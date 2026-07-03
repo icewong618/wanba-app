@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -2081,12 +2082,16 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
+<<<<<<< HEAD
 // 填充发帖分类选择器的印章图标
 document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
 console.log('✓ 页面初始化完成 【版本 V9 - 吃喝玩乐印章图标】');
+=======
+console.log('✓ 页面初始化完成 【版本 V6 - 连接新数据库】');
+>>>>>>> 029294241b26fcbd90455934dfbbec565a7b4113
 </script>
 </body>
 </html>
