@@ -1735,6 +1735,7 @@ async function submitPost(){
     event = {capacity:cap, registered:0, deadline:dl, userJoined:false};
   }
 
+  const cat = selectedCat; // 关键修复：在 closeCompose 清空前捕获分类值
   const excerpt = content.slice(0,40)+(content.length>40?'…':'');
   const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[coverImageIndex] : 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
   const images = uploadedImages.length > 0 ? uploadedImages : null;
@@ -1745,7 +1746,7 @@ async function submitPost(){
     const p = posts.find(x => x.id === editingPostId);
     if(p){
       p.title = title; p.content = content; p.excerpt = excerpt;
-      p.category = selectedCat; p.youtube = ytId; p.event = event;
+      p.category = cat; p.youtube = ytId; p.event = event;
       if(uploadedImages.length > 0){ p.image = image; p.images = images; }
     }
     const idToUpdate = editingPostId;
@@ -1754,7 +1755,7 @@ async function submitPost(){
     renderChips(); renderFeed(); initProfilePage(); savePosts();
     showToast('✓ 已更新');
     try {
-      const fields = { title, content, excerpt, category:selectedCat, youtube:ytId, event };
+      const fields = { title, content, excerpt, category:cat, youtube:ytId, event };
       if(uploadedImages.length > 0){ fields.image = image; fields.images = images; }
       await supabaseUpdatePost(idToUpdate, fields);
       console.log('✓ 数据库已同步更新 id=', idToUpdate);
@@ -1767,7 +1768,7 @@ async function submitPost(){
 
   /* ---- 新建模式 ---- */
   const localPost = {
-    id: nextPostId++, category:selectedCat, title, excerpt,
+    id: nextPostId++, category:cat, title, excerpt,
     content, image, images,
     youtube: ytId, author: authorName, time:'刚刚', likes:0, liked:false,
     event, comments:[]
@@ -1784,7 +1785,7 @@ async function submitPost(){
   // 同步保存到 Supabase 数据库
   try {
     const saved = await supabaseInsertPost({
-      title, content, excerpt, category:selectedCat,
+      title, content, excerpt, category:cat,
       author: authorName, image, images, youtube: ytId,
       likes: 0, event
     });
@@ -2086,7 +2087,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 V9 - 吃喝玩乐印章图标】');
+console.log('✓ 页面初始化完成 【版本 V10 - 修复分类保存】');
 </script>
 </body>
 </html>
