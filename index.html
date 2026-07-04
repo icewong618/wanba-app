@@ -412,6 +412,10 @@
   }
   .image-item.add-more:hover{border-color:var(--sage);background:var(--sage-light);}
   .image-item.video-item{position:relative;border-radius:8px;overflow:hidden;background:#000;}
+  .msg-dot{display:none;position:absolute;top:8px;right:calc(50% - 26px);width:8px;height:8px;border-radius:50%;background:#FF2442;}
+  .msg-dot.on{display:block;}
+  .msg-tab.active{color:var(--berry);border-bottom:2px solid var(--berry);margin-bottom:-2px;}
+  .nav-msg-dot{position:absolute;top:6px;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;background:#FF2442;}
   .video-badge{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.65);color:#fff;font-size:10px;text-align:center;padding:3px 2px;}
   .image-item.add-more .add-plus{font-size:30px;color:var(--ink-faint);line-height:1;}
   .image-item.add-more .add-hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
@@ -764,11 +768,12 @@
 </div>
 <div class="page" id="page-message" style="display:none;">
   <div class="page-header">💬 消息通知</div>
-  <div class="empty-state">
-    <span style="font-size:40px;margin-bottom:12px;display:block;">📭</span>
-    <p style="font-weight:600;">暂无新消息</p>
-    <p style="font-size:12px;color:var(--ink-faint);margin-top:4px;">您的回复和私信会显示在这里</p>
+  <div style="display:flex;border-bottom:2px solid var(--line);background:#fff;">
+    <button class="msg-tab" data-mt="dm" onclick="switchMsgTab('dm')" style="flex:1;padding:13px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;position:relative;">私信<span class="msg-dot" id="dotDm"></span></button>
+    <button class="msg-tab" data-mt="like" onclick="switchMsgTab('like')" style="flex:1;padding:13px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;position:relative;">点赞<span class="msg-dot" id="dotLike"></span></button>
+    <button class="msg-tab" data-mt="fav" onclick="switchMsgTab('fav')" style="flex:1;padding:13px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;position:relative;">收藏<span class="msg-dot" id="dotFav"></span></button>
   </div>
+  <div id="msgContent" style="background:#fff;min-height:60vh;padding-bottom:80px;"></div>
 </div>
 <div class="page" id="page-profile" style="display:none;">
   <div style="background:#fff;padding:20px;min-height:100vh;margin-bottom:60px;">
@@ -1555,8 +1560,8 @@ async function loadCommentsFromDb(postId){
 async function loadEngagement(){
   try {
     const [lr, fr, cr] = await Promise.all([
-      authedFetch(`${SUPABASE_URL}/rest/v1/likes?select=post_id,user_id`, { method:'GET' }),
-      authedFetch(`${SUPABASE_URL}/rest/v1/favorites?select=post_id,user_id`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/likes?select=post_id,user_id,name,created_at`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/favorites?select=post_id,user_id,name,created_at`, { method:'GET' }),
       authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id`, { method:'GET' })
     ]);
     const likes = lr.ok ? await lr.json() : [];
@@ -1569,11 +1574,15 @@ async function loadEngagement(){
     cmts.forEach(r => { cmtCount[r.post_id] = (cmtCount[r.post_id]||0)+1; });
     posts.forEach(p => {
       p.likes = likeCount[p.id] || 0;
+      p.favs = favCount[p.id] || 0;
       p.liked = myLikes.has(p.id);
       p.collected = myFavs.has(p.id);
       p.commentCount = cmtCount[p.id] || 0;
     });
+    window._likeRows = likes;
+    window._favRows = favs;
     renderFeed();
+    updateNavMsgDot();
     console.log('✓ 点赞/收藏已同步');
   } catch(e){ console.warn('互动数据同步失败:', e.message); }
 }
@@ -1846,6 +1855,7 @@ function renderPostModal(){
       <span class="avatar" style="background:${avatarColor(p.author)}">${initials(p.author)}</span>
       <span class="xhs-author-name">${p.author}</span>
       <button class="xhs-follow" id="followBtn" onclick="toggleFollow()">关注</button>
+      ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">✉️</button>` : ''}
       <button class="xhs-share" onclick="showToast('链接已复制')">↗</button>
     </div>
     <div class="xhs-scroll">
@@ -1871,7 +1881,7 @@ function renderPostModal(){
         <span class="ico">${p.liked?'♥':'♡'}</span><span id="xhsLikeNum">${p.likes}</span>
       </button>
       <button class="xhs-act ${p.collected?'collected':''}" id="xhsCollect" onclick="toggleCollect()">
-        <span class="ico">${p.collected?'★':'☆'}</span><span>收藏</span>
+        <span class="ico">${p.collected?'★':'☆'}</span><span id="xhsFavNum">${p.favs||0}</span>
       </button>
       <button class="xhs-act" onclick="document.getElementById('newCommentInput').focus()">
         <span class="ico">💬</span><span>${countComments(p)}</span>
@@ -1895,13 +1905,18 @@ async function toggleCollect(){
   if(btn){
     btn.classList.toggle('collected', p.collected);
     btn.querySelector('.ico').textContent = p.collected ? '★' : '☆';
+    const fn = document.getElementById('xhsFavNum');
+    p.favs = (p.favs||0) + (p.collected ? 1 : -1);
+    if(p.favs < 0) p.favs = 0;
+    if(fn) fn.textContent = p.favs;
   }
   showToast(p.collected ? '✓ 已收藏' : '已取消收藏');
   try {
     if(p.collected){
+      const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
       const res = await authedFetch(`${SUPABASE_URL}/rest/v1/favorites`, {
         method:'POST',
-        body: JSON.stringify({ post_id: p.id, user_id: session.user.id })
+        body: JSON.stringify({ post_id: p.id, user_id: session.user.id, name: nick })
       });
       if(!res.ok && res.status !== 409) throw new Error(res.status);
     } else {
@@ -1994,9 +2009,10 @@ async function toggleLike(){
   renderFeed();
   try {
     if(willLike){
+      const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
       const res = await authedFetch(`${SUPABASE_URL}/rest/v1/likes`, {
         method:'POST',
-        body: JSON.stringify({ post_id: p.id, user_id: session.user.id })
+        body: JSON.stringify({ post_id: p.id, user_id: session.user.id, name: nick })
       });
       if(!res.ok && res.status !== 409) throw new Error(res.status);
     } else {
@@ -2339,6 +2355,178 @@ function captureVideoPoster(vObj){
     };
     video.onerror = () => { console.warn('视频封面截取失败'); cleanup(); };
   } catch(e){ console.warn('captureVideoPoster:', e.message); }
+}
+
+/* ====== 消息中心：私信 + 点赞/收藏通知 + 未读红点 ====== */
+let msgTab = 'dm';
+let dmRows = [];
+
+function readTsKey(){ return 'wanba_read_' + (session && session.user ? session.user.id : 'guest'); }
+function getReadTs(){
+  try { return JSON.parse(localStorage.getItem(readTsKey()) || '{}'); } catch(e){ return {}; }
+}
+function setReadTs(cat){
+  const t = getReadTs(); t[cat] = new Date().toISOString();
+  localStorage.setItem(readTsKey(), JSON.stringify(t));
+}
+function myPostIds(){
+  const me = session && session.user ? session.user.id : null;
+  if(!me) return new Set();
+  return new Set(posts.filter(p => p.user_id === me).map(p => p.id));
+}
+function likeNotifs(){
+  const me = session && session.user ? session.user.id : null;
+  const mine = myPostIds();
+  return (window._likeRows || []).filter(r => mine.has(r.post_id) && r.user_id !== me)
+    .sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+}
+function favNotifs(){
+  const me = session && session.user ? session.user.id : null;
+  const mine = myPostIds();
+  return (window._favRows || []).filter(r => mine.has(r.post_id) && r.user_id !== me)
+    .sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+}
+function unreadCounts(){
+  const ts = getReadTs();
+  const me = session && session.user ? session.user.id : null;
+  const dm = dmRows.filter(m => m.to_id === me && (!ts.dm || m.created_at > ts.dm)).length;
+  const lk = likeNotifs().filter(r => !ts.like || (r.created_at||'') > ts.like).length;
+  const fv = favNotifs().filter(r => !ts.fav || (r.created_at||'') > ts.fav).length;
+  return { dm, like: lk, fav: fv, total: dm + lk + fv };
+}
+function updateNavMsgDot(){
+  const btn = document.querySelector('[data-tab="message"]');
+  if(!btn) return;
+  btn.style.position = 'relative';
+  let dot = btn.querySelector('.nav-msg-dot');
+  const u = unreadCounts();
+  if(u.total > 0){
+    if(!dot){ dot = document.createElement('span'); dot.className = 'nav-msg-dot'; btn.appendChild(dot); }
+  } else if(dot){ dot.remove(); }
+  // 页内三个红点
+  const map = { dotDm:'dm', dotLike:'like', dotFav:'fav' };
+  Object.entries(map).forEach(([id, k]) => {
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('on', u[k] > 0);
+  });
+}
+async function loadDms(){
+  const me = session && session.user ? session.user.id : null;
+  if(!me){ dmRows = []; return; }
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/messages?or=(to_id.eq.${me},from_id.eq.${me})&order=created_at.asc`, { method:'GET' });
+    dmRows = res.ok ? await res.json() : [];
+  } catch(e){ dmRows = []; }
+}
+function initMessagePage(){
+  document.querySelectorAll('.msg-tab').forEach(b => b.classList.toggle('active', b.dataset.mt === msgTab));
+  loadDms().then(() => { renderMsgContent(); updateNavMsgDot(); });
+  renderMsgContent();
+  updateNavMsgDot();
+}
+function switchMsgTab(t){
+  msgTab = t;
+  setReadTs(t === 'dm' ? 'dm' : (t === 'like' ? 'like' : 'fav'));
+  document.querySelectorAll('.msg-tab').forEach(b => b.classList.toggle('active', b.dataset.mt === t));
+  renderMsgContent();
+  updateNavMsgDot();
+}
+function fmtTime(iso){
+  try { return new Date(iso).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e){ return ''; }
+}
+function renderMsgContent(){
+  const box = document.getElementById('msgContent');
+  if(!box) return;
+  const me = session && session.user ? session.user.id : null;
+  if(!me){
+    box.innerHTML = '<div class="empty-state"><span style="font-size:40px;display:block;">🔒</span><p>登录后查看消息</p></div>';
+    return;
+  }
+  if(msgTab === 'like' || msgTab === 'fav'){
+    const rows = msgTab === 'like' ? likeNotifs() : favNotifs();
+    const verb = msgTab === 'like' ? '给你点了赞' : '收藏了你的笔记';
+    const icon = msgTab === 'like' ? '❤️' : '⭐';
+    box.innerHTML = rows.length ? rows.map(r => {
+      const p = posts.find(x => x.id === r.post_id);
+      return `<div style="display:flex;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);" ${p?`onclick="openPost(${p.id})" style="cursor:pointer"`:''}>
+        <span class="avatar" style="background:${avatarColor(r.name||'友')};width:40px;height:40px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${initials(r.name||'友')}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;"><b>${r.name||'某用户'}</b> ${verb} ${icon}</div>
+          <div style="font-size:12px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p ? '《'+p.title+'》' : ''} · ${fmtTime(r.created_at)}</div>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty-state"><span style="font-size:40px;display:block;">${icon}</span><p>还没有${msgTab==='like'?'点赞':'收藏'}通知</p></div>`;
+    return;
+  }
+  /* 私信：按对方分组会话 */
+  const convs = {};
+  dmRows.forEach(m => {
+    const other = m.from_id === me ? m.to_id : m.from_id;
+    const otherName = m.from_id === me ? (convs[other]?.name || '对方') : m.from_name;
+    if(!convs[other]) convs[other] = { id: other, name: otherName, msgs: [] };
+    if(m.from_id !== me) convs[other].name = m.from_name;
+    convs[other].msgs.push(m);
+  });
+  const list = Object.values(convs).sort((a,b) => b.msgs[b.msgs.length-1].created_at.localeCompare(a.msgs[a.msgs.length-1].created_at));
+  box.innerHTML = list.length ? list.map(c => {
+    const last = c.msgs[c.msgs.length-1];
+    return `<div onclick="openThread('${c.id}','${(c.name||'').replace(/'/g,'')}')" style="display:flex;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;">
+      <span class="avatar" style="background:${avatarColor(c.name||'友')};width:44px;height:44px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${initials(c.name||'友')}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;">${c.name||'用户'}</div>
+        <div style="font-size:12px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${last.from_id===me?'我: ':''}${last.text}</div>
+      </div>
+      <span style="font-size:11px;color:var(--ink-faint);flex-shrink:0;">${fmtTime(last.created_at)}</span>
+    </div>`;
+  }).join('') : '<div class="empty-state"><span style="font-size:40px;display:block;">📭</span><p>暂无私信</p><p style="font-size:12px;color:var(--ink-faint);">在帖子页点 ✉️ 可以私信作者</p></div>';
+}
+function openThread(otherId, otherName){
+  const box = document.getElementById('msgContent');
+  const me = session.user.id;
+  const msgs = dmRows.filter(m => m.from_id === otherId || m.to_id === otherId);
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);">
+      <button onclick="renderMsgContent()" style="border:none;background:none;font-size:20px;cursor:pointer;">‹</button>
+      <b>${otherName}</b>
+    </div>
+    <div id="threadList" style="padding:16px;display:flex;flex-direction:column;gap:10px;max-height:50vh;overflow-y:auto;">
+      ${msgs.map(m => `
+        <div style="align-self:${m.from_id===me?'flex-end':'flex-start'};max-width:75%;background:${m.from_id===me?'var(--sage-light)':'var(--bg-alt)'};padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.5;">${m.text}</div>
+      `).join('')}
+    </div>
+    <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);">
+      <input type="text" id="threadInput" placeholder="回复 ${otherName}…" style="flex:1;padding:10px 14px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-family:inherit;">
+      <button onclick="sendDm('${otherId}','${(otherName||'').replace(/'/g,'')}')" style="background:var(--berry);color:#fff;border:none;border-radius:999px;padding:10px 18px;font-weight:600;cursor:pointer;">发送</button>
+    </div>`;
+  const tl = document.getElementById('threadList');
+  if(tl) tl.scrollTop = tl.scrollHeight;
+}
+async function sendDm(toId, toName){
+  const input = document.getElementById('threadInput') || document.getElementById('dmComposeInput');
+  const text = input ? input.value.trim() : '';
+  if(!text) return;
+  const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ from_id: session.user.id, from_name: nick, to_id: toId, text })
+    });
+    if(!res.ok) throw new Error(res.status);
+    const saved = (await res.json())[0];
+    dmRows.push(saved);
+    if(document.getElementById('threadList')) openThread(toId, toName);
+    else { closeXhsImport(); showToast('✓ 私信已发送'); }
+  } catch(e){ showToast('发送失败：' + e.message); }
+}
+function openDmTo(toId, toName){
+  if(!session || !session.user){ showToast('请先登录'); openAuth(); return; }
+  const modal = document.getElementById('xhsModal');
+  const content = document.getElementById('xhsContent');
+  modal.style.display = 'flex';
+  content.innerHTML = `
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:14px;">✉️ 私信 ${toName}</h3>
+    <textarea id="dmComposeInput" placeholder="想对TA说什么…" style="width:100%;min-height:100px;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;"></textarea>
+    <button onclick="sendDm('${toId}','${(toName||'').replace(/'/g,'')}')" style="width:100%;margin-top:12px;background:var(--berry);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:600;cursor:pointer;">发送</button>`;
 }
 
 function removeVideo(e, i){
@@ -2909,6 +3097,9 @@ window.switchTab = function(tab){
   } else if(tab === 'week'){
     console.log('📅 周末活动已切换');
     renderWeekFeed();
+  } else if(tab === 'message'){
+    console.log('💬 消息页已切换');
+    initMessagePage();
   } else if(tab === 'profile'){
     console.log('👤 个人资料页面已切换，初始化页面...');
     updateProfileDisplay();
@@ -2921,6 +3112,7 @@ loadPosts();
 loadUserProfile(); // 加载用户信息
 loadSession();     // 加载登录会话
 fetchIpLocation(); // 获取真实IP属地
+setTimeout(() => { if(session) loadDms().then(updateNavMsgDot); }, 3000); // 私信未读红点
 handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
 renderChips();
 renderQuicklinks();
@@ -2951,7 +3143,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.8 - 修复令牌过期401】');
+console.log('✓ 页面初始化完成 【版本 2.9 - 消息中心+收藏计数】');
 </script>
 </body>
 </html>
