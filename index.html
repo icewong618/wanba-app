@@ -224,6 +224,10 @@
     display:flex;flex-direction:column;
     max-height:92vh;
   }
+  @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .sheet-item{display:flex;align-items:center;gap:12px;width:100%;padding:14px 8px;border:none;background:none;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--line);text-align:left;}
+  .sheet-item:last-child{border-bottom:none;}
+  .sheet-item .si{font-size:19px;width:26px;text-align:center;}
   @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:none;}}
   .modal-close{
     position:absolute;top:14px;right:14px;
@@ -651,6 +655,14 @@
     <button id="authSubmit" onclick="submitAuth()" style="width:100%;background:var(--berry);color:#fff;border:none;padding:13px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">登入</button>
     <p style="font-size:11.5px;color:var(--ink-faint);margin-top:12px;text-align:center;line-height:1.6;">💡 首次登入需点击邮箱中的验证链接完成注册<br>验证后再次点击登入即可</p>
     <div id="authMsg" style="font-size:12px;color:var(--berry);margin-top:8px;text-align:center;min-height:16px;"></div>
+  </div>
+</div>
+
+<!-- 笔记管理底部面板 -->
+<div id="ownerSheet" style="display:none;position:fixed;inset:0;background:rgba(42,39,33,.45);z-index:300;" onclick="if(event.target.id==='ownerSheet')closeOwnerSheet()">
+  <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:18px 18px 0 0;padding:10px 16px 26px;animation:slideUp .25s ease;">
+    <div style="width:40px;height:4px;background:var(--line);border-radius:999px;margin:6px auto 14px;"></div>
+    <div id="ownerSheetBody"></div>
   </div>
 </div>
 
@@ -1633,12 +1645,14 @@ function initProfilePage(){
   
   if(userPosts.length > 0){
     console.log('📝 显示', userPosts.length, '条笔记');
+    userPosts.sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
     notesContent.innerHTML = userPosts.map(p => `
-      <div style="position:relative;border-radius:12px;overflow:hidden;background:var(--bg-alt);">
+      <div onclick="openPost(${p.id})" style="position:relative;border-radius:12px;overflow:hidden;background:var(--bg-alt);cursor:pointer;">
+        ${p.pinned ? '<span style="position:absolute;top:6px;left:6px;z-index:3;background:var(--berry);color:#fff;font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600;">置顶</span>' : ''}
         ${p.image ? `<img src="${p.image}" alt="" style="width:100%;aspect-ratio:3/4;object-fit:cover;">` : '<div style="aspect-ratio:3/4;background:var(--bg-alt);"></div>'}
         <div style="position:absolute;inset:0;background:rgba(0,0,0,0);opacity:0;transition:opacity 0.3s;display:flex;align-items:flex-end;justify-content:space-around;padding:12px;gap:8px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.7));" class="post-overlay-${p.id}">
-          <button onclick="editPost(${p.id})" style="flex:1;padding:8px 12px;background:var(--sage);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;">✏️ 编辑</button>
-          <button onclick="deletePost(${p.id})" style="flex:1;padding:8px 12px;background:#d9534f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;">🗑️ 删除</button>
+          <button onclick="event.stopPropagation();editPost(${p.id})" style="flex:1;padding:8px 12px;background:var(--sage);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;">✏️ 编辑</button>
+          <button onclick="event.stopPropagation();ownerDeletePost(${p.id})" style="flex:1;padding:8px 12px;background:#d9534f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;">🗑️ 删除</button>
         </div>
         <div style="padding:10px;background:#fff;">
           <div style="font-size:12px;font-weight:600;color:var(--ink);line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${p.title}</div>
@@ -1875,7 +1889,7 @@ function renderPostModal(){
       <span class="xhs-author-name">${p.author}</span>
       ${p.user_id && (!session || !session.user || p.user_id !== session.user.id) ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
       ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">✉️</button>` : ''}
-      <button class="xhs-share" onclick="showToast('链接已复制')">↗</button>
+      ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" onclick="showToast('链接已复制')">↗</button>`}
     </div>
     <div class="xhs-scroll">
       ${media ? `<div class="modal-media">${media}</div>` : ''}
@@ -1891,6 +1905,11 @@ function renderPostModal(){
         <div style="height:10px;"></div>
       </div>
     </div>
+    ${(session && session.user && p.user_id === session.user.id) ? `
+    <div class="xhs-bottombar">
+      <div style="flex:1;font-size:13px;color:var(--ink-soft);font-weight:600;" id="visStatus">${visLabel(p.visibility)}</div>
+      <button onclick="openOwnerSheet()" style="border:none;background:var(--sage);color:#fff;border-radius:999px;padding:10px 18px;font-weight:600;font-size:13px;cursor:pointer;">⚙️ 编辑和权限设置</button>
+    </div>` : `
     <div class="xhs-bottombar">
       <input type="text" id="newCommentInput" placeholder="说点什么…" 
         oninput="document.getElementById('xhsSend').style.display = this.value.trim() ? 'block' : 'none'"
@@ -1905,7 +1924,7 @@ function renderPostModal(){
       <button class="xhs-act" onclick="document.getElementById('newCommentInput').focus()">
         <span class="ico">💬</span><span>${countComments(p)}</span>
       </button>
-    </div>
+    </div>`}
   `;
   setupCarouselTouch();
 }
@@ -2661,6 +2680,84 @@ function openDmTo(toId, toName){
     <button onclick="sendDm('${toId}','${(toName||'').replace(/'/g,'')}')" style="width:100%;margin-top:12px;background:var(--berry);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:600;cursor:pointer;">发送</button>`;
 }
 
+/* ====== 笔记所有者管理：权限/置顶/删除/编辑/转发 ====== */
+function visLabel(v){
+  if(v === 'private') return '🔒 仅自己可见';
+  if(v === 'mutual') return '🤝 互关好友可见';
+  return '🌍 公开可见';
+}
+function openOwnerSheet(){
+  const p = getPost();
+  if(!p) return;
+  const body = document.getElementById('ownerSheetBody');
+  body.innerHTML = `
+    <button class="sheet-item" onclick="closeOwnerSheet();closePost();editPost(${p.id})"><span class="si">✏️</span>编辑</button>
+    <button class="sheet-item" onclick="openVisSheet()"><span class="si">${visLabel(p.visibility).slice(0,2)}</span>权限设置 <span style="margin-left:auto;font-size:12px;color:var(--ink-faint);font-weight:400;">${visLabel(p.visibility).slice(2)}</span></button>
+    <button class="sheet-item" onclick="togglePin()"><span class="si">📌</span>${p.pinned ? '取消置顶' : '置顶'}</button>
+    <button class="sheet-item" onclick="showToast('链接已复制');closeOwnerSheet()"><span class="si">↗</span>转发</button>
+    <button class="sheet-item" style="color:#d9534f;" onclick="ownerDeletePost(${p.id})"><span class="si">🗑️</span>删除</button>
+  `;
+  document.getElementById('ownerSheet').style.display = 'block';
+}
+function closeOwnerSheet(){ document.getElementById('ownerSheet').style.display = 'none'; }
+function openVisSheet(){
+  const p = getPost();
+  if(!p) return;
+  const cur = p.visibility || 'public';
+  const opt = (val, label, desc) => `
+    <button class="sheet-item" onclick="setVisibility('${val}')">
+      <span class="si">${label.slice(0,2)}</span>${label.slice(2)}
+      <span style="margin-left:auto;font-size:16px;">${cur === val ? '✔️' : ''}</span>
+    </button>
+    <div style="font-size:11px;color:var(--ink-faint);padding:0 8px 8px 46px;margin-top:-8px;">${desc}</div>`;
+  document.getElementById('ownerSheetBody').innerHTML = `
+    <div style="font-size:14px;font-weight:700;padding:4px 8px 12px;">谁可以看这篇笔记</div>
+    ${opt('public','🌍 公开可见','所有人都能在主页看到')}
+    ${opt('mutual','🤝 互关好友可见','只有互相关注的好友能看到')}
+    ${opt('private','🔒 仅自己可见','只有你自己能看到')}
+    <button class="sheet-item" onclick="openOwnerSheet()" style="justify-content:center;color:var(--ink-faint);">‹ 返回</button>
+  `;
+}
+async function setVisibility(v){
+  const p = getPost();
+  if(!p) return;
+  try {
+    await supabaseUpdatePost(p.id, { visibility: v });
+    p.visibility = v;
+    const st = document.getElementById('visStatus');
+    if(st) st.textContent = visLabel(v);
+    closeOwnerSheet();
+    showToast('✓ 已设为' + visLabel(v).slice(2));
+    savePosts();
+  } catch(e){ showToast('设置失败：' + e.message); }
+}
+async function togglePin(){
+  const p = getPost();
+  if(!p) return;
+  try {
+    const np = !p.pinned;
+    await supabaseUpdatePost(p.id, { pinned: np });
+    p.pinned = np;
+    closeOwnerSheet();
+    showToast(np ? '📌 已置顶' : '已取消置顶');
+    savePosts();
+    initProfilePage();
+  } catch(e){ showToast('操作失败：' + e.message); }
+}
+async function ownerDeletePost(id){
+  if(!confirm('确定删除这篇笔记吗？删除后无法恢复')) return;
+  try {
+    await supabaseDeletePost(id);
+    posts = posts.filter(x => x.id !== id);
+    closeOwnerSheet();
+    closePost();
+    renderFeed();
+    initProfilePage();
+    savePosts();
+    showToast('✓ 笔记已删除');
+  } catch(e){ showToast('删除失败：' + e.message); }
+}
+
 function removeVideo(e, i){
   e.stopPropagation();
   URL.revokeObjectURL(selectedVideos[i].url);
@@ -2912,7 +3009,7 @@ async function submitPost(){
       title, content, excerpt, category:cat,
       author: authorName, image, images, youtube: ytId,
       likes: 0, event, tags: tagsArr,
-      user_id: session.user.id
+      user_id: session.user.id, visibility: 'public', pinned: false
     });
     if(saved && saved.id){
       localPost.id = saved.id; // 使用数据库生成的 id，保证后续编辑/删除一致
@@ -3185,6 +3282,8 @@ async function loadPostsFromSupabase(){
         event: p.event,
         tags: p.tags || [],
         user_id: p.user_id || null,
+        visibility: p.visibility || 'public',
+        pinned: !!p.pinned,
         time: p.created_at ? new Date(p.created_at).toLocaleString('zh-CN') : new Date().toLocaleString('zh-CN'),
         comments: []
       }));
@@ -3275,7 +3374,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.91 - 消息中心改版：评论@/粉丝/赞藏】');
+console.log('✓ 页面初始化完成 【版本 2.92 - 笔记权限/置顶/管理面板】');
 </script>
 </body>
 </html>
