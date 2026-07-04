@@ -941,6 +941,13 @@ function loadSession(){
     if(s){ session = JSON.parse(s); }
   } catch(e){}
   updateAuthUI();
+  // 启动即刷新令牌（access_token 1小时过期，主动续期避免401）
+  if(session && session.refresh_token){
+    refreshSession().then(ok => {
+      if(ok){ console.log('✓ 登录令牌已续期'); loadEngagement && loadEngagement(); }
+      else { console.warn('令牌续期失败，需重新登录'); logoutUser(); }
+    });
+  }
 }
 function updateAuthUI(){
   const status = document.getElementById('authStatus');
@@ -1529,9 +1536,7 @@ function openPost(id){
 }
 async function loadCommentsFromDb(postId){
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${postId}&order=created_at.asc`, {
-      headers: supabaseHeaders()
-    });
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${postId}&order=created_at.asc`, { method:'GET' });
     if(!res.ok) return;
     const rows = await res.json();
     const p = getPost();
@@ -1549,11 +1554,10 @@ async function loadCommentsFromDb(postId){
 /* 从数据库同步所有帖子的点赞/收藏状态 */
 async function loadEngagement(){
   try {
-    const h = { headers: supabaseHeaders() };
     const [lr, fr, cr] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/likes?select=post_id,user_id`, h),
-      fetch(`${SUPABASE_URL}/rest/v1/favorites?select=post_id,user_id`, h),
-      fetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id`, h)
+      authedFetch(`${SUPABASE_URL}/rest/v1/likes?select=post_id,user_id`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/favorites?select=post_id,user_id`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id`, { method:'GET' })
     ]);
     const likes = lr.ok ? await lr.json() : [];
     const favs = fr.ok ? await fr.json() : [];
@@ -2394,6 +2398,7 @@ async function refreshSession(){
 }
 /* 带自动重试的请求：401 时刷新令牌重试一次 */
 async function authedFetch(url, options){
+  options = options || {};
   options.headers = supabaseHeaders();
   let res = await fetch(url, options);
   if(res.status === 401 && session){
@@ -2401,6 +2406,11 @@ async function authedFetch(url, options){
     if(ok){
       options.headers = supabaseHeaders();
       res = await fetch(url, options);
+    } else if((options.method || 'GET') === 'GET'){
+      // 读操作降级为匿名重试（公共数据仍可读）
+      options.headers = { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
+      res = await fetch(url, options);
+      logoutUser();
     } else {
       logoutUser();
       showToast('登录已过期，请重新登录');
@@ -2941,7 +2951,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.7 - 评论点赞收藏入库】');
+console.log('✓ 页面初始化完成 【版本 2.8 - 修复令牌过期401】');
 </script>
 </body>
 </html>
