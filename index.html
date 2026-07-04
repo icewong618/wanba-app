@@ -951,14 +951,12 @@ function updateAuthUI(){
     const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
     status.textContent = `✓ 已登录：${nick}`;
     inBtn.style.display = 'none'; regBtn.style.display = 'none'; outBtn.style.display = 'block';
-    // 同步昵称到个人资料
-    if(currentUser.name === '游客用户' || !currentUser.name){ currentUser.name = nick; }
-    currentUser.id = '#' + session.user.id.slice(0,6);
-    saveUserProfileToStorage();
-    updateProfileDisplay();
+    // 关键：切换到该账号自己的资料档案
+    loadUserProfile();
   } else {
     status.textContent = '未登录（游客模式）';
     inBtn.style.display = 'block'; regBtn.style.display = 'block'; outBtn.style.display = 'none';
+    loadUserProfile(); // 回到游客档案
   }
 }
 function openAuth(){
@@ -1138,21 +1136,72 @@ function calcAge(birth){
 }
 
 // 从 localStorage 加载用户信息
+/* 每个账号一份独立资料，键：userProfile_{uid}；游客：userProfile_guest */
+function profileKey(){
+  return (session && session.user) ? `userProfile_${session.user.id}` : 'userProfile_guest';
+}
+function defaultProfile(){
+  const nick = (session && session.user)
+    ? ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0])
+    : '游客用户';
+  return {
+    name: nick, bio: '还没有介绍呢', gender: '🚹',
+    birth: '', age: null, location: '',
+    tags: [], id: (session && session.user) ? uidToNumericId(session.user.id) : '00000000'
+  };
+}
 function loadUserProfile(){
-  const saved = localStorage.getItem('userProfile');
-  if(saved){
-    try {
-      currentUser = JSON.parse(saved);
-      updateProfileDisplay();
-    } catch(e) {
-      console.warn('用户信息加载失败');
-    }
+  const legacy = localStorage.getItem('userProfile');
+  if(legacy && !localStorage.getItem('userProfile_guest')){
+    localStorage.setItem('userProfile_guest', legacy);
+    localStorage.removeItem('userProfile');
   }
+  const saved = localStorage.getItem(profileKey());
+  if(saved){
+    try { currentUser = JSON.parse(saved); } catch(e){ currentUser = defaultProfile(); }
+  } else {
+    currentUser = defaultProfile();
+  }
+  if(session && session.user){
+    if(!currentUser.name) currentUser.name = defaultProfile().name;
+    currentUser.id = uidToNumericId(session.user.id);
+  }
+  updateProfileDisplay();
 }
 
-// 保存用户信息到 localStorage
+// 保存用户信息到当前账号的档案
 function saveUserProfileToStorage(){
-  localStorage.setItem('userProfile', JSON.stringify(currentUser));
+  localStorage.setItem(profileKey(), JSON.stringify(currentUser));
+}
+/* 由账号UUID确定性生成8位纯数字专属ID（同一账号任何设备都相同） */
+function uidToNumericId(uuid){
+  let h = 0;
+  for(let i = 0; i < uuid.length; i++){
+    h = (h * 131 + uuid.charCodeAt(i)) >>> 0;
+  }
+  return String(10000000 + (h % 90000000));
+}
+/* 真实IP属地（免费接口 ipapi.co，缓存24小时） */
+async function fetchIpLocation(){
+  try {
+    const cached = JSON.parse(localStorage.getItem('wanba_ip_loc') || 'null');
+    if(cached && Date.now() - cached.ts < 24*60*60*1000){
+      applyIpLocation(cached.loc); return;
+    }
+    const res = await fetch('https://ipapi.co/json/');
+    if(!res.ok) return;
+    const d = await res.json();
+    const loc = [d.city, d.country_name].filter(Boolean).join(', ') || d.country_name || '';
+    if(loc){
+      localStorage.setItem('wanba_ip_loc', JSON.stringify({loc, ts: Date.now()}));
+      applyIpLocation(loc);
+    }
+  } catch(e){ console.warn('IP属地获取失败:', e.message); }
+}
+function applyIpLocation(loc){
+  window._ipLocation = loc;
+  const el = document.getElementById('userLocationDisplay');
+  if(el) el.textContent = `IP属地：${loc}`;
 }
 
 // 进入编辑模式
@@ -1246,8 +1295,8 @@ function saveUserProfile(){
 function updateProfileDisplay(){
   document.getElementById('userAvatarDisplay').textContent = currentUser.name.slice(0,1);
   document.getElementById('userNameDisplay').textContent = currentUser.name;
-  document.getElementById('userIdDisplay').textContent = `ID: ${currentUser.id}`;
-  document.getElementById('userLocationDisplay').textContent = `IP属地：${(currentUser.location||'').replace('📍','').trim()}`;
+  document.getElementById('userIdDisplay').textContent = `ID: ${String(currentUser.id||'').replace('#','')}`;
+  document.getElementById('userLocationDisplay').textContent = `IP属地：${window._ipLocation || (currentUser.location||'').replace('📍','').trim() || '获取中…'}`;
   document.getElementById('userBioDisplay').textContent = currentUser.bio;
   
   // 更新标签显示（年龄由出生年月自动计算）
@@ -2620,6 +2669,7 @@ window.switchTab = function(tab){
 loadPosts();
 loadUserProfile(); // 加载用户信息
 loadSession();     // 加载登录会话
+fetchIpLocation(); // 获取真实IP属地
 handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
 renderChips();
 renderQuicklinks();
@@ -2650,7 +2700,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.3 - 一体化登入+验证限频】');
+console.log('✓ 页面初始化完成 【版本 2.4 - 账号资料隔离+8位ID+真实IP属地】');
 </script>
 </body>
 </html>
