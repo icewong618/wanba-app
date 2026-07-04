@@ -578,6 +578,12 @@
   .empty{text-align:center;padding:60px 20px;color:var(--ink-faint);}
   .empty .display{font-size:20px;color:var(--ink-soft);display:block;margin-bottom:6px;}
 
+  /* 发布窗口：恢复整体滚动（详情页专用的flex布局不适用于表单） */
+  #composeOverlay .modal{
+    display:block;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
   @media(max-width:640px){
     .top-row{flex-wrap:wrap;}
     .search{display:none;}
@@ -2553,7 +2559,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.0 - 帖子绑定用户+权限保护】');
+console.log('✓ 页面初始化完成 【版本 2.1 - 修复发布窗口滚动】');
 </script>
 </body>
 </html>
