@@ -2003,8 +2003,10 @@ function handleMultiImageUpload(e){
       showToast('只能选择1个视频');
     } else {
       const v = videos[0];
-      selectedVideos.push({ name: v.name, url: URL.createObjectURL(v), size: v.size, file: v, uploadedId: null });
-      showToast('🎬 已选视频。可点「上传到YouTube」或自行上传后贴链接；别忘了＋上传封面');
+      const vObj = { name: v.name, url: URL.createObjectURL(v), size: v.size, file: v, uploadedId: null };
+      selectedVideos.push(vObj);
+      showToast('🎬 已选视频，正在自动截取封面…');
+      captureVideoPoster(vObj); // 自动截第一帧做封面（可手动替换）
     }
     renderImageGrid();
   }
@@ -2220,6 +2222,44 @@ async function doYouTubeUpload(){
     else if(em.includes('youtubesignuprequired') || em.includes('channelnotfound') || em.includes('unauthorized')) showToast('该Google账号还没有YouTube频道，请先去YouTube创建');
     else showToast('上传失败：' + err.message.slice(0, 60));
   }
+}
+
+/* 自动截取视频第一帧作为封面（用户没手动传封面时使用） */
+function captureVideoPoster(vObj){
+  try {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = vObj.url;
+    const cleanup = () => { video.src = ''; };
+    video.onloadeddata = () => {
+      // 跳到0.1秒，避开纯黑首帧
+      video.currentTime = Math.min(0.1, (video.duration || 1) / 10);
+    };
+    video.onseeked = () => {
+      try {
+        const maxW = 700;
+        const scale = Math.min(1, maxW / (video.videoWidth || maxW));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round((video.videoWidth || 400) * scale);
+        canvas.height = Math.round((video.videoHeight || 533) * scale);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const poster = canvas.toDataURL('image/jpeg', 0.7);
+        // 只在用户尚未手动设封面时应用
+        if(uploadedImages.length === 0 && selectedVideos.length > 0){
+          uploadedImages = [poster];
+          coverImageIndex = 0;
+          renderImageGrid();
+          showToast('✓ 已自动生成封面（可点封面上的✕换成自己的图）');
+        }
+      } catch(err){
+        console.warn('截帧失败:', err.message);
+      }
+      cleanup();
+    };
+    video.onerror = () => { console.warn('视频封面截取失败'); cleanup(); };
+  } catch(e){ console.warn('captureVideoPoster:', e.message); }
 }
 
 function removeVideo(e, i){
@@ -2825,7 +2865,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.5 - YouTube授权上传】');
+console.log('✓ 页面初始化完成 【版本 2.6 - 视频自动截帧封面】');
 </script>
 </body>
 </html>
