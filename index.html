@@ -767,13 +767,29 @@
   <div class="feed" id="weekFeed"></div>
 </div>
 <div class="page" id="page-message" style="display:none;">
-  <div class="page-header">💬 消息通知</div>
-  <div style="display:flex;border-bottom:2px solid var(--line);background:#fff;">
-    <button class="msg-tab" data-mt="dm" onclick="switchMsgTab('dm')" style="flex:1;padding:13px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;position:relative;">私信<span class="msg-dot" id="dotDm"></span></button>
-    <button class="msg-tab" data-mt="like" onclick="switchMsgTab('like')" style="flex:1;padding:13px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;position:relative;">点赞<span class="msg-dot" id="dotLike"></span></button>
-    <button class="msg-tab" data-mt="fav" onclick="switchMsgTab('fav')" style="flex:1;padding:13px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;position:relative;">收藏<span class="msg-dot" id="dotFav"></span></button>
+  <div class="page-header">💬 消息</div>
+  <div id="msgHome" style="background:#fff;min-height:60vh;padding-bottom:80px;">
+    <div style="display:flex;justify-content:space-around;padding:20px 10px;border-bottom:8px solid var(--bg-alt);">
+      <button onclick="openMsgCat('cmt')" style="border:none;background:none;cursor:pointer;text-align:center;position:relative;">
+        <span style="display:block;width:52px;height:52px;border-radius:50%;background:#5B8DEF;color:#fff;font-size:24px;line-height:52px;margin:0 auto 6px;">💬</span>
+        <span style="font-size:12px;color:var(--ink);">评论和@</span>
+        <span class="msg-dot" id="dotCmt" style="top:2px;right:2px;"></span>
+      </button>
+      <button onclick="openMsgCat('fans')" style="border:none;background:none;cursor:pointer;text-align:center;position:relative;">
+        <span style="display:block;width:52px;height:52px;border-radius:50%;background:#4FC3A1;color:#fff;font-size:24px;line-height:52px;margin:0 auto 6px;">👥</span>
+        <span style="font-size:12px;color:var(--ink);">新增粉丝</span>
+        <span class="msg-dot" id="dotFans" style="top:2px;right:2px;"></span>
+      </button>
+      <button onclick="openMsgCat('lf')" style="border:none;background:none;cursor:pointer;text-align:center;position:relative;">
+        <span style="display:block;width:52px;height:52px;border-radius:50%;background:#FF6B6B;color:#fff;font-size:24px;line-height:52px;margin:0 auto 6px;">❤️</span>
+        <span style="font-size:12px;color:var(--ink);">赞和收藏</span>
+        <span class="msg-dot" id="dotLf" style="top:2px;right:2px;"></span>
+      </button>
+    </div>
+    <div style="padding:14px 16px 6px;font-size:13px;font-weight:700;color:var(--ink-soft);position:relative;display:inline-block;">私信<span class="msg-dot" id="dotDm" style="top:12px;right:-12px;"></span></div>
+    <div id="dmList"></div>
   </div>
-  <div id="msgContent" style="background:#fff;min-height:60vh;padding-bottom:80px;"></div>
+  <div id="msgDetail" style="display:none;background:#fff;min-height:60vh;padding-bottom:80px;"></div>
 </div>
 <div class="page" id="page-profile" style="display:none;">
   <div style="background:#fff;padding:20px;min-height:100vh;margin-bottom:60px;">
@@ -1559,10 +1575,11 @@ async function loadCommentsFromDb(postId){
 /* 从数据库同步所有帖子的点赞/收藏状态 */
 async function loadEngagement(){
   try {
-    const [lr, fr, cr] = await Promise.all([
+    const [lr, fr, cr, flr] = await Promise.all([
       authedFetch(`${SUPABASE_URL}/rest/v1/likes?select=post_id,user_id,name,created_at`, { method:'GET' }),
       authedFetch(`${SUPABASE_URL}/rest/v1/favorites?select=post_id,user_id,name,created_at`, { method:'GET' }),
-      authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id`, { method:'GET' })
+      authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id,user_id,name,text,created_at`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/follows?select=*`, { method:'GET' })
     ]);
     const likes = lr.ok ? await lr.json() : [];
     const favs = fr.ok ? await fr.json() : [];
@@ -1581,6 +1598,8 @@ async function loadEngagement(){
     });
     window._likeRows = likes;
     window._favRows = favs;
+    window._cmtRows = cmts;
+    window._followRows = flr.ok ? await flr.json() : [];
     renderFeed();
     updateNavMsgDot();
     console.log('✓ 点赞/收藏已同步');
@@ -1854,7 +1873,7 @@ function renderPostModal(){
       <button class="xhs-back" onclick="closePost()">‹</button>
       <span class="avatar" style="background:${avatarColor(p.author)}">${initials(p.author)}</span>
       <span class="xhs-author-name">${p.author}</span>
-      <button class="xhs-follow" id="followBtn" onclick="toggleFollow()">关注</button>
+      ${p.user_id && (!session || !session.user || p.user_id !== session.user.id) ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
       ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">✉️</button>` : ''}
       <button class="xhs-share" onclick="showToast('链接已复制')">↗</button>
     </div>
@@ -1890,12 +1909,47 @@ function renderPostModal(){
   `;
   setupCarouselTouch();
 }
-function toggleFollow(){
-  const btn = document.getElementById('followBtn');
-  if(!btn) return;
-  const on = btn.classList.toggle('on');
-  btn.textContent = on ? '已关注' : '关注';
-  showToast(on ? '✓ 已关注' : '已取消关注');
+/* 关注状态查询（基于 follows 表） */
+function isFollowing(uid){
+  const me = session && session.user ? session.user.id : null;
+  if(!me || !uid) return false;
+  return (window._followRows || []).some(f => f.follower_id === me && f.followee_id === uid && f.active);
+}
+async function toggleFollowUser(uid, name){
+  if(!session || !session.user){ showToast('请先登录'); openAuth(); return; }
+  const me = session.user.id;
+  const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
+  const now = isFollowing(uid);
+  const newActive = !now;
+  try {
+    // 先尝试更新已有记录
+    const pr = await authedFetch(`${SUPABASE_URL}/rest/v1/follows?follower_id=eq.${me}&followee_id=eq.${uid}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active: newActive, follower_name: nick })
+    });
+    let rows = pr.ok ? await pr.json() : [];
+    if(!rows.length && newActive){
+      // 无记录则插入
+      const ir = await authedFetch(`${SUPABASE_URL}/rest/v1/follows`, {
+        method: 'POST',
+        body: JSON.stringify({ follower_id: me, follower_name: nick, followee_id: uid, active: true })
+      });
+      if(!ir.ok && ir.status !== 409) throw new Error(ir.status);
+      rows = ir.ok ? await ir.json() : [];
+    }
+    // 更新本地缓存
+    window._followRows = window._followRows || [];
+    const ex = window._followRows.find(f => f.follower_id === me && f.followee_id === uid);
+    if(ex) ex.active = newActive;
+    else if(rows[0]) window._followRows.push(rows[0]);
+    else window._followRows.push({ follower_id: me, follower_name: nick, followee_id: uid, active: newActive, created_at: new Date().toISOString() });
+    const btn = document.getElementById('followBtn');
+    if(btn){ btn.classList.toggle('on', newActive); btn.textContent = newActive ? '已关注' : '关注'; }
+    showToast(newActive ? '✓ 已关注' : '已取消关注');
+    if(document.getElementById('msgDetail') && document.getElementById('msgDetail').style.display !== 'none' && window._msgCat === 'fans'){
+      openMsgCat('fans', true);
+    }
+  } catch(e){ showToast('操作失败：' + e.message); }
 }
 async function toggleCollect(){
   if(!session || !session.user){ showToast('请先登录后再收藏'); openAuth(); return; }
@@ -2357,9 +2411,9 @@ function captureVideoPoster(vObj){
   } catch(e){ console.warn('captureVideoPoster:', e.message); }
 }
 
-/* ====== 消息中心：私信 + 点赞/收藏通知 + 未读红点 ====== */
-let msgTab = 'dm';
+/* ====== 消息中心 2.91：评论和@ / 新增粉丝 / 赞和收藏 + 私信 ====== */
 let dmRows = [];
+window._msgCat = null;
 
 function readTsKey(){ return 'wanba_read_' + (session && session.user ? session.user.id : 'guest'); }
 function getReadTs(){
@@ -2374,25 +2428,42 @@ function myPostIds(){
   if(!me) return new Set();
   return new Set(posts.filter(p => p.user_id === me).map(p => p.id));
 }
-function likeNotifs(){
-  const me = session && session.user ? session.user.id : null;
-  const mine = myPostIds();
-  return (window._likeRows || []).filter(r => mine.has(r.post_id) && r.user_id !== me)
-    .sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+function myNick(){
+  if(!(session && session.user)) return null;
+  return (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
 }
-function favNotifs(){
+/* 评论和@：我帖子下的评论 + 任何@我的评论 */
+function cmtNotifs(){
   const me = session && session.user ? session.user.id : null;
   const mine = myPostIds();
-  return (window._favRows || []).filter(r => mine.has(r.post_id) && r.user_id !== me)
+  const nick = myNick();
+  return (window._cmtRows || []).filter(r =>
+    r.user_id !== me && (mine.has(r.post_id) || (nick && r.text && r.text.includes('@' + nick)))
+  ).sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+}
+/* 赞和收藏合并 */
+function lfNotifs(){
+  const me = session && session.user ? session.user.id : null;
+  const mine = myPostIds();
+  const L = (window._likeRows || []).filter(r => mine.has(r.post_id) && r.user_id !== me).map(r => ({...r, _t:'like'}));
+  const F = (window._favRows || []).filter(r => mine.has(r.post_id) && r.user_id !== me).map(r => ({...r, _t:'fav'}));
+  return L.concat(F).sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+}
+/* 新增粉丝：关注过我的（含已取关，靠active区分） */
+function fanRows(){
+  const me = session && session.user ? session.user.id : null;
+  if(!me) return [];
+  return (window._followRows || []).filter(f => f.followee_id === me)
     .sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
 }
 function unreadCounts(){
   const ts = getReadTs();
   const me = session && session.user ? session.user.id : null;
   const dm = dmRows.filter(m => m.to_id === me && (!ts.dm || m.created_at > ts.dm)).length;
-  const lk = likeNotifs().filter(r => !ts.like || (r.created_at||'') > ts.like).length;
-  const fv = favNotifs().filter(r => !ts.fav || (r.created_at||'') > ts.fav).length;
-  return { dm, like: lk, fav: fv, total: dm + lk + fv };
+  const cmt = cmtNotifs().filter(r => !ts.cmt || (r.created_at||'') > ts.cmt).length;
+  const fans = fanRows().filter(r => r.active && (!ts.fans || (r.created_at||'') > ts.fans)).length;
+  const lf = lfNotifs().filter(r => !ts.lf || (r.created_at||'') > ts.lf).length;
+  return { dm, cmt, fans, lf, total: dm + cmt + fans + lf };
 }
 function updateNavMsgDot(){
   const btn = document.querySelector('[data-tab="message"]');
@@ -2403,8 +2474,7 @@ function updateNavMsgDot(){
   if(u.total > 0){
     if(!dot){ dot = document.createElement('span'); dot.className = 'nav-msg-dot'; btn.appendChild(dot); }
   } else if(dot){ dot.remove(); }
-  // 页内三个红点
-  const map = { dotDm:'dm', dotLike:'like', dotFav:'fav' };
+  const map = { dotDm:'dm', dotCmt:'cmt', dotFans:'fans', dotLf:'lf' };
   Object.entries(map).forEach(([id, k]) => {
     const el = document.getElementById(id);
     if(el) el.classList.toggle('on', u[k] > 0);
@@ -2419,74 +2489,135 @@ async function loadDms(){
   } catch(e){ dmRows = []; }
 }
 function initMessagePage(){
-  document.querySelectorAll('.msg-tab').forEach(b => b.classList.toggle('active', b.dataset.mt === msgTab));
-  loadDms().then(() => { renderMsgContent(); updateNavMsgDot(); });
-  renderMsgContent();
-  updateNavMsgDot();
-}
-function switchMsgTab(t){
-  msgTab = t;
-  setReadTs(t === 'dm' ? 'dm' : (t === 'like' ? 'like' : 'fav'));
-  document.querySelectorAll('.msg-tab').forEach(b => b.classList.toggle('active', b.dataset.mt === t));
-  renderMsgContent();
+  window._msgCat = null;
+  document.getElementById('msgHome').style.display = 'block';
+  document.getElementById('msgDetail').style.display = 'none';
+  loadDms().then(() => { renderDmList(); updateNavMsgDot(); });
+  renderDmList();
   updateNavMsgDot();
 }
 function fmtTime(iso){
   try { return new Date(iso).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e){ return ''; }
 }
-function renderMsgContent(){
-  const box = document.getElementById('msgContent');
+function avatarSpan(name, size){
+  return `<span class="avatar" style="background:${avatarColor(name||'友')};width:${size}px;height:${size}px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${initials(name||'友')}</span>`;
+}
+/* ---- 私信会话列表（消息首页下方） ---- */
+function renderDmList(){
+  const box = document.getElementById('dmList');
   if(!box) return;
   const me = session && session.user ? session.user.id : null;
   if(!me){
-    box.innerHTML = '<div class="empty-state"><span style="font-size:40px;display:block;">🔒</span><p>登录后查看消息</p></div>';
+    box.innerHTML = '<div class="empty-state"><span style="font-size:36px;display:block;">🔒</span><p>登录后查看消息</p></div>';
     return;
   }
-  if(msgTab === 'like' || msgTab === 'fav'){
-    const rows = msgTab === 'like' ? likeNotifs() : favNotifs();
-    const verb = msgTab === 'like' ? '给你点了赞' : '收藏了你的笔记';
-    const icon = msgTab === 'like' ? '❤️' : '⭐';
-    box.innerHTML = rows.length ? rows.map(r => {
-      const p = posts.find(x => x.id === r.post_id);
-      return `<div style="display:flex;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);" ${p?`onclick="openPost(${p.id})" style="cursor:pointer"`:''}>
-        <span class="avatar" style="background:${avatarColor(r.name||'友')};width:40px;height:40px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${initials(r.name||'友')}</span>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;"><b>${r.name||'某用户'}</b> ${verb} ${icon}</div>
-          <div style="font-size:12px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p ? '《'+p.title+'》' : ''} · ${fmtTime(r.created_at)}</div>
-        </div>
-      </div>`;
-    }).join('') : `<div class="empty-state"><span style="font-size:40px;display:block;">${icon}</span><p>还没有${msgTab==='like'?'点赞':'收藏'}通知</p></div>`;
-    return;
-  }
-  /* 私信：按对方分组会话 */
   const convs = {};
   dmRows.forEach(m => {
     const other = m.from_id === me ? m.to_id : m.from_id;
-    const otherName = m.from_id === me ? (convs[other]?.name || '对方') : m.from_name;
-    if(!convs[other]) convs[other] = { id: other, name: otherName, msgs: [] };
+    if(!convs[other]) convs[other] = { id: other, name: '对方', msgs: [] };
     if(m.from_id !== me) convs[other].name = m.from_name;
     convs[other].msgs.push(m);
   });
   const list = Object.values(convs).sort((a,b) => b.msgs[b.msgs.length-1].created_at.localeCompare(a.msgs[a.msgs.length-1].created_at));
   box.innerHTML = list.length ? list.map(c => {
     const last = c.msgs[c.msgs.length-1];
-    return `<div onclick="openThread('${c.id}','${(c.name||'').replace(/'/g,'')}')" style="display:flex;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;">
-      <span class="avatar" style="background:${avatarColor(c.name||'友')};width:44px;height:44px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${initials(c.name||'友')}</span>
+    return `<div onclick="openThread('${c.id}','${(c.name||'').replace(/'/g,'')}')" style="display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;">
+      ${avatarSpan(c.name, 44)}
       <div style="flex:1;min-width:0;">
         <div style="font-size:14px;font-weight:600;">${c.name||'用户'}</div>
         <div style="font-size:12px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${last.from_id===me?'我: ':''}${last.text}</div>
       </div>
       <span style="font-size:11px;color:var(--ink-faint);flex-shrink:0;">${fmtTime(last.created_at)}</span>
     </div>`;
-  }).join('') : '<div class="empty-state"><span style="font-size:40px;display:block;">📭</span><p>暂无私信</p><p style="font-size:12px;color:var(--ink-faint);">在帖子页点 ✉️ 可以私信作者</p></div>';
+  }).join('') : '<div style="text-align:center;padding:30px 20px;color:var(--ink-faint);font-size:13px;">暂无私信 · 在帖子页点 ✉️ 可私信作者</div>';
 }
+/* ---- 三大分类详情页 ---- */
+function msgDetailShell(title, inner){
+  return `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);">
+      <button onclick="initMessagePage()" style="border:none;background:none;font-size:22px;cursor:pointer;padding:0;">‹</button>
+      <b style="font-size:15px;">${title}</b>
+    </div>
+    <div>${inner}</div>`;
+}
+function openMsgCat(cat, keep){
+  window._msgCat = cat;
+  if(!keep) setReadTs(cat);
+  const home = document.getElementById('msgHome');
+  const detail = document.getElementById('msgDetail');
+  home.style.display = 'none';
+  detail.style.display = 'block';
+  const me = session && session.user ? session.user.id : null;
+  if(!me){
+    detail.innerHTML = msgDetailShell('消息', '<div class="empty-state"><p>请先登录</p></div>');
+    updateNavMsgDot();
+    return;
+  }
+  if(cat === 'cmt'){
+    const rows = cmtNotifs();
+    const nick = myNick();
+    detail.innerHTML = msgDetailShell('评论和@', rows.length ? rows.map(r => {
+      const p = posts.find(x => x.id === r.post_id);
+      const isAt = nick && r.text && r.text.includes('@' + nick) && !myPostIds().has(r.post_id);
+      return `<div style="display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;" onclick="${p?`openPost(${p.id})`:''}">
+        ${avatarSpan(r.name, 40)}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13.5px;"><b>${r.name||'用户'}</b> ${isAt ? '@了你' : '评论了你的笔记'}</div>
+          <div style="font-size:13px;color:var(--ink-soft);margin:3px 0;">${r.text}</div>
+          <div style="font-size:11px;color:var(--ink-faint);">${p ? '《'+p.title.slice(0,18)+'》 · ' : ''}${fmtTime(r.created_at)}</div>
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty-state"><span style="font-size:36px;display:block;">💬</span><p>还没有评论或@</p></div>');
+  } else if(cat === 'fans'){
+    const rows = fanRows();
+    detail.innerHTML = msgDetailShell('新增粉丝', rows.length ? rows.map(r => {
+      const iFollow = isFollowing(r.follower_id);
+      let btn;
+      if(iFollow){
+        btn = `<button onclick="event.stopPropagation();toggleFollowUser('${r.follower_id}','${(r.follower_name||'').replace(/'/g,'')}')" style="padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink-faint);font-size:12px;font-weight:600;cursor:pointer;">已关注</button>`;
+      } else if(r.active){
+        btn = `<button onclick="event.stopPropagation();toggleFollowUser('${r.follower_id}','${(r.follower_name||'').replace(/'/g,'')}')" style="padding:6px 14px;border-radius:999px;border:none;background:var(--berry);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">回关</button>`;
+      } else {
+        btn = `<button onclick="event.stopPropagation();toggleFollowUser('${r.follower_id}','${(r.follower_name||'').replace(/'/g,'')}')" style="padding:6px 14px;border-radius:999px;border:1px solid var(--berry);background:#fff;color:var(--berry);font-size:12px;font-weight:600;cursor:pointer;">关注</button>`;
+      }
+      return `<div style="display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);">
+        ${avatarSpan(r.follower_name, 44)}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;">${r.follower_name||'用户'}</div>
+          <div style="font-size:12px;color:var(--ink-faint);">${r.active ? '关注了你' : '曾关注过你（已取关）'} · ${fmtTime(r.created_at)}</div>
+        </div>
+        ${btn}
+      </div>`;
+    }).join('') : '<div class="empty-state"><span style="font-size:36px;display:block;">👥</span><p>还没有新粉丝</p></div>');
+  } else if(cat === 'lf'){
+    const rows = lfNotifs();
+    detail.innerHTML = msgDetailShell('赞和收藏', rows.length ? rows.map(r => {
+      const p = posts.find(x => x.id === r.post_id);
+      const verb = r._t === 'like' ? '赞了你的笔记 ❤️' : '收藏了你的笔记 ⭐';
+      return `<div style="display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);">
+        ${avatarSpan(r.name, 40)}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13.5px;"><b>${r.name||'用户'}</b> ${verb}</div>
+          <div style="font-size:11px;color:var(--ink-faint);">${p ? '《'+p.title.slice(0,18)+'》 · ' : ''}${fmtTime(r.created_at)}</div>
+        </div>
+        ${p ? `<button onclick="openPost(${p.id})" style="padding:6px 12px;border-radius:999px;border:1px solid var(--sage);background:#fff;color:var(--sage-dark);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">查看笔记</button>` : ''}
+      </div>`;
+    }).join('') : '<div class="empty-state"><span style="font-size:36px;display:block;">❤️</span><p>还没有赞和收藏</p></div>');
+  }
+  updateNavMsgDot();
+}
+/* ---- 私信聊天流 ---- */
 function openThread(otherId, otherName){
-  const box = document.getElementById('msgContent');
+  setReadTs('dm');
+  const home = document.getElementById('msgHome');
+  const detail = document.getElementById('msgDetail');
+  home.style.display = 'none';
+  detail.style.display = 'block';
   const me = session.user.id;
   const msgs = dmRows.filter(m => m.from_id === otherId || m.to_id === otherId);
-  box.innerHTML = `
+  detail.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);">
-      <button onclick="renderMsgContent()" style="border:none;background:none;font-size:20px;cursor:pointer;">‹</button>
+      <button onclick="initMessagePage()" style="border:none;background:none;font-size:22px;cursor:pointer;padding:0;">‹</button>
       <b>${otherName}</b>
     </div>
     <div id="threadList" style="padding:16px;display:flex;flex-direction:column;gap:10px;max-height:50vh;overflow-y:auto;">
@@ -2500,12 +2631,13 @@ function openThread(otherId, otherName){
     </div>`;
   const tl = document.getElementById('threadList');
   if(tl) tl.scrollTop = tl.scrollHeight;
+  updateNavMsgDot();
 }
 async function sendDm(toId, toName){
   const input = document.getElementById('threadInput') || document.getElementById('dmComposeInput');
   const text = input ? input.value.trim() : '';
   if(!text) return;
-  const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
+  const nick = myNick();
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/messages`, {
       method: 'POST',
@@ -3143,7 +3275,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.9 - 消息中心+收藏计数】');
+console.log('✓ 页面初始化完成 【版本 2.91 - 消息中心改版：评论@/粉丝/赞藏】');
 </script>
 </body>
 </html>
