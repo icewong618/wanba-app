@@ -1525,6 +1525,53 @@ function openPost(id){
   activePostId = id;
   renderPostModal();
   document.getElementById('postOverlay').classList.add('open');
+  loadCommentsFromDb(id); // 从数据库加载评论
+}
+async function loadCommentsFromDb(postId){
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${postId}&order=created_at.asc`, {
+      headers: supabaseHeaders()
+    });
+    if(!res.ok) return;
+    const rows = await res.json();
+    const p = getPost();
+    if(!p || p.id !== postId) return;
+    p.comments = rows.map(r => ({
+      id: r.id, name: r.name, text: r.text, user_id: r.user_id,
+      time: r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : ''
+    }));
+    const list = document.getElementById('commentsList');
+    if(list) list.innerHTML = p.comments.map(c => renderComment(c)).join('') || '<div style="text-align:center;color:var(--ink-faint);font-size:13px;padding:16px 0;">还没有评论，来抢沙发～</div>';
+    const countEl = document.querySelector('.xhs-comments-count');
+    if(countEl) countEl.textContent = `共 ${p.comments.length} 条评论`;
+  } catch(e){ console.warn('评论加载失败:', e.message); }
+}
+/* 从数据库同步所有帖子的点赞/收藏状态 */
+async function loadEngagement(){
+  try {
+    const h = { headers: supabaseHeaders() };
+    const [lr, fr, cr] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/likes?select=post_id,user_id`, h),
+      fetch(`${SUPABASE_URL}/rest/v1/favorites?select=post_id,user_id`, h),
+      fetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id`, h)
+    ]);
+    const likes = lr.ok ? await lr.json() : [];
+    const favs = fr.ok ? await fr.json() : [];
+    const cmts = cr.ok ? await cr.json() : [];
+    const me = session && session.user ? session.user.id : null;
+    const likeCount = {}, favCount = {}, cmtCount = {}, myLikes = new Set(), myFavs = new Set();
+    likes.forEach(r => { likeCount[r.post_id] = (likeCount[r.post_id]||0)+1; if(r.user_id===me) myLikes.add(r.post_id); });
+    favs.forEach(r => { favCount[r.post_id] = (favCount[r.post_id]||0)+1; if(r.user_id===me) myFavs.add(r.post_id); });
+    cmts.forEach(r => { cmtCount[r.post_id] = (cmtCount[r.post_id]||0)+1; });
+    posts.forEach(p => {
+      p.likes = likeCount[p.id] || 0;
+      p.liked = myLikes.has(p.id);
+      p.collected = myFavs.has(p.id);
+      p.commentCount = cmtCount[p.id] || 0;
+    });
+    renderFeed();
+    console.log('✓ 点赞/收藏已同步');
+  } catch(e){ console.warn('互动数据同步失败:', e.message); }
 }
 function closePost(){
   document.getElementById('postOverlay').classList.remove('open');
@@ -1836,88 +1883,103 @@ function toggleFollow(){
   btn.textContent = on ? '已关注' : '关注';
   showToast(on ? '✓ 已关注' : '已取消关注');
 }
-function toggleCollect(){
+async function toggleCollect(){
+  if(!session || !session.user){ showToast('请先登录后再收藏'); openAuth(); return; }
   const p = getPost();
-  if(!p) return;
   p.collected = !p.collected;
   const btn = document.getElementById('xhsCollect');
   if(btn){
     btn.classList.toggle('collected', p.collected);
     btn.querySelector('.ico').textContent = p.collected ? '★' : '☆';
   }
-  savePosts();
   showToast(p.collected ? '✓ 已收藏' : '已取消收藏');
+  try {
+    if(p.collected){
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+        method:'POST',
+        body: JSON.stringify({ post_id: p.id, user_id: session.user.id })
+      });
+      if(!res.ok && res.status !== 409) throw new Error(res.status);
+    } else {
+      await authedFetch(`${SUPABASE_URL}/rest/v1/favorites?post_id=eq.${p.id}&user_id=eq.${session.user.id}`, { method:'DELETE' });
+    }
+  } catch(e){ console.warn('收藏同步失败:', e); }
 }
 function countComments(p){
-  return p.comments.reduce((n,c)=>n+1+c.replies.length,0);
+  return (p.comments || []).length;
 }
 function renderComment(c){
-  const replies = c.replies.map(r=>`
-    <div class="comment">
-      <span class="avatar" style="background:${avatarColor(r.name)}">${initials(r.name)}</span>
-      <div class="comment-body">
-        <div class="comment-name">${r.name}</div>
-        <div class="comment-text">${r.text}</div>
-      </div>
-    </div>
-  `).join('');
+  const mine = session && session.user && c.user_id === session.user.id;
   return `
     <div class="comment">
       <span class="avatar" style="background:${avatarColor(c.name)}">${initials(c.name)}</span>
       <div class="comment-body">
-        <div class="comment-name">${c.name}</div>
+        <div class="comment-name">${c.name} <span style="font-weight:400;color:var(--ink-faint);font-size:11px;">${c.time || ''}</span></div>
         <div class="comment-text">${c.text}</div>
-        <div class="comment-actions">
-          <span>♡ ${c.likes}</span>
-          <button onclick="toggleReplyBox(${c.id})">回复</button>
-        </div>
-        <div class="reply-input" id="replyBox-${c.id}">
-          <input type="text" id="replyInput-${c.id}" placeholder="回复 ${c.name}">
-          <button class="send-btn small" onclick="addReply(${c.id})">发送</button>
-        </div>
-        ${c.replies.length ? `<div class="replies">${replies}</div>` : ''}
       </div>
+      ${mine ? `<button onclick="deleteComment(${c.id})" title="删除" style="border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:13px;padding:4px;">✕</button>` : ''}
     </div>
   `;
 }
-function toggleReplyBox(cid){
-  const box = document.getElementById(`replyBox-${cid}`);
-  box.classList.toggle('open');
+async function deleteComment(id){
+  if(!confirm('删除这条评论？')) return;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?id=eq.${id}`, { method:'DELETE' });
+    if(!res.ok) throw new Error('删除失败 ' + res.status);
+    const p = getPost();
+    p.comments = p.comments.filter(c => c.id !== id);
+    const list = document.getElementById('commentsList');
+    if(list) list.innerHTML = p.comments.map(c => renderComment(c)).join('');
+    const countEl = document.querySelector('.xhs-comments-count');
+    if(countEl) countEl.textContent = `共 ${p.comments.length} 条评论`;
+    showToast('评论已删除');
+  } catch(e){ showToast('删除失败：' + e.message); }
 }
-function addReply(cid){
-  const input = document.getElementById(`replyInput-${cid}`);
-  const text = input.value.trim();
-  if(!text) return;
-  const p = getPost();
-  const c = p.comments.find(c=>c.id===cid);
-  c.replies.push({id:nextCommentId++, name:'我', text});
-  renderPostModal();
-  savePosts();
-  showToast('回复已发送');
-}
-function addComment(){
+async function addComment(){
   const input = document.getElementById('newCommentInput');
   const text = input.value.trim();
   if(!text) return;
+  if(!session || !session.user){
+    showToast('请先登录后再评论');
+    openAuth();
+    return;
+  }
   const p = getPost();
-  p.comments.push({id:nextCommentId++, name:'我', text, likes:0, replies:[]});
-  // 局部更新：只刷新评论区，不重建整个弹窗（保持图片位置和滚动位置）
-  const list = document.getElementById('commentsList');
-  if(list) list.innerHTML = p.comments.map(c => renderComment(c)).join('');
-  const countEl = document.querySelector('.xhs-comments-count');
-  if(countEl) countEl.textContent = `共 ${countComments(p)} 条评论`;
-  input.value = '';
-  const sendBtn = document.getElementById('xhsSend');
-  if(sendBtn) sendBtn.style.display = 'none';
-  renderFeed();
-  savePosts();
-  showToast('评论已发送');
+  const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ post_id: p.id, user_id: session.user.id, name: nick, text })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error(`${res.status}: ${t.slice(0,80)}`);
+    }
+    const saved = (await res.json())[0];
+    p.comments.push({
+      id: saved.id, name: nick, text, user_id: session.user.id,
+      time: new Date().toLocaleString('zh-CN')
+    });
+    const list = document.getElementById('commentsList');
+    if(list) list.innerHTML = p.comments.map(c => renderComment(c)).join('');
+    const countEl = document.querySelector('.xhs-comments-count');
+    if(countEl) countEl.textContent = `共 ${p.comments.length} 条评论`;
+    input.value = '';
+    const sendBtn = document.getElementById('xhsSend');
+    if(sendBtn) sendBtn.style.display = 'none';
+    showToast('评论已发送');
+  } catch(e){
+    console.warn('评论保存失败:', e.message);
+    showToast('评论发送失败，请重试');
+  }
 }
-function toggleLike(){
+async function toggleLike(){
+  if(!session || !session.user){ showToast('请先登录后再点赞'); openAuth(); return; }
   const p = getPost();
-  p.liked = !p.liked;
-  p.likes += p.liked ? 1 : -1;
-  // 局部更新点赞按钮
+  const willLike = !p.liked;
+  // 乐观更新UI
+  p.liked = willLike;
+  p.likes += willLike ? 1 : -1;
   const btn = document.getElementById('xhsLike');
   if(btn){
     btn.classList.toggle('liked', p.liked);
@@ -1926,7 +1988,20 @@ function toggleLike(){
     if(num) num.textContent = p.likes;
   }
   renderFeed();
-  savePosts();
+  try {
+    if(willLike){
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/likes`, {
+        method:'POST',
+        body: JSON.stringify({ post_id: p.id, user_id: session.user.id })
+      });
+      if(!res.ok && res.status !== 409) throw new Error(res.status);
+    } else {
+      await authedFetch(`${SUPABASE_URL}/rest/v1/likes?post_id=eq.${p.id}&user_id=eq.${session.user.id}`, { method:'DELETE' });
+    }
+  } catch(e){
+    console.warn('点赞同步失败:', e);
+    showToast('操作未同步，请重试');
+  }
 }
 function rsvp(){
   const p = getPost();
@@ -2787,6 +2862,7 @@ async function loadPostsFromSupabase(){
       renderQuicklinks();
       renderFeed();
       console.log('✓ 页面已刷新');
+      loadEngagement(); // 同步点赞/收藏
     } else {
       console.log('📭 暂无数据或数据格式不正确');
     }
@@ -2865,7 +2941,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.6 - 视频自动截帧封面】');
+console.log('✓ 页面初始化完成 【版本 2.7 - 评论点赞收藏入库】');
 </script>
 </body>
 </html>
