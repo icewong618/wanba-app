@@ -1681,7 +1681,7 @@ function renderFeed(){
         <div class="card-title">${p.title}</div>
         <div class="card-meta">
           <div class="author">
-            <span class="avatar" style="background:${avatarColor(p.author)}">${initials(p.author)}</span>
+            ${avatarCircleHtml(p.author, p.user_id)}
             <span class="author-name">${p.author}</span>
           </div>
           <div class="stat-row">
@@ -1702,6 +1702,9 @@ function openPost(id){
   renderPostModal();
   document.getElementById('postOverlay').classList.add('open');
   loadCommentsFromDb(id); // 从数据库加载评论
+  // 2.94修复：兜底确保笔记作者头像已缓存（一般在首页加载时已批量拉过）
+  const p = getPost();
+  if(p) ensureAvatarsFor([p.user_id]).then(changed => { if(changed && activePostId === id) renderPostModal(); });
 }
 async function loadCommentsFromDb(postId){
   try {
@@ -1899,7 +1902,7 @@ function renderWeekFeed(){
             <div class="card-title">${p.title}</div>
             <div class="card-meta">
               <div class="author">
-                <span class="avatar" style="background:${avatarColor(p.author)}">${initials(p.author)}</span>
+                ${avatarCircleHtml(p.author, p.user_id)}
                 <span class="author-name">${p.author}</span>
               </div>
               <div class="stat-row"><span>${p.liked?'♥':'♡'} ${p.likes}</span></div>
@@ -2028,7 +2031,7 @@ function renderPostModal(){
   document.getElementById('postModal').innerHTML = `
     <div class="xhs-topbar">
       <button class="xhs-back" onclick="closePost()">‹</button>
-      <span class="avatar" style="background:${avatarColor(p.author)}">${initials(p.author)}</span>
+      ${avatarCircleHtml(p.author, p.user_id)}
       <span class="xhs-author-name">${p.author}</span>
       ${p.user_id && (!session || !session.user || p.user_id !== session.user.id) ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
       ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">✉️</button>` : ''}
@@ -3562,6 +3565,14 @@ async function loadPostsFromSupabase(){
       renderFeed();
       console.log('✓ 页面已刷新');
       loadEngagement(); // 同步点赞/收藏
+      // 2.94修复：批量拉取帖子作者头像，拿到后刷新一次feed显示真实头像
+      ensureAvatarsFor(posts.map(p => p.user_id)).then(changed => {
+        if(changed){
+          renderFeed();
+          const weekPage = document.getElementById('page-week');
+          if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
+        }
+      });
     } else {
       console.log('📭 暂无数据或数据格式不正确');
     }
@@ -3644,7 +3655,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.94 - 楼中楼评论回复+资料丢失修复+真实头像+顶部分区显隐修复】');
+console.log('✓ 页面初始化完成 【版本 2.94 - 楼中楼评论回复+资料丢失修复+真实头像(评论/卡片)+顶部分区显隐修复】');
 </script>
 </body>
 </html>
