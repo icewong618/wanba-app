@@ -967,6 +967,35 @@ function avatarColor(name){
 }
 function initials(name){ return name.slice(0,1); }
 
+/* ====== 真实头像缓存（评论等处按 user_id 显示真实头像）（2.94修复） ====== */
+window._avatarCache = window._avatarCache || {};
+function resolveAvatarUrl(user_id){
+  if(!user_id) return null;
+  // 自己的头像直接用内存里的 currentUser，最新且不用等网络
+  if(session && session.user && user_id === session.user.id && currentUser.avatar) return currentUser.avatar;
+  return window._avatarCache[user_id] || null;
+}
+/* 批量拉取一批 user_id 的头像并写入缓存，已缓存过的（含"确认没有头像"）不会重复请求 */
+async function ensureAvatarsFor(userIds){
+  const need = [...new Set((userIds||[]).filter(Boolean))].filter(uid => !(uid in window._avatarCache));
+  if(!need.length) return false;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${need.join(',')})&select=user_id,avatar`);
+    if(res.ok){
+      const rows = await res.json();
+      rows.forEach(r => { window._avatarCache[r.user_id] = r.avatar || null; });
+    }
+    need.forEach(uid => { if(!(uid in window._avatarCache)) window._avatarCache[uid] = null; });
+    return true;
+  } catch(e){ console.warn('头像批量获取失败:', e.message); return false; }
+}
+/* 头像圆圈：有真实头像显示图片，否则回退成色块+首字（class="avatar" 走已有CSS尺寸） */
+function avatarCircleHtml(name, user_id){
+  const url = resolveAvatarUrl(user_id);
+  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
+  return `<span class="avatar" style="background:${avatarColor(name||'友')}">${initials(name||'友')}</span>`;
+}
+
 // ====== 用户信息管理 ======
 let currentUser = {
   name: '游客用户',
@@ -992,7 +1021,12 @@ function loadSession(){
   // 启动即刷新令牌（access_token 1小时过期，主动续期避免401）
   if(session && session.refresh_token){
     refreshSession().then(ok => {
-      if(ok){ console.log('✓ 登录令牌已续期'); loadEngagement && loadEngagement(); }
+      if(ok){
+        console.log('✓ 登录令牌已续期');
+        loadEngagement && loadEngagement();
+        // 令牌确认续期成功后再拉取头像/昵称，避免和上面这次refreshSession并发争抢同一个refresh_token
+        fetchProfileFromDb();
+      }
       else { console.warn('令牌续期失败，需重新登录'); logoutUser(); }
     });
   }
@@ -1009,7 +1043,6 @@ function updateAuthUI(){
     inBtn.style.display = 'none'; regBtn.style.display = 'none'; outBtn.style.display = 'block';
     // 关键：切换到该账号自己的资料档案
     loadUserProfile();
-    fetchProfileFromDb();
   } else {
     status.textContent = '未登录（游客模式）';
     inBtn.style.display = 'block'; regBtn.style.display = 'block'; outBtn.style.display = 'none';
@@ -1087,6 +1120,7 @@ async function submitAuth(){
       session = { access_token: data.access_token, refresh_token: data.refresh_token, user: data.user };
       localStorage.setItem('wanba_session', JSON.stringify(session));
       updateAuthUI(); closeAuth(); initProfilePage();
+      fetchProfileFromDb();
       showToast('✓ 登入成功');
       return;
     }
@@ -1126,6 +1160,7 @@ async function submitAuth(){
         session = { access_token: rd.access_token, refresh_token: rd.refresh_token, user: rd.user };
         localStorage.setItem('wanba_session', JSON.stringify(session));
         updateAuthUI(); closeAuth(); initProfilePage();
+        fetchProfileFromDb();
         showToast('🎉 注册成功，已登入');
       } else {
         // 需要邮箱验证
@@ -1168,6 +1203,7 @@ async function handleEmailConfirmRedirect(){
     localStorage.setItem('wanba_session', JSON.stringify(session));
     updateAuthUI();
     initProfilePage();
+    fetchProfileFromDb();
     // 清除地址栏中的令牌，避免泄露
     history.replaceState(null, '', window.location.pathname);
     showToast(type === 'signup' ? '🎉 邮箱验证成功，已自动登录！' : '✓ 已自动登录');
@@ -1676,12 +1712,11 @@ async function loadCommentsFromDb(postId){
     if(!p || p.id !== postId) return;
     p.comments = rows.map(r => ({
       id: r.id, name: r.name, text: r.text, user_id: r.user_id,
+      parent_id: r.parent_id || null, reply_to_name: r.reply_to_name || null,
       time: r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : ''
     }));
-    const list = document.getElementById('commentsList');
-    if(list) list.innerHTML = p.comments.map(c => renderComment(c)).join('') || '<div style="text-align:center;color:var(--ink-faint);font-size:13px;padding:16px 0;">还没有评论，来抢沙发～</div>';
-    const countEl = document.querySelector('.xhs-comments-count');
-    if(countEl) countEl.textContent = `共 ${p.comments.length} 条评论`;
+    await ensureAvatarsFor(p.comments.map(c => c.user_id));
+    renderCommentsList(p);
   } catch(e){ console.warn('评论加载失败:', e.message); }
 }
 /* 从数据库同步所有帖子的点赞/收藏状态 */
@@ -1690,7 +1725,7 @@ async function loadEngagement(){
     const [lr, fr, cr, flr] = await Promise.all([
       authedFetch(`${SUPABASE_URL}/rest/v1/likes?select=post_id,user_id,name,created_at`, { method:'GET' }),
       authedFetch(`${SUPABASE_URL}/rest/v1/favorites?select=post_id,user_id,name,created_at`, { method:'GET' }),
-      authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id,user_id,name,text,created_at`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=post_id,user_id,name,text,created_at,parent_id,reply_to_user_id,reply_to_name`, { method:'GET' }),
       authedFetch(`${SUPABASE_URL}/rest/v1/follows?select=*`, { method:'GET' })
     ]);
     const likes = lr.ok ? await lr.json() : [];
@@ -1839,6 +1874,9 @@ function switchTab(tab){
   // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
   const topWrap = document.querySelector('header.top .top-wrap');
   if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
+  // 2.94修复：绿色quick-bar（遛娃/免费活动/本月活动/本周末活动）在首页/本周/消息都显示，只在"我的"页隐藏
+  const quickBar = document.querySelector('header.top .quick-bar');
+  if(quickBar) quickBar.style.display = (tab === 'profile') ? 'none' : '';
 
   // Render content for specific tabs
   if(tab === 'week'){
@@ -1984,7 +2022,8 @@ function renderPostModal(){
       </div>
     </div>` : '';
 
-  const commentsHtml = p.comments.map(c => renderComment(c)).join('') || `<div style="font-size:13px;color:var(--ink-faint);padding:6px 0 12px;">还没有评论,来说第一句吧</div>`;
+  const commentThreads = buildCommentThreads(p.comments || []);
+  const commentsHtml = commentThreads.map(t => renderCommentThread(t)).join('') || `<div style="font-size:13px;color:var(--ink-faint);padding:6px 0 12px;">还没有评论,来说第一句吧</div>`;
 
   document.getElementById('postModal').innerHTML = `
     <div class="xhs-topbar">
@@ -2026,7 +2065,7 @@ function renderPostModal(){
         <span class="ico">${p.collected?'★':'☆'}</span><span id="xhsFavNum">${p.favs||0}</span>
       </button>
       <button class="xhs-act" onclick="document.getElementById('newCommentInput').focus()">
-        <span class="ico">💬</span><span>${countComments(p)}</span>
+        <span class="ico">💬</span><span id="xhsCmtNum">${countComments(p)}</span>
       </button>
     </div>`}
   `;
@@ -2104,30 +2143,152 @@ async function toggleCollect(){
 function countComments(p){
   return (p.comments || []).length;
 }
-function renderComment(c){
+/* 2.93.1：按 root 主评论分组，回复（含"回复的回复"）统一展开在主评论下方——小红书式楼中楼 */
+function buildCommentThreads(comments){
+  const byId = {};
+  comments.forEach(c => { byId[c.id] = c; });
+  function findRootId(c){
+    let cur = c, guard = 0;
+    while(cur.parent_id && byId[cur.parent_id] && guard++ < 50){
+      cur = byId[cur.parent_id];
+    }
+    return cur.id;
+  }
+  const threads = [];
+  const indexOfRoot = {};
+  comments.forEach(c => {
+    if(!c.parent_id){
+      indexOfRoot[c.id] = threads.length;
+      threads.push({ root: c, replies: [] });
+    }
+  });
+  comments.forEach(c => {
+    if(c.parent_id){
+      const rid = findRootId(c);
+      if(indexOfRoot[rid] === undefined){
+        // 极端情况：主评论已不在本地列表（理论上不会发生，兜底展示）
+        indexOfRoot[rid] = threads.length;
+        threads.push({ root: byId[rid] || c, replies: [] });
+      }
+      if(c.id !== rid) threads[indexOfRoot[rid]].replies.push(c);
+    }
+  });
+  return threads;
+}
+/* 统一刷新评论列表+计数（新增/删除/回复共用） */
+function renderCommentsList(p){
+  const threads = buildCommentThreads(p.comments || []);
+  const list = document.getElementById('commentsList');
+  if(list){
+    list.innerHTML = threads.map(t => renderCommentThread(t)).join('') ||
+      '<div style="text-align:center;color:var(--ink-faint);font-size:13px;padding:16px 0;">还没有评论，来抢沙发～</div>';
+  }
+  const total = countComments(p);
+  const countEl = document.querySelector('.xhs-comments-count');
+  if(countEl) countEl.textContent = `共 ${total} 条评论`;
+  const cmtNum = document.getElementById('xhsCmtNum');
+  if(cmtNum) cmtNum.textContent = total;
+}
+function renderCommentThread(t){
+  const repliesHtml = t.replies.map(r => renderComment(r, true)).join('');
+  return `${renderComment(t.root, false)}${repliesHtml ? `<div class="replies">${repliesHtml}</div>` : ''}`;
+}
+function renderComment(c, isReply){
   const mine = session && session.user && c.user_id === session.user.id;
+  const replyPrefix = (isReply && c.reply_to_name) ? `<span style="color:var(--sage-dark);font-weight:600;">回复 @${c.reply_to_name}：</span>` : '';
   return `
     <div class="comment">
-      <span class="avatar" style="background:${avatarColor(c.name)}">${initials(c.name)}</span>
+      ${avatarCircleHtml(c.name, c.user_id)}
       <div class="comment-body">
         <div class="comment-name">${c.name} <span style="font-weight:400;color:var(--ink-faint);font-size:11px;">${c.time || ''}</span></div>
-        <div class="comment-text">${c.text}</div>
+        <div class="comment-text">${replyPrefix}${c.text}</div>
+        <div class="comment-actions">
+          <button onclick="toggleReplyInput(${c.id})">回复</button>
+        </div>
+        <div class="reply-input" id="replyInput-${c.id}">
+          <input type="text" id="replyText-${c.id}" placeholder="回复 ${(c.name||'').replace(/"/g,'')}..." onkeydown="if(event.key==='Enter'){submitReply(${c.id})}">
+          <button class="send-btn small" onclick="submitReply(${c.id})">发送</button>
+        </div>
       </div>
       ${mine ? `<button onclick="deleteComment(${c.id})" title="删除" style="border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:13px;padding:4px;">✕</button>` : ''}
     </div>
   `;
 }
+/* 展开/收起某条评论下方的回复输入框（同时只留一个展开，收起其余的） */
+function toggleReplyInput(id){
+  if(!session || !session.user){ showToast('请先登录后再回复'); openAuth(); return; }
+  document.querySelectorAll('.reply-input.open').forEach(el => {
+    if(el.id !== `replyInput-${id}`) el.classList.remove('open');
+  });
+  const box = document.getElementById(`replyInput-${id}`);
+  if(!box) return;
+  const opening = !box.classList.contains('open');
+  box.classList.toggle('open', opening);
+  if(opening){
+    const input = document.getElementById(`replyText-${id}`);
+    if(input) input.focus();
+  }
+}
+/* 回复某条评论/回复：真正写入数据库（parent_id + reply_to_user_id + reply_to_name） */
+async function submitReply(parentId){
+  const input = document.getElementById(`replyText-${parentId}`);
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  if(!session || !session.user){ showToast('请先登录后再回复'); openAuth(); return; }
+  const p = getPost();
+  const parent = (p.comments || []).find(c => c.id === parentId);
+  if(!parent){ showToast('找不到要回复的评论'); return; }
+  const nick = myNick();
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        post_id: p.id, user_id: session.user.id, name: nick, text,
+        parent_id: parentId, reply_to_user_id: parent.user_id || null, reply_to_name: parent.name
+      })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error(`${res.status}: ${t.slice(0,80)}`);
+    }
+    const saved = (await res.json())[0];
+    p.comments.push({
+      id: saved.id, name: nick, text, user_id: session.user.id,
+      parent_id: parentId, reply_to_name: parent.name,
+      time: new Date().toLocaleString('zh-CN')
+    });
+    renderCommentsList(p);
+    showToast('回复已发送');
+  } catch(e){
+    console.warn('回复保存失败:', e.message);
+    showToast('回复发送失败，请重试');
+  }
+}
+/* 收集某条评论的所有下级回复id（本地级联删除，数据库侧已有 ON DELETE CASCADE 兜底） */
+function collectDescendantIds(comments, id){
+  const result = new Set([id]);
+  let changed = true;
+  while(changed){
+    changed = false;
+    comments.forEach(c => {
+      if(c.parent_id != null && result.has(c.parent_id) && !result.has(c.id)){
+        result.add(c.id);
+        changed = true;
+      }
+    });
+  }
+  return result;
+}
 async function deleteComment(id){
-  if(!confirm('删除这条评论？')) return;
+  if(!confirm('删除这条评论？其下的回复也会一并删除')) return;
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?id=eq.${id}`, { method:'DELETE' });
     if(!res.ok) throw new Error('删除失败 ' + res.status);
     const p = getPost();
-    p.comments = p.comments.filter(c => c.id !== id);
-    const list = document.getElementById('commentsList');
-    if(list) list.innerHTML = p.comments.map(c => renderComment(c)).join('');
-    const countEl = document.querySelector('.xhs-comments-count');
-    if(countEl) countEl.textContent = `共 ${p.comments.length} 条评论`;
+    const toRemove = collectDescendantIds(p.comments, id);
+    p.comments = p.comments.filter(c => !toRemove.has(c.id));
+    renderCommentsList(p);
     showToast('评论已删除');
   } catch(e){ showToast('删除失败：' + e.message); }
 }
@@ -2141,7 +2302,7 @@ async function addComment(){
     return;
   }
   const p = getPost();
-  const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
+  const nick = myNick();
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments`, {
       method: 'POST',
@@ -2156,10 +2317,7 @@ async function addComment(){
       id: saved.id, name: nick, text, user_id: session.user.id,
       time: new Date().toLocaleString('zh-CN')
     });
-    const list = document.getElementById('commentsList');
-    if(list) list.innerHTML = p.comments.map(c => renderComment(c)).join('');
-    const countEl = document.querySelector('.xhs-comments-count');
-    if(countEl) countEl.textContent = `共 ${p.comments.length} 条评论`;
+    renderCommentsList(p);
     input.value = '';
     const sendBtn = document.getElementById('xhsSend');
     if(sendBtn) sendBtn.style.display = 'none';
@@ -2564,7 +2722,7 @@ function cmtNotifs(){
   const mine = myPostIds();
   const nick = myNick();
   return (window._cmtRows || []).filter(r =>
-    r.user_id !== me && (mine.has(r.post_id) || (nick && r.text && r.text.includes('@' + nick)))
+    r.user_id !== me && (mine.has(r.post_id) || r.reply_to_user_id === me || (nick && r.text && r.text.includes('@' + nick)))
   ).sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
 }
 /* 赞和收藏合并 */
@@ -2684,11 +2842,13 @@ function openMsgCat(cat, keep){
     const nick = myNick();
     detail.innerHTML = msgDetailShell('评论和@', rows.length ? rows.map(r => {
       const p = posts.find(x => x.id === r.post_id);
-      const isAt = nick && r.text && r.text.includes('@' + nick) && !myPostIds().has(r.post_id);
+      const isReplyToMe = r.reply_to_user_id === me;
+      const isAt = !isReplyToMe && nick && r.text && r.text.includes('@' + nick) && !myPostIds().has(r.post_id);
+      const verb = isReplyToMe ? '回复了你的评论' : (isAt ? '@了你' : '评论了你的笔记');
       return `<div style="display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;" onclick="${p?`openPost(${p.id})`:''}">
         ${avatarSpan(r.name, 40)}
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13.5px;"><b>${r.name||'用户'}</b> ${isAt ? '@了你' : '评论了你的笔记'}</div>
+          <div style="font-size:13.5px;"><b>${r.name||'用户'}</b> ${verb}</div>
           <div style="font-size:13px;color:var(--ink-soft);margin:3px 0;">${r.text}</div>
           <div style="font-size:11px;color:var(--ink-faint);">${p ? '《'+p.title.slice(0,18)+'》 · ' : ''}${fmtTime(r.created_at)}</div>
         </div>
@@ -3484,7 +3644,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.93 - 响应式布局/头部按页显隐/头像上传/简化登录】');
+console.log('✓ 页面初始化完成 【版本 2.94 - 楼中楼评论回复+资料丢失修复+真实头像+顶部分区显隐修复】');
 </script>
 </body>
 </html>
