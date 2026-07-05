@@ -663,6 +663,13 @@
   </div>
 </div>
 
+<div id="merchantEditSheet" style="display:none;position:fixed;inset:0;background:rgba(42,39,33,.45);z-index:300;" onclick="if(event.target.id==='merchantEditSheet')closeMerchantEditSheet()">
+  <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:18px 18px 0 0;padding:10px 16px 26px;max-height:82vh;overflow-y:auto;animation:slideUp .25s ease;">
+    <div style="width:40px;height:4px;background:var(--line);border-radius:999px;margin:6px auto 14px;"></div>
+    <div id="merchantEditSheetBody"></div>
+  </div>
+</div>
+
 <div class="overlay" id="postOverlay">
   <div class="modal" style="position:relative;" id="postModal"></div>
 </div>
@@ -803,7 +810,11 @@
 <div class="page" id="page-profile" style="display:none;">
   <div style="background:#fff;padding:20px;min-height:100vh;margin-bottom:60px;">
     <h1 style="font-size:24px;font-weight:700;margin-bottom:20px;">👤 个人资料</h1>
-    
+
+    <!-- 认证商家专属主页：仅当前账号是已认证商家时显示，内容由 renderMerchantPage() 填充 -->
+    <div id="merchantPageWrap" style="display:none;"></div>
+
+    <div id="normalProfileWrap">
     <!-- Profile View Mode -->
     <!-- 登录状态条 -->
     <div id="authBar" style="display:flex;align-items:center;justify-content:space-between;background:var(--sage-light);border-radius:10px;padding:10px 14px;margin-bottom:16px;">
@@ -903,6 +914,7 @@
     </div>
     <div id="favorites-content" class="profile-tab-content" style="display:none;">
       <div id="userFavorites" class="user-content-grid"></div>
+    </div>
     </div>
   </div>
 </div>
@@ -1007,6 +1019,7 @@ function loadSession(){
         loadEngagement && loadEngagement();
         // 令牌确认续期成功后再拉取头像/昵称，避免和上面这次refreshSession并发争抢同一个refresh_token
         fetchProfileFromDb();
+        fetchMerchantProfile();
       }
       else { console.warn('令牌续期失败，需重新登录'); logoutUser(); }
     });
@@ -1102,6 +1115,7 @@ async function submitAuth(){
       localStorage.setItem('wanba_session', JSON.stringify(session));
       updateAuthUI(); closeAuth(); initProfilePage();
       fetchProfileFromDb();
+      fetchMerchantProfile();
       showToast('✓ 登入成功');
       return;
     }
@@ -1142,6 +1156,7 @@ async function submitAuth(){
         localStorage.setItem('wanba_session', JSON.stringify(session));
         updateAuthUI(); closeAuth(); initProfilePage();
         fetchProfileFromDb();
+        fetchMerchantProfile();
         showToast('🎉 注册成功，已登入');
       } else {
         // 需要邮箱验证
@@ -1185,6 +1200,7 @@ async function handleEmailConfirmRedirect(){
     updateAuthUI();
     initProfilePage();
     fetchProfileFromDb();
+    fetchMerchantProfile();
     // 清除地址栏中的令牌，避免泄露
     history.replaceState(null, '', window.location.pathname);
     showToast(type === 'signup' ? '🎉 邮箱验证成功，已自动登录！' : '✓ 已自动登录');
@@ -1329,6 +1345,220 @@ async function fetchProfileFromDb(){
       updateProfileDisplay();
     }
   } catch(e){ console.warn('资料拉取失败:', e.message); }
+}
+/* 拉取当前账号的商家资料。若存在且已通过认证(verified=true)，"我"页会显示商家专属主页而非普通个人页 */
+let currentMerchant = null;
+async function fetchMerchantProfile(){
+  if(!(session && session.user)){ currentMerchant = null; return; }
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${session.user.id}&select=*`);
+    if(!res.ok){ currentMerchant = null; return; }
+    const rows = await res.json();
+    currentMerchant = (rows && rows[0]) || null;
+    // 若当前正停留在"我"页，刷新一下让商家主页/普通个人页及时切换
+    const activeTab = document.querySelector('.nav-btn.active');
+    if(activeTab && activeTab.dataset.tab === 'profile') initProfilePage();
+  } catch(e){ console.warn('商家资料拉取失败:', e.message); currentMerchant = null; }
+}
+/* 属性值安全转义，防止商家资料里的引号破坏 value="..." 属性 */
+function escAttr(s){ return (s == null ? '' : String(s)).replace(/"/g,'&quot;'); }
+
+/* 渲染认证商家专属主页（"我"页在已认证商家账号下显示的内容） */
+function renderMerchantPage(){
+  const m = currentMerchant;
+  const wrap = document.getElementById('merchantPageWrap');
+  if(!m || !wrap) return;
+  const perks = Array.isArray(m.perks) ? m.perks : [];
+  wrap.innerHTML = `
+    <div style="margin:0 -20px;position:relative;height:170px;background:var(--sage-light);">
+      ${m.cover_image ? `<img src="${m.cover_image}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--sage-dark);">还没有上传封面图</div>`}
+    </div>
+    <div style="padding:0 4px;position:relative;">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+        <div style="width:64px;height:64px;border-radius:16px;background:#fff;border:3px solid #fff;margin-top:-32px;overflow:hidden;box-shadow:var(--shadow);">
+          ${m.logo ? `<img src="${m.logo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">🏪</div>`}
+        </div>
+        <button onclick="openMerchantEditSheet()" style="padding:7px 16px;border:1.5px solid var(--sage);border-radius:999px;background:#fff;color:var(--sage-dark);font-size:13px;font-weight:700;cursor:pointer;">✏️ 编辑资料</button>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:19px;font-weight:700;color:var(--ink);">${m.business_name || '还没有填写店名'}</span>
+        <span style="display:inline-flex;align-items:center;gap:3px;background:var(--sage-light);color:var(--sage-dark);font-size:11px;font-weight:700;padding:2px 8px 2px 6px;border-radius:999px;">✓ 已认证</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;margin-top:8px;font-size:13px;color:var(--ink-soft);" id="merchantStatsRow">
+        <span>· 关注</span><span>♥ ·</span>
+      </div>
+      ${m.category ? `<div style="margin-top:10px;"><span style="display:inline-flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12.5px;color:var(--ink-soft);font-weight:500;">${catIcon(m.category,16)} ${m.category}${m.subcategory ? (' / ' + m.subcategory) : ''}</span></div>` : ''}
+      <div style="display:flex;align-items:center;gap:5px;margin-top:10px;color:var(--ink-faint);font-size:12.5px;">
+        <span>📍</span><span>${m.address || '还没有填写地址'}</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <a href="tel:${m.phone || ''}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:none;border-radius:10px;background:var(--sage);color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;">📞 Call</a>
+        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.address || m.business_name || '')}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px solid var(--line-strong);border-radius:10px;background:var(--card);color:var(--ink);font-size:13.5px;font-weight:700;text-decoration:none;">🧭 导航</a>
+      </div>
+      <div style="margin-top:14px;padding:10px 12px;background:var(--berry-light);border-radius:10px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:15px;">🛡️</span>
+        <span style="font-size:12px;color:var(--berry-dark);font-weight:500;">已通过玩吧社区商家认证${m.verified_at ? (' · ' + new Date(m.verified_at).toLocaleDateString('zh-CN')) : ''}</span>
+      </div>
+      <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
+        <div style="display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;">🎁 会员优惠规则</div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+          ${perks.length ? perks.map(p => `<span style="background:rgba(255,255,255,0.16);color:#fff;font-size:12px;padding:4px 10px;border-radius:8px;">${p}</span>`).join('') : '<span style="color:rgba(255,255,255,0.75);font-size:12px;">还没有设置优惠，点上面"编辑资料"添加</span>'}
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,0.85);">集${m.loyalty_target || 8}次消费换「${m.loyalty_reward || '免费一杯'}」</div>
+      </div>
+    </div>
+    <div style="height:8px;background:var(--bg-alt);margin:16px -20px 0;"></div>
+    <div style="padding:14px 0 4px;">
+      <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:12px;">🔥 最新动态</div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px;">
+        <div style="height:120px;background:var(--sage-light);display:flex;align-items:center;justify-content:center;font-size:32px;">🧋</div>
+        <div style="padding:10px 12px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">买一送一活动</div>
+          <div style="font-size:12px;color:var(--sage-dark);">#优惠</div>
+        </div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;">
+        <div style="height:120px;background:var(--sky-light);display:flex;align-items:center;justify-content:center;font-size:32px;">✨</div>
+        <div style="padding:10px 12px;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;">新品上市</div>
+          <div style="font-size:12px;color:var(--ink-faint);">还没有加标签</div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:11.5px;color:var(--ink-faint);margin-top:10px;">（以上为示例内容，商家发布动态功能后续开发）</div>
+    </div>
+  `;
+  loadMerchantStats(m.user_id);
+}
+/* 拉取商家主页真实的关注数/点赞数 */
+async function loadMerchantStats(merchantId){
+  try {
+    const [fRes, lRes] = await Promise.all([
+      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_follows?merchant_id=eq.${merchantId}&select=follower_id`),
+      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_likes?merchant_id=eq.${merchantId}&select=user_id`)
+    ]);
+    const followers = fRes.ok ? await fRes.json() : [];
+    const likes = lRes.ok ? await lRes.json() : [];
+    const row = document.getElementById('merchantStatsRow');
+    if(row) row.innerHTML = `<span>${followers.length} 关注</span><span>♥ ${likes.length}</span>`;
+  } catch(e){ console.warn('商家统计加载失败:', e.message); }
+}
+/* 打开商家资料编辑面板 */
+function openMerchantEditSheet(){
+  const m = currentMerchant || {};
+  const perksStr = Array.isArray(m.perks) ? m.perks.join(',') : '';
+  document.getElementById('merchantEditSheetBody').innerHTML = `
+    <div style="font-size:15px;font-weight:700;margin:0 0 14px;">编辑商家资料</div>
+    <div style="display:flex;gap:12px;margin-bottom:14px;">
+      <div style="text-align:center;">
+        <div style="width:56px;height:56px;border-radius:12px;background:var(--bg-alt);overflow:hidden;cursor:pointer;margin:0 auto 4px;" onclick="document.getElementById('merchantLogoInput').click()">
+          ${m.logo ? `<img src="${m.logo}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;">🏪</div>`}
+        </div>
+        <span style="font-size:11px;color:var(--ink-faint);">店铺Logo</span>
+        <input type="file" id="merchantLogoInput" accept="image/*" style="display:none;" onchange="onMerchantImageSelected(event,'logo')">
+      </div>
+      <div style="flex:1;">
+        <div style="width:100%;height:56px;border-radius:12px;background:var(--bg-alt);overflow:hidden;cursor:pointer;margin-bottom:4px;" onclick="document.getElementById('merchantCoverInput').click()">
+          ${m.cover_image ? `<img src="${m.cover_image}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-faint);">点击上传封面图</div>`}
+        </div>
+        <input type="file" id="merchantCoverInput" accept="image/*" style="display:none;" onchange="onMerchantImageSelected(event,'cover')">
+      </div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">店铺名称</label>
+      <input type="text" id="mBizName" value="${escAttr(m.business_name)}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:12px;">
+      <div style="flex:1;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">分类</label>
+        <select id="mBizCat" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;">
+          ${CATS.filter(c => c.code).map(c => `<option value="${c.key}" ${m.category === c.key ? 'selected' : ''}>${c.emoji} ${c.key}</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">细分（如：奶茶）</label>
+        <input type="text" id="mBizSubcat" value="${escAttr(m.subcategory)}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+      </div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">地址</label>
+      <input type="text" id="mBizAddr" value="${escAttr(m.address)}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">电话</label>
+      <input type="tel" id="mBizPhone" value="${escAttr(m.phone)}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">会员优惠（用逗号分隔，最多4个）</label>
+      <input type="text" id="mBizPerks" value="${escAttr(perksStr)}" placeholder="例如: 会员日9折,生日双倍积分" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;">
+      <div style="flex:1;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">集章目标</label>
+        <input type="number" id="mBizLoyaltyTarget" min="1" max="99" value="${m.loyalty_target || 8}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+      </div>
+      <div style="flex:2;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">兑换奖励</label>
+        <input type="text" id="mBizLoyaltyReward" value="${escAttr(m.loyalty_reward || '免费一杯')}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="saveMerchantProfile()" style="flex:1;padding:12px;border-radius:10px;background:var(--sage);color:#fff;border:none;cursor:pointer;font-weight:600;font-size:13px;">✓ 保存</button>
+      <button onclick="closeMerchantEditSheet()" style="flex:1;padding:12px;border-radius:10px;background:var(--bg-alt);color:var(--ink);border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:13px;">✕ 取消</button>
+    </div>
+  `;
+  document.getElementById('merchantEditSheet').style.display = 'block';
+}
+function closeMerchantEditSheet(){ document.getElementById('merchantEditSheet').style.display = 'none'; }
+/* Logo/封面图上传：读取→压缩→暂存到 currentMerchant，点"保存"时才真正写库 */
+function onMerchantImageSelected(event, type){
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if(!file || !file.type || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    compressImage(ev.target.result, compressedData => {
+      if(!currentMerchant) currentMerchant = { user_id: session.user.id };
+      if(type === 'logo') currentMerchant.logo = compressedData;
+      else currentMerchant.cover_image = compressedData;
+      openMerchantEditSheet(); // 重新渲染面板，让新图片立即预览
+    }, type === 'logo' ? 0.85 : 0.75, type === 'logo' ? 300 : 900);
+  };
+  reader.readAsDataURL(file);
+}
+/* 保存商家资料：先PATCH已有行，没有行再POST新建（和关注表同一套路） */
+async function saveMerchantProfile(){
+  if(!(session && session.user)){ showToast('请先登录'); return; }
+  const perks = document.getElementById('mBizPerks').value.split(',').map(s => s.trim()).filter(Boolean).slice(0,4);
+  const payload = {
+    business_name: document.getElementById('mBizName').value.trim(),
+    category: document.getElementById('mBizCat').value,
+    subcategory: document.getElementById('mBizSubcat').value.trim(),
+    address: document.getElementById('mBizAddr').value.trim(),
+    phone: document.getElementById('mBizPhone').value.trim(),
+    perks: perks,
+    loyalty_target: parseInt(document.getElementById('mBizLoyaltyTarget').value) || 8,
+    loyalty_reward: document.getElementById('mBizLoyaltyReward').value.trim() || '免费一杯',
+    logo: (currentMerchant && currentMerchant.logo) || null,
+    cover_image: (currentMerchant && currentMerchant.cover_image) || null,
+    updated_at: new Date().toISOString()
+  };
+  try {
+    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${session.user.id}`, {
+      method: 'PATCH', body: JSON.stringify(payload)
+    });
+    let rows = res.ok ? await res.json() : [];
+    if(!rows.length){
+      res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants`, {
+        method: 'POST', body: JSON.stringify(Object.assign({ user_id: session.user.id }, payload))
+      });
+      rows = res.ok ? await res.json() : [];
+    }
+    if(!res.ok){ showToast('保存失败，请重试'); return; }
+    currentMerchant = Object.assign({}, currentMerchant, payload, rows[0] || {});
+    closeMerchantEditSheet();
+    renderMerchantPage();
+    showToast('✓ 商家资料已保存');
+  } catch(e){ console.warn('商家资料保存失败:', e.message); showToast('保存失败：' + e.message); }
 }
 /* 真实IP属地（免费接口 ipapi.co，缓存24小时） */
 async function fetchIpLocation(){
@@ -1746,6 +1976,17 @@ function getPost(){ return posts.find(p=>p.id===activePostId); }
 /* ---- profile page ---- */
 let browsingHistory = [];
 function initProfilePage(){
+  const wrapMerchant = document.getElementById('merchantPageWrap');
+  const wrapNormal = document.getElementById('normalProfileWrap');
+  if(currentMerchant && currentMerchant.verified){
+    if(wrapNormal) wrapNormal.style.display = 'none';
+    if(wrapMerchant) wrapMerchant.style.display = 'block';
+    renderMerchantPage();
+    return;
+  }
+  if(wrapMerchant) wrapMerchant.style.display = 'none';
+  if(wrapNormal) wrapNormal.style.display = '';
+
   // 首先更新用户信息显示
   console.log('👤 初始化个人资料页面...');
   console.log('当前用户:', currentUser);
@@ -3608,7 +3849,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 2.95 - 去掉分类按钮圆点】');
+console.log('✓ 页面初始化完成 【版本 2.96 - 认证商家专属主页】');
 </script>
 </body>
 </html>
