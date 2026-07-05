@@ -31,6 +31,7 @@
     --line:#E0DACB;
     --line-strong:#CFC7AF;
     --radius:14px;
+    --container-w:1080px;
     --shadow: 0 2px 10px rgba(42,39,33,0.06), 0 1px 2px rgba(42,39,33,0.04);
     --shadow-lift: 0 12px 32px rgba(42,39,33,0.14), 0 2px 8px rgba(42,39,33,0.08);
   }
@@ -48,7 +49,7 @@
   ::selection{background:var(--sage-light);}
 
   /* ---------- layout shell ---------- */
-  .app{max-width:1080px;margin:0 auto;padding:0 20px 100px;}
+  .app{max-width:var(--container-w);margin:0 auto;padding:0 20px 100px;}
 
   /* ---------- header ---------- */
   header.top{
@@ -63,7 +64,7 @@
     background:var(--sage-dark);
   }
   .quick-row{
-    max-width:1080px;margin:0 auto;padding:0 20px;
+    max-width:var(--container-w);margin:0 auto;padding:0 20px;
     display:flex;align-items:center;gap:22px;
     overflow-x:auto;scrollbar-width:none;
   }
@@ -82,7 +83,7 @@
   .quick-link.active{color:#fff;border-bottom-color:var(--berry);}
   .top-wrap{padding-top:16px;}
   .top-row{
-    max-width:1080px;margin:0 auto;padding:0 20px;
+    max-width:var(--container-w);margin:0 auto;padding:0 20px;
     display:flex;align-items:center;justify-content:space-between;gap:16px;
   }
   .brand{display:flex;align-items:center;gap:10px;}
@@ -111,7 +112,7 @@
   /* category chips - die-cut tag style */
   .chip-row{
     display:flex;gap:10px;overflow-x:auto;
-    max-width:1080px;margin:16px auto 0;padding:0 20px 16px;
+    max-width:var(--container-w);margin:16px auto 0;padding:0 20px 16px;
     scrollbar-width:none;
   }
   .chip-row::-webkit-scrollbar{display:none;}
@@ -599,6 +600,20 @@
     .modal{border-radius:0;height:100vh;height:100dvh;max-height:100dvh;}
     .overlay{padding:0;}
   }
+
+  /* ---------- 响应式：手机保持2列，平板/桌面按分辨率增加列数（2.93） ---------- */
+  @media(min-width:768px){
+    :root{ --container-w:1000px; }
+    .feed{ grid-template-columns:repeat(3, 1fr); }
+  }
+  @media(min-width:1024px){
+    :root{ --container-w:1320px; }
+    .feed{ grid-template-columns:repeat(4, 1fr); }
+  }
+  @media(min-width:1440px){
+    :root{ --container-w:1600px; }
+    .feed{ grid-template-columns:repeat(5, 1fr); }
+  }
 </style>
 </head>
 <body>
@@ -640,10 +655,6 @@
   <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;position:relative;box-shadow:var(--shadow-lift);padding:26px;">
     <button class="modal-close" onclick="closeAuth()">✕</button>
     <h3 style="font-size:17px;font-weight:700;margin-bottom:16px;text-align:center;">登入 玩吧</h3>
-    <div id="authNameRow" style="margin-bottom:12px;">
-      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">昵称 <span style="font-weight:400;color:var(--ink-faint);">（新账号必填，老账号可留空）</span></label>
-      <input type="text" id="authName" placeholder="给自己起个名字" maxlength="12" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
-    </div>
     <div style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">邮箱</label>
       <input type="email" id="authEmail" placeholder="you@example.com" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
@@ -820,7 +831,11 @@
     <div id="profileViewMode">
       <!-- Profile Header：头像在左，名字/ID/IP在右侧齐平（小红书风格） -->
       <div style="display:flex;align-items:center;gap:16px;padding:10px 4px 18px;margin-bottom:4px;">
-        <div style="width:72px;height:72px;border-radius:50%;background:var(--berry);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;border:3px solid var(--sage-light);flex-shrink:0;" id="userAvatarDisplay">👤</div>
+        <div style="position:relative;flex-shrink:0;">
+          <div style="width:72px;height:72px;border-radius:50%;background:var(--berry);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;border:3px solid var(--sage-light);cursor:pointer;overflow:hidden;" id="userAvatarDisplay" onclick="onAvatarClick()" title="点击更换头像">👤</div>
+          <div style="position:absolute;right:-2px;bottom:-2px;width:22px;height:22px;border-radius:50%;background:var(--sage-dark);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;pointer-events:none;">📷</div>
+          <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="onAvatarFileSelected(event)">
+        </div>
         <div style="flex:1;min-width:0;text-align:left;">
           <div style="font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;" id="userNameDisplay">游客用户</div>
           <div style="font-size:12px;color:var(--ink-faint);margin-bottom:2px;" id="userIdDisplay">ID: #888888</div>
@@ -994,6 +1009,7 @@ function updateAuthUI(){
     inBtn.style.display = 'none'; regBtn.style.display = 'none'; outBtn.style.display = 'block';
     // 关键：切换到该账号自己的资料档案
     loadUserProfile();
+    fetchProfileFromDb();
   } else {
     status.textContent = '未登录（游客模式）';
     inBtn.style.display = 'block'; regBtn.style.display = 'block'; outBtn.style.display = 'none';
@@ -1041,7 +1057,7 @@ async function resendVerifyEmail(email){
 async function submitAuth(){
   const email = document.getElementById('authEmail').value.trim().toLowerCase();
   const pass = document.getElementById('authPass').value;
-  const name = document.getElementById('authName').value.trim();
+  const name = email.split('@')[0]; // 2.93：昵称栏已去掉，新账号默认取邮箱前缀，注册后可在"我的"页修改
   const msg = document.getElementById('authMsg');
   msg.style.color = 'var(--berry)';
   if(!email || !email.includes('@')){ msg.textContent = '请输入有效邮箱'; return; }
@@ -1093,10 +1109,6 @@ async function submitAuth(){
 
     /* 情况B：登录失败 → 可能是新账号，尝试注册 */
     if(em.includes('invalid login')){
-      if(!name){
-        msg.textContent = '账号不存在或密码错误。若是新账号，请填写昵称后再点登入';
-        return;
-      }
       const reg = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method:'POST',
         headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
@@ -1222,6 +1234,85 @@ function uidToNumericId(uuid){
   }
   return String(10000000 + (h % 90000000));
 }
+
+/* ====== 头像上传（2.93）：点击→选文件→压缩→存库 ====== */
+function onAvatarClick(){
+  if(!(session && session.user)){
+    showToast('请先登录后再设置头像');
+    return;
+  }
+  document.getElementById('avatarFileInput').click();
+}
+function onAvatarFileSelected(evt){
+  const file = evt.target.files && evt.target.files[0];
+  evt.target.value = ''; // 允许重复选择同一张图片
+  if(!file) return;
+  if(!file.type || !file.type.startsWith('image/')){
+    showToast('请选择图片文件');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      // 居中裁剪为正方形，压缩到128px
+      const size = 128;
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      currentUser.avatar = dataUrl;
+      saveUserProfileToStorage();
+      updateProfileDisplay();
+      syncProfileToDb();
+    };
+    img.onerror = function(){ showToast('图片读取失败，请换一张试试'); };
+    img.src = e.target.result;
+  };
+  reader.onerror = function(){ showToast('图片读取失败，请换一张试试'); };
+  reader.readAsDataURL(file);
+}
+/* 同步头像/昵称到 profiles 表：先尝试更新已有行，没有行再插入（与关注表同一套路） */
+async function syncProfileToDb(){
+  if(!(session && session.user)) return;
+  try {
+    const payload = { name: currentUser.name, avatar: currentUser.avatar || null, updated_at: new Date().toISOString() };
+    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+    let rows = res.ok ? await res.json() : [];
+    if(!rows.length){
+      res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method: 'POST',
+        body: JSON.stringify(Object.assign({ user_id: session.user.id }, payload))
+      });
+    }
+    if(res.ok){ showToast('✓ 头像已更新'); }
+    else { const t = await res.text(); console.warn('头像同步失败:', t); showToast('头像上传失败，请重试'); }
+  } catch(e){
+    console.warn('头像同步异常:', e.message);
+    showToast('头像上传失败，请检查网络');
+  }
+}
+/* 登录时从 profiles 表拉取头像/昵称，覆盖本地档案（跨设备同步） */
+async function fetchProfileFromDb(){
+  if(!(session && session.user)) return;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar`);
+    if(!res.ok) return;
+    const rows = await res.json();
+    if(rows && rows[0]){
+      if(rows[0].avatar) currentUser.avatar = rows[0].avatar;
+      if(rows[0].name) currentUser.name = rows[0].name;
+      saveUserProfileToStorage();
+      updateProfileDisplay();
+    }
+  } catch(e){ console.warn('资料拉取失败:', e.message); }
+}
 /* 真实IP属地（免费接口 ipapi.co，缓存24小时） */
 async function fetchIpLocation(){
   try {
@@ -1326,6 +1417,9 @@ function saveUserProfile(){
   
   // 更新显示
   updateProfileDisplay();
+
+  // 同步昵称到 profiles 表（2.93）
+  syncProfileToDb();
   
   // 退出编辑模式
   exitEditMode();
@@ -1334,7 +1428,13 @@ function saveUserProfile(){
 
 // 更新个人资料显示
 function updateProfileDisplay(){
-  document.getElementById('userAvatarDisplay').textContent = currentUser.name.slice(0,1);
+  const avatarEl = document.getElementById('userAvatarDisplay');
+  if(currentUser.avatar){
+    avatarEl.innerHTML = `<img src="${currentUser.avatar}" alt="头像" style="width:100%;height:100%;object-fit:cover;">`;
+  } else {
+    avatarEl.innerHTML = '';
+    avatarEl.textContent = currentUser.name.slice(0,1);
+  }
   document.getElementById('userNameDisplay').textContent = currentUser.name;
   document.getElementById('userIdDisplay').textContent = `ID: ${String(currentUser.id||'').replace('#','')}`;
   document.getElementById('userLocationDisplay').textContent = `IP属地：${window._ipLocation || (currentUser.location||'').replace('📍','').trim() || '获取中…'}`;
@@ -1735,7 +1835,11 @@ function switchTab(tab){
   const page = document.getElementById(`page-${tab}`);
   if(page) page.classList.add('active');
   document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-  
+
+  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
+  const topWrap = document.querySelector('header.top .top-wrap');
+  if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
+
   // Render content for specific tabs
   if(tab === 'week'){
     renderWeekFeed();
@@ -2449,7 +2553,10 @@ function myPostIds(){
 }
 function myNick(){
   if(!(session && session.user)) return null;
-  return (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
+  // 2.93：优先取"我的"页可编辑的昵称，其次才回退到注册时的邮箱前缀
+  return (typeof currentUser !== 'undefined' && currentUser.name)
+    ? currentUser.name
+    : ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0]);
 }
 /* 评论和@：我帖子下的评论 + 任何@我的评论 */
 function cmtNotifs(){
@@ -2957,9 +3064,12 @@ async function submitPost(){
   const excerpt = content.slice(0,40)+(content.length>40?'…':'');
   const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[coverImageIndex] : 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
   const images = uploadedImages.length > 0 ? uploadedImages : null;
-  const authorName = (session && session.user)
-    ? ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0])
-    : ((typeof currentUser !== 'undefined' && currentUser.name && currentUser.name !== '游客用户') ? currentUser.name : '我');
+  // 2.93：优先取"我的"页可编辑的昵称
+  const authorName = (typeof currentUser !== 'undefined' && currentUser.name && currentUser.name !== '游客用户')
+    ? currentUser.name
+    : (session && session.user)
+      ? ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0])
+      : '我';
 
   if(editingPostId !== null){
     /* ---- 编辑模式：更新已有帖子 ---- */
@@ -3374,7 +3484,7 @@ document.querySelectorAll('.cat-pick-ico').forEach(el => {
   const c = el.dataset.ico;
   if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
 });
-console.log('✓ 页面初始化完成 【版本 2.92 - 笔记权限/置顶/管理面板】');
+console.log('✓ 页面初始化完成 【版本 2.93 - 响应式布局/头部按页显隐/头像上传/简化登录】');
 </script>
 </body>
 </html>
