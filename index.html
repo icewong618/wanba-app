@@ -117,9 +117,8 @@
   }
   .chip-row::-webkit-scrollbar{display:none;}
   .chip{
-    position:relative;
     display:flex;align-items:center;gap:6px;
-    padding:7px 16px 7px 22px;
+    padding:7px 16px;
     border:1.5px solid var(--line-strong);
     border-radius:8px;
     background:var(--card);
@@ -127,16 +126,9 @@
     flex-shrink:0;
     transition:all .15s ease;
   }
-  .chip::before{
-    content:'';
-    position:absolute;left:9px;top:50%;transform:translateY(-50%);
-    width:6px;height:6px;border-radius:50%;
-    background:var(--bg);border:1.5px solid var(--line-strong);
-  }
   .chip.active{
     background:var(--sage);border-color:var(--sage-dark);color:#fff;
   }
-  .chip.active::before{background:var(--sage);border-color:rgba(255,255,255,0.7);}
   .chip .dot-emoji{font-size:14px;}
 
   /* ---------- feed grid ---------- */
@@ -171,18 +163,12 @@
     padding:4px 10px;border-radius:6px;
     font-size:11.5px;font-weight:700;letter-spacing:.5px;color:#fff;
   }
-  .cat-tag.吃{background:#C2603B;}
-  .cat-tag.喝{background:#4C87A6;}
-  .cat-tag.玩{background:var(--sage);}
-  .cat-tag.乐{background:var(--berry);}
   /* 印章图标角标（替代文字色块） */
   .cat-tag-icon{
     position:absolute;top:8px;left:8px;z-index:2;
     filter:drop-shadow(0 1px 3px rgba(0,0,0,.35));
   }
   .cat-tag-icon img{display:block;}
-  .cat-pick-ico{display:block;width:30px;height:30px;background-size:contain;background-repeat:no-repeat;background-position:center;}
-  #catPicker .cat-pick{padding:8px 12px;line-height:0;}
 
   .stub{
     position:absolute;bottom:10px;right:10px;
@@ -404,11 +390,11 @@
     font-size:13px;font-weight:600;color:var(--ink-soft);
   }
   .cat-pick.sel{color:#fff;border-color:transparent;}
-  .cat-pick.sel[data-c="吃"]{background:#C2603B;}
-  .cat-pick.sel[data-c="喝"]{background:#4C87A6;}
-  .cat-pick.sel[data-c="玩"]{background:var(--sage);}
-  .cat-pick.sel[data-c="乐"]{background:var(--berry);}
-  .cat-pick.sel[data-c="看"]{background:#B8912E;}
+  .cat-pick.sel[data-c="美食"]{background:#C2603B;}
+  .cat-pick.sel[data-c="玩乐"]{background:var(--berry);}
+  .cat-pick.sel[data-c="好物"]{background:#B8912E;}
+  .cat-pick.sel[data-c="生活"]{background:var(--sage);}
+  .cat-pick.sel[data-c="社区"]{background:#4C87A6;}
   /* 图片追加按钮 */
   .image-item.add-more{
     display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -695,11 +681,11 @@
       <div class="form-field">
         <label>分类</label>
         <div class="cat-picker" id="catPicker">
-          <button class="cat-pick" data-c="吃" onclick="pickCat('吃')" title="吃"><span class="cat-pick-ico" data-ico="吃"></span></button>
-          <button class="cat-pick" data-c="喝" onclick="pickCat('喝')" title="喝"><span class="cat-pick-ico" data-ico="喝"></span></button>
-          <button class="cat-pick" data-c="玩" onclick="pickCat('玩')" title="玩"><span class="cat-pick-ico" data-ico="玩"></span></button>
-          <button class="cat-pick" data-c="乐" onclick="pickCat('乐')" title="乐"><span class="cat-pick-ico" data-ico="乐"></span></button>
-          <button class="cat-pick" data-c="看" onclick="pickCat('看')" title="看"><span class="cat-pick-ico" data-ico="看"></span></button>
+          <button class="cat-pick" data-c="美食" onclick="pickCat('美食')"><img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/72x72/1f35c.png" alt="🍜" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;" onerror="this.outerHTML='🍜'"> 美食</button>
+          <button class="cat-pick" data-c="玩乐" onclick="pickCat('玩乐')"><img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/72x72/1f389.png" alt="🎉" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;" onerror="this.outerHTML='🎉'"> 玩乐</button>
+          <button class="cat-pick" data-c="好物" onclick="pickCat('好物')"><img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/72x72/1f6cd.png" alt="🛍️" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;" onerror="this.outerHTML='🛍️'"> 好物</button>
+          <button class="cat-pick" data-c="生活" onclick="pickCat('生活')"><img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/72x72/1f3e1.png" alt="🏡" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;" onerror="this.outerHTML='🏡'"> 生活</button>
+          <button class="cat-pick" data-c="社区" onclick="pickCat('社区')"><img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/72x72/1f4ac.png" alt="💬" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;" onerror="this.outerHTML='💬'"> 社区</button>
         </div>
       </div>
 
@@ -936,23 +922,18 @@
 <script>
 /* ---------------- state ---------------- */
 const CATS = [
-  {key:'全部', emoji:'✨'},
-  {key:'吃', emoji:'🍜'},
-  {key:'喝', emoji:'🍵'},
-  {key:'玩', emoji:'🎡'},
-  {key:'乐', emoji:'🎶'},
-  {key:'看', emoji:'📺'},
+  {key:'全部'},
+  {key:'美食', emoji:'🍜', code:'1f35c'},
+  {key:'玩乐', emoji:'🎉', code:'1f389'},
+  {key:'好物', emoji:'🛍️', code:'1f6cd'},
+  {key:'生活', emoji:'🏡', code:'1f3e1'},
+  {key:'社区', emoji:'💬', code:'1f4ac'},
 ];
-/* 吃喝玩乐 手绘印章图标（base64 内嵌，透明底） */
-const CAT_ICONS = {
-  '吃': 'data:image/png;base64,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',
-  '喝': 'data:image/png;base64,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',
-  '玩': 'data:image/png;base64,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',
-  '乐': 'data:image/png;base64,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',
-  '看': 'data:image/png;base64,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'
-};
+/* 分类图标：固定用图片渲染emoji（Twemoji CDN），避免不同系统/设备显示不一致；加载失败自动回退成系统自带emoji文字 */
 function catIcon(cat, size){
-  return CAT_ICONS[cat] ? `<img src="${CAT_ICONS[cat]}" alt="${cat}" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;">` : cat;
+  const c = CATS.find(x => x.key === cat);
+  if(!c || !c.code) return cat || ''; // "全部"或未知分类，直接返回文字
+  return `<img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/72x72/${c.code}.png" alt="${c.emoji}" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;" onerror="this.outerHTML='${c.emoji}'">`;
 }
 const QUICKLINKS = [
   {key:'遛娃', icon:'👶'},
@@ -1488,7 +1469,7 @@ function updateProfileDisplay(){
 
 let posts = [
   {
-    id:1, category:'吃', title:'巷口张阿姨的葱油饼,排队35分钟到底值不值?',
+    id:1, category:'美食', title:'巷口张阿姨的葱油饼,排队35分钟到底值不值?',
     excerpt:'每天下午四点准时出摊,面团现擀现烙,葱花是自己种的……',
     content:'每天下午四点,张阿姨的小推车准时出现在巷口第三棵梧桐树下。面团是现擀的,葱花是自家阳台种的,油要烧到冒青烟才下饼,滋啦一声,整条巷子都是香味。\n\n排队的人从下午四点半就开始排,高峰期要等35分钟左右。我的建议是:提前十分钟去,能少排一半的队。饼皮酥、内里软,咬开还能拉丝,10块钱一个,巷子里的性价比之王。',
     image:'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&q=60',
@@ -1503,7 +1484,7 @@ let posts = [
     ]
   },
   {
-    id:2, category:'喝', title:'社区限定手冲试饮会:埃塞俄比亚耶加雪菲',
+    id:2, category:'美食', title:'社区限定手冲试饮会:埃塞俄比亚耶加雪菲',
     excerpt:'巷尾那家新开的豆子铺,这周六下午办一场免费试饮会,名额有限……',
     content:'巷尾新开的豆子铺这周六下午两点办一场手冲试饮会,主理人会现场演示三种冲煮手法,让大家对比同一支豆子不同萃取方式的风味差异。\n\n这次用的是一支水洗处理的耶加雪菲,花香明显,尾调带柑橘。到场即可免费试饮,还会讲讲怎么在家用最简单的器具冲出还不错的一杯。位置有限,建议提前报名。',
     image:'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=60',
@@ -1518,7 +1499,7 @@ let posts = [
     ]
   },
   {
-    id:3, category:'玩', title:'周末城市漫步:老城区骑行路线实测',
+    id:3, category:'玩乐', title:'周末城市漫步:老城区骑行路线实测',
     excerpt:'花了一个下午把老城区的巷子骑了个遍,剪了条视频给大家看看路线',
     content:'趁着好天气把老城区的巷子骑了个遍,从东门牌坊一路骑到河边老码头,全程大概8公里,坡不多,很适合周末慢慢逛。\n\n视频里标了几个容易错过的小拐角,还有中途可以歇脚喝茶的地方,想自己去骑的可以参考一下路线。',
     image:null,
@@ -1528,7 +1509,7 @@ let posts = [
     comments:[]
   },
   {
-    id:4, category:'乐', title:'社区草坪电影夜:本周六放什么?',
+    id:4, category:'玩乐', title:'社区草坪电影夜:本周六放什么?',
     excerpt:'露天投影+躺椅+爆米花,自带野餐垫更佳,这周六晚八点不见不散',
     content:'这周六晚八点,老地方——社区中心草坪,继续我们的露天电影夜。现场提供躺椅和免费爆米花,建议大家自带野餐垫和外套,晚上草坪有点凉。\n\n这次放的是一部轻松的喜剧片,具体片名到场揭晓,给大家留个悬念。名额有限,报名截止到周五晚上。',
     image:'https://images.unsplash.com/photo-1489599162946-4b8b6b3b4f4a?w=800&q=60',
@@ -1541,7 +1522,7 @@ let posts = [
     ]
   },
   {
-    id:5, category:'吃', title:'深夜食堂:三家开到凌晨的隐藏巷子小馆',
+    id:5, category:'美食', title:'深夜食堂:三家开到凌晨的隐藏巷子小馆',
     excerpt:'加班到深夜也不用饿肚子,这三家我私藏了好久,终于决定分享出来',
     content:'第一家是巷子中段的无名馄饨摊,只在晚上十点后出摊,老板一个人包一个人煮,汤底是猪骨吊了六个小时的。\n\n第二家是二楼的居酒屋,菜单没有中文,但老板会画画给你看,烤鸡皮和玉子烧是招牌。\n\n第三家最隐蔽,要从五金店旁边的铁门进去,里面别有洞天,主打粥品和小菜,凌晨两点还有人在排队。',
     image:'https://images.unsplash.com/photo-1555126634-323283e090fa?w=800&q=60',
@@ -1551,7 +1532,7 @@ let posts = [
     comments:[]
   },
   {
-    id:7, category:'乐', title:'周日儿童手工市集:陶艺、扎染、彩绘任选',
+    id:7, category:'玩乐', title:'周日儿童手工市集:陶艺、扎染、彩绘任选',
     excerpt:'社区广场周日上午开摊,三个手作摊位免费体验,遛娃好去处……',
     content:'这周日上午九点到十二点,社区广场会摆三个手作摊位:陶艺拉坯、扎染小方巾、石头彩绘,都是免费体验,材料社区包了。\n\n每个摊位大概能玩20-30分钟,建议按年龄段错峰去,3岁以上小朋友基本都能上手。广场旁边有遮阳棚和长椅,带娃的家长也能歇脚。名额有限,建议提前报名占坑。',
     image:'https://images.unsplash.com/photo-1503457574465-52a7a4b7d1e5?w=800&q=60',
@@ -1562,7 +1543,7 @@ let posts = [
     comments:[]
   },
   {
-    id:6, category:'喝', title:'自制气泡水配方分享,夏天续命神器',
+    id:6, category:'美食', title:'自制气泡水配方分享,夏天续命神器',
     excerpt:'气泡水机到手一个月,试了十几种搭配,把最好喝的三个配方整理出来了',
     content:'气泡水机到手一个月,已经试了十几种水果+香草的搭配,今天把最好喝的三个配方整理出来:\n\n1. 青柠+薄荷+一点点蜂蜜,酸甜清爽\n2. 冷萃乌龙茶打气泡,茶香更突出,适合下午茶\n3. 黄瓜+罗勒叶,意外地很解腻,配沙拉一绝\n\n气泡强度建议打两次,口感更绵密。',
     image:'https://images.unsplash.com/photo-1544145945-f90425340c7e?w=800&q=60',
@@ -1626,7 +1607,7 @@ function renderChips(){
   const row = document.getElementById('chipRow');
   row.innerHTML = CATS.map(c => `
     <button class="chip ${currentFilter===c.key?'active':''}" onclick="setFilter('${c.key}')">
-      ${CAT_ICONS[c.key] ? catIcon(c.key, 26) : `<span class="dot-emoji">${c.emoji}</span>${c.key}`}
+      ${c.code ? catIcon(c.key, 18) + ' ' : ''}${c.key}
     </button>
   `).join('');
 }
@@ -1864,30 +1845,6 @@ function closeBrowsingHistory(){
 }
 
 /* ---- page navigation ---- */
-function switchTab(tab){
-  // Hide all pages
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  
-  // Show selected page
-  const page = document.getElementById(`page-${tab}`);
-  if(page) page.classList.add('active');
-  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-
-  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
-  const topWrap = document.querySelector('header.top .top-wrap');
-  if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
-  // 2.94修复：绿色quick-bar（遛娃/免费活动/本月活动/本周末活动）在首页/本周/消息都显示，只在"我的"页隐藏
-  const quickBar = document.querySelector('header.top .quick-bar');
-  if(quickBar) quickBar.style.display = (tab === 'profile') ? 'none' : '';
-
-  // Render content for specific tabs
-  if(tab === 'week'){
-    renderWeekFeed();
-  } else if(tab === 'profile'){
-    initProfilePage();
-  }
-}
 function renderWeekFeed(){
   const weekFeed = document.getElementById('weekFeed');
   const weekPosts = posts.filter(p=>p.event && (p.tags && p.tags.includes('本周末活动') || p.category));
@@ -2043,7 +2000,7 @@ function renderPostModal(){
       <div class="modal-body">
         <h2 class="modal-title display">${p.title}</h2>
         <div class="modal-content">${p.content}</div>
-        <div class="xhs-tags"># ${p.category}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
+        <div class="xhs-tags">${catIcon(p.category, 18)}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
         <div class="xhs-time">编辑于 ${p.time} · 洛杉矶</div>
         ${eventBlock}
         <div class="xhs-comments-count">共 ${countComments(p)} 条评论</div>
@@ -2051,11 +2008,6 @@ function renderPostModal(){
         <div style="height:10px;"></div>
       </div>
     </div>
-    ${(session && session.user && p.user_id === session.user.id) ? `
-    <div class="xhs-bottombar">
-      <div style="flex:1;font-size:13px;color:var(--ink-soft);font-weight:600;" id="visStatus">${visLabel(p.visibility)}</div>
-      <button onclick="openOwnerSheet()" style="border:none;background:var(--sage);color:#fff;border-radius:999px;padding:10px 18px;font-weight:600;font-size:13px;cursor:pointer;">⚙️ 编辑和权限设置</button>
-    </div>` : `
     <div class="xhs-bottombar">
       <input type="text" id="newCommentInput" placeholder="说点什么…" 
         oninput="document.getElementById('xhsSend').style.display = this.value.trim() ? 'block' : 'none'"
@@ -2070,7 +2022,7 @@ function renderPostModal(){
       <button class="xhs-act" onclick="document.getElementById('newCommentInput').focus()">
         <span class="ico">💬</span><span id="xhsCmtNum">${countComments(p)}</span>
       </button>
-    </div>`}
+    </div>
   `;
   setupCarouselTouch();
 }
@@ -3323,9 +3275,9 @@ if(document.getElementById('browsingModal')){
 let xhsAccountVerified = false;
 let xhsUsername = '';
 const MOCK_XHS_POSTS = [
-  { id:1, title:'小红书: 巷口张阿姨的葱油饼评测', content:'每天下午四点准时出摊，面团现擀现烙，葱花是自己种的……', image:'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&q=60', category:'吃' },
-  { id:2, title:'小红书: 社区咖啡馆手冲体验', content:'巷尾新开的豆子铺，这周六有免费试饮会，位置有限……', image:'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=60', category:'喝' },
-  { id:3, title:'小红书: 老城区骑行路线实测', content:'花了一个下午把老城区的巷子骑了个遍，推荐8公里路线……', image:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=60', category:'玩' },
+  { id:1, title:'小红书: 巷口张阿姨的葱油饼评测', content:'每天下午四点准时出摊，面团现擀现烙，葱花是自己种的……', image:'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&q=60', category:'美食' },
+  { id:2, title:'小红书: 社区咖啡馆手冲体验', content:'巷尾新开的豆子铺，这周六有免费试饮会，位置有限……', image:'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=60', category:'美食' },
+  { id:3, title:'小红书: 老城区骑行路线实测', content:'花了一个下午把老城区的巷子骑了个遍，推荐8公里路线……', image:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=60', category:'玩乐' },
 ];
 
 function openXhsImport(){
@@ -3584,7 +3536,6 @@ async function loadPostsFromSupabase(){
 }
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
-const originalSwitchTab = window.switchTab || function(){};
 window.switchTab = function(tab){
   // 隐藏所有页面（同时清除内联样式）
   document.querySelectorAll('.page').forEach(p => {
@@ -3601,6 +3552,13 @@ window.switchTab = function(tab){
   }
   const btn = document.querySelector(`[data-tab="${tab}"]`);
   if(btn) btn.classList.add('active');
+
+  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
+  const topWrap = document.querySelector('header.top .top-wrap');
+  if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
+  // 2.94修复：绿色quick-bar（遛娃/免费活动/本月活动/本周末活动）在首页/本周/消息都显示，只在"我的"页隐藏
+  const quickBar = document.querySelector('header.top .quick-bar');
+  if(quickBar) quickBar.style.display = (tab === 'profile') ? 'none' : '';
   
   // 根据标签页处理逻辑
   if(tab === 'home'){
@@ -3650,12 +3608,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-// 填充发帖分类选择器的印章图标
-document.querySelectorAll('.cat-pick-ico').forEach(el => {
-  const c = el.dataset.ico;
-  if(CAT_ICONS[c]) el.style.backgroundImage = `url(${CAT_ICONS[c]})`;
-});
-console.log('✓ 页面初始化完成 【版本 2.94 - 楼中楼评论回复+资料丢失修复+真实头像(评论/卡片)+顶部分区显隐修复】');
+console.log('✓ 页面初始化完成 【版本 2.95 - 去掉分类按钮圆点】');
 </script>
 </body>
 </html>
