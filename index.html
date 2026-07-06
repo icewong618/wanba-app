@@ -689,7 +689,7 @@
       </div>
       <div class="top-actions">
         <div class="search">🔍 搜一搜村里的新鲜事</div>
-        <button class="btn-post" onclick="openCompose()">＋ 发布</button>
+        <button class="btn-post" onclick="handlePublishClick()">＋ 发布</button>
       </div>
     </div>
     <div class="chip-row" id="chipRow"></div>
@@ -739,6 +739,14 @@
   <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:18px 18px 0 0;padding:10px 16px 26px;max-height:82vh;overflow-y:auto;animation:slideUp .25s ease;">
     <div style="width:40px;height:4px;background:var(--line);border-radius:999px;margin:6px auto 14px;"></div>
     <div id="merchantEditSheetBody"></div>
+  </div>
+</div>
+
+<!-- 认证商家点击"发布"按钮时弹出的专属仪表盘（只有商家+点发布按钮才会出现，不影响首页/导航栏） -->
+<div class="overlay" id="merchantPublishOverlay" onclick="if(event.target.id==='merchantPublishOverlay')closeMerchantPublishDashboard()">
+  <div class="modal" id="merchantPublishModal" style="position:relative;">
+    <button onclick="closeMerchantPublishDashboard()" style="position:absolute;top:12px;right:12px;z-index:2;width:30px;height:30px;border-radius:50%;background:rgba(42,39,33,0.45);border:none;color:#fff;font-size:14px;cursor:pointer;">✕</button>
+    <div id="merchantPublishBody" style="padding:20px;overflow-y:auto;"></div>
   </div>
 </div>
 
@@ -827,7 +835,7 @@
 </div>
 
 <!-- Bottom Navigation -->
-<div class="bottom-nav" id="normalBottomNav">
+<div class="bottom-nav">
   <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
     <span class="nav-icon">🏠</span>
     <span class="nav-label">首页</span>
@@ -850,50 +858,9 @@
   </button>
 </div>
 
-<!-- 认证商家专属底部导航（默认隐藏，登录后若是已认证商家才切换显示） -->
-<div class="bottom-nav" id="merchantBottomNav" style="display:none;">
-  <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
-    <span class="nav-icon">🏠</span>
-    <span class="nav-label">首页</span>
-  </button>
-  <button class="nav-btn" data-tab="aiassist" onclick="switchTab('aiassist')">
-    <span class="nav-icon">🤖</span>
-    <span class="nav-label">AI助手</span>
-  </button>
-  <button class="nav-btn-fab" onclick="openCompose()" title="发布">
-    <span class="fab-circle">＋</span>
-  </button>
-  <button class="nav-btn" data-tab="data" onclick="switchTab('data')">
-    <span class="nav-icon">📊</span>
-    <span class="nav-label">数据</span>
-  </button>
-  <button class="nav-btn" data-tab="profile" onclick="switchTab('profile')">
-    <span class="nav-icon">👤</span>
-    <span class="nav-label">我</span>
-  </button>
-</div>
-
 <!-- Pages -->
 <div class="page" id="page-home">
-  <div id="communityHomeWrap">
-    <div class="feed" id="feed"></div>
-  </div>
-  <!-- 认证商家的"首页"：显示AI创作/发布仪表盘，内容由 renderMerchantDashboard() 填充 -->
-  <div id="merchantDashboardWrap" style="display:none;padding:16px;"></div>
-</div>
-<div class="page" id="page-aiassist" style="display:none;">
-  <div class="page-header">🤖 AI 助手</div>
-  <div style="text-align:center;padding:60px 20px;color:var(--ink-faint);">
-    <span style="font-size:40px;display:block;margin-bottom:12px;">🤖</span>
-    <p>AI 助手功能开发中，敬请期待</p>
-  </div>
-</div>
-<div class="page" id="page-data" style="display:none;">
-  <div class="page-header">📊 数据</div>
-  <div style="text-align:center;padding:60px 20px;color:var(--ink-faint);">
-    <span style="font-size:40px;display:block;margin-bottom:12px;">📊</span>
-    <p>完整数据分析功能开发中，敬请期待</p>
-  </div>
+  <div class="feed" id="feed"></div>
 </div>
 <div class="page" id="page-week" style="display:none;">
   <div class="page-header">📅 本周活动</div>
@@ -1488,24 +1455,15 @@ async function fetchProfileFromDb(){
 /* 拉取当前账号的商家资料。若存在且已通过认证(verified=true)，"我"页会显示商家专属主页而非普通个人页 */
 let currentMerchant = null;
 async function fetchMerchantProfile(){
-  if(!(session && session.user)){ currentMerchant = null; updateNavForMerchant(); return; }
+  if(!(session && session.user)){ currentMerchant = null; return; }
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${session.user.id}&select=*`);
-    if(!res.ok){ currentMerchant = null; updateNavForMerchant(); return; }
+    if(!res.ok){ currentMerchant = null; return; }
     const rows = await res.json();
     currentMerchant = (rows && rows[0]) || null;
-    updateNavForMerchant();
-    // 若当前正停留在"我"页或"首页"，重新触发一次switchTab，让商家仪表盘/普通视图及时切换
-    if(currentTab === 'profile' || currentTab === 'home') switchTab(currentTab);
-  } catch(e){ console.warn('商家资料拉取失败:', e.message); currentMerchant = null; updateNavForMerchant(); }
-}
-/* 根据当前账号是否为已认证商家，切换显示"普通底部导航"或"商家专属底部导航" */
-function updateNavForMerchant(){
-  const isM = !!(currentMerchant && currentMerchant.verified);
-  const normalNav = document.getElementById('normalBottomNav');
-  const merchantNav = document.getElementById('merchantBottomNav');
-  if(normalNav) normalNav.style.display = isM ? 'none' : '';
-  if(merchantNav) merchantNav.style.display = isM ? '' : 'none';
+    // 若当前正停留在"我"页，刷新一下让商家主页/普通个人页及时切换
+    if(currentTab === 'profile') initProfilePage();
+  } catch(e){ console.warn('商家资料拉取失败:', e.message); currentMerchant = null; }
 }
 /* 属性值安全转义，防止商家资料里的引号破坏 value="..." 属性 */
 function escAttr(s){ return (s == null ? '' : String(s)).replace(/"/g,'&quot;'); }
@@ -1710,7 +1668,7 @@ async function saveMerchantProfile(){
 
 /* ====== 商家仪表盘："首页"对已认证商家显示此内容 ====== */
 function renderMerchantDashboard(){
-  const wrap = document.getElementById('merchantDashboardWrap');
+  const wrap = document.getElementById('merchantPublishBody');
   if(!wrap || !(session && session.user)) return;
   const m = currentMerchant || {};
   const displayName = (currentUser && currentUser.name) || m.business_name || '老板';
@@ -1727,7 +1685,7 @@ function renderMerchantDashboard(){
         <div class="merchant-dash-greeting">👋 早上好，${displayName}</div>
         <div class="merchant-dash-sub">让 AI 帮你轻松创作并发布内容，提升品牌影响力！</div>
       </div>
-      <button class="merchant-dash-shopbtn" onclick="switchTab('profile')">🏪 店铺主页 ›</button>
+      <button class="merchant-dash-shopbtn" onclick="closeMerchantPublishDashboard();switchTab('profile');">🏪 店铺主页 ›</button>
     </div>
 
     <div class="merchant-ai-banner">
@@ -1750,14 +1708,14 @@ function renderMerchantDashboard(){
         <div class="merchant-quick-ico" style="background:var(--sage-light);">✏️</div>
         <div class="merchant-quick-title">手动发一篇</div>
         <div class="merchant-quick-sub">自己编辑已有内容</div>
-        <button class="merchant-quick-btn" style="background:var(--sage);" onclick="openCompose()">开始发布</button>
+        <button class="merchant-quick-btn" style="background:var(--sage);" onclick="closeMerchantPublishDashboard();openCompose();">开始发布</button>
       </div>
     </div>
 
     <div class="merchant-dash-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <span style="font-size:15px;font-weight:700;">上一次发布效果</span>
-        ${myPosts.length ? `<span style="font-size:12px;color:var(--ink-faint);cursor:pointer;" onclick="switchTab('profile')">查看全部 ›</span>` : ''}
+        ${myPosts.length ? `<span style="font-size:12px;color:var(--ink-faint);cursor:pointer;" onclick="closeMerchantPublishDashboard();switchTab('profile');">查看全部 ›</span>` : ''}
       </div>
       ${latest ? `
         <div style="display:flex;gap:10px;align-items:center;">
@@ -1780,7 +1738,7 @@ function renderMerchantDashboard(){
     <div class="merchant-dash-card">
       <div style="font-size:15px;font-weight:700;margin-bottom:6px;">最近发布</div>
       ${recent.length ? recent.map(p => `
-        <div class="merchant-recent-row" onclick="openPost(${p.id})" style="cursor:pointer;">
+        <div class="merchant-recent-row" onclick="closeMerchantPublishDashboard();openPost(${p.id});" style="cursor:pointer;">
           <img class="merchant-recent-img" src="${p.image || ''}" alt="">
           <div style="flex:1;min-width:0;">
             <div class="merchant-recent-title">${p.title}</div>
@@ -2928,6 +2886,21 @@ function rsvp(){
 }
 
 /* ---------------- compose ---------------- */
+/* 发布入口分发：认证商家先看专属发布仪表盘；普通用户/未认证商家和以前一样直接进入发布 */
+function handlePublishClick(){
+  if(currentMerchant && currentMerchant.verified){
+    openMerchantPublishDashboard();
+  } else {
+    openCompose();
+  }
+}
+function openMerchantPublishDashboard(){
+  document.getElementById('merchantPublishOverlay').classList.add('open');
+  renderMerchantDashboard();
+}
+function closeMerchantPublishDashboard(){
+  document.getElementById('merchantPublishOverlay').classList.remove('open');
+}
 function openCompose(){
   document.getElementById('composeOverlay').classList.add('open');
 }
@@ -4128,8 +4101,9 @@ async function loadPostsFromSupabase(){
           if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
         }
       });
-      // 商家仪表盘依赖同一份posts数据，数据到齐后刷新一次
-      if(currentTab === 'home' && currentMerchant && currentMerchant.verified) renderMerchantDashboard();
+      // 若商家发布弹层正打开着，数据到齐后刷新一次里面的统计
+      const mpModal = document.getElementById('merchantPublishModal');
+      if(mpModal && mpModal.style.display === 'flex') renderMerchantDashboard();
     } else {
       console.log('📭 暂无数据或数据格式不正确');
     }
@@ -4156,29 +4130,19 @@ window.switchTab = function(tab){
     page.classList.add('active');
     page.style.display = 'block';
   }
-  // 普通导航栏和商家导航栏里，同名data-tab的按钮都要同步高亮（两条导航同一时刻只显示一条，但都要维护好状态）
-  document.querySelectorAll(`[data-tab="${tab}"]`).forEach(b => b.classList.add('active'));
+  const btn = document.querySelector(`[data-tab="${tab}"]`);
+  if(btn) btn.classList.add('active');
 
-  const isMerchantView = !!(currentMerchant && currentMerchant.verified);
-  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅"普通用户的主页"显示；商家账号整套隐藏
+  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
   const topWrap = document.querySelector('header.top .top-wrap');
-  if(topWrap) topWrap.style.display = (tab === 'home' && !isMerchantView) ? '' : 'none';
-  // 2.94修复：绿色quick-bar 在首页/本周/消息都显示，只在"我的"页隐藏；商家账号整套隐藏（导航结构不一样，quick-bar不适用）
+  if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
+  // 2.94修复：绿色quick-bar（遛娃/免费活动/本月活动/本周末活动）在首页/本周/消息都显示，只在"我的"页隐藏
   const quickBar = document.querySelector('header.top .quick-bar');
-  if(quickBar) quickBar.style.display = (tab === 'profile' || isMerchantView) ? 'none' : '';
+  if(quickBar) quickBar.style.display = (tab === 'profile') ? 'none' : '';
   
-  // 根据标签页处理逻辑
+  // 根据标签页处理逻辑（首页/导航栏不区分商家与普通用户，两者完全一致）
   if(tab === 'home'){
-    if(isMerchantView){
-      console.log('🏪 商家主页（仪表盘）已切换');
-      document.getElementById('communityHomeWrap').style.display = 'none';
-      document.getElementById('merchantDashboardWrap').style.display = 'block';
-      renderMerchantDashboard();
-    } else {
-      console.log('🏠 主页已切换，加载最新数据...');
-      document.getElementById('communityHomeWrap').style.display = '';
-      document.getElementById('merchantDashboardWrap').style.display = 'none';
-    }
+    console.log('🏠 主页已切换，加载最新数据...');
     loadPostsFromSupabase();
   } else if(tab === 'week'){
     console.log('📅 周末活动已切换');
@@ -4227,7 +4191,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 2.98 - 商家专属仪表盘首页】');
+console.log('✓ 页面初始化完成 【版本 2.99 - 商家发布弹层（点击发布按钮触发，首页/导航栏不变）】');
 </script>
 </body>
 </html>
