@@ -159,6 +159,14 @@
   .deals-search-wrap{display:flex;gap:8px;align-items:center;}
   .deals-search{width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:999px;font-size:13.5px;font-family:inherit;background:var(--card);}
   .deals-search-btn{flex-shrink:0;padding:10px 14px;border-radius:999px;background:var(--sage);color:#fff;font-size:12.5px;font-weight:800;}
+  .deals-search-panel{margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:var(--shadow);}
+  .deals-search-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;}
+  .deals-search-panel-title{font-size:13px;font-weight:900;color:var(--ink);}
+  .deals-search-panel-title span{display:block;font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:3px;}
+  .deals-search-panel-close{width:26px;height:26px;border-radius:50%;background:var(--bg-alt);color:var(--ink-faint);font-size:16px;font-weight:900;line-height:1;}
+  .deals-search-links{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:8px;}
+  .deals-search-link{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:10px;background:var(--bg-alt);color:var(--ink);font-size:12px;font-weight:800;text-align:left;}
+  .deals-search-link span{font-size:11px;color:var(--ink-faint);font-weight:700;white-space:nowrap;}
   .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:8px 16px 4px;}
   .deals-section-header{font-size:15px;font-weight:800;color:var(--ink);margin:12px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .deals-section-header span{font-size:11.5px;font-weight:600;color:var(--ink-faint);}
@@ -195,7 +203,7 @@
   .deal-actions{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px;}
   .deal-actions button{flex:1;padding:8px;border-radius:8px;background:var(--bg-alt);color:var(--ink-soft);font-size:12px;font-weight:600;}
   .deal-actions button.liked{background:var(--berry-light);color:var(--berry-dark);}
-  @media(min-width:720px){.food-price-grid{grid-template-columns:repeat(4, minmax(0,1fr));}}
+  @media(min-width:720px){.food-price-grid{grid-template-columns:repeat(4, minmax(0,1fr));}.deals-search-links{grid-template-columns:repeat(4, minmax(0,1fr));}}
 
   /* ---------- 商家专属底部导航（含中间凸起"发布"按钮）---------- */
   .nav-btn-fab{
@@ -1067,9 +1075,10 @@
     </div>
     <div class="deals-banner" id="dealsBanner"></div>
     <div class="deals-search-wrap">
-      <input type="text" id="dealsSearchInput" class="deals-search" placeholder="搜索鸡蛋、牛奶、大米、Best Buy..." oninput="renderFoodLowPrices();renderDealsList()" onkeydown="if(event.key==='Enter')openRetailerSearch()">
+      <input type="text" id="dealsSearchInput" class="deals-search" placeholder="搜索鸡蛋、牛奶、大米、Best Buy..." oninput="hideDealsSearchPanel();renderFoodLowPrices();renderDealsList()" onkeydown="if(event.key==='Enter')openRetailerSearch()">
       <button class="deals-search-btn" onclick="openRetailerSearch()">全网找</button>
     </div>
+    <div id="dealsSearchPanel" class="deals-search-panel" style="display:none;"></div>
   </div>
   <div class="deals-meta-row">
     <span>Los Angeles 周边</span>
@@ -2588,6 +2597,55 @@ const DEAL_RETAILERS = [
   { key:'macys', name:"Macy's", url:'https://www.macys.com/shop/featured/' },
   { key:'clearance', name:'清仓' }
 ];
+const DEAL_SEARCH_TARGETS = [
+  { key:'walmart', name:'Walmart', type:'超市 / 日用品', url:'https://www.walmart.com/search?q=' },
+  { key:'target', name:'Target', type:'百货 / 食品', url:'https://www.target.com/s?searchTerm=' },
+  { key:'costco', name:'Costco', type:'会员仓储', url:'https://www.costco.com/CatalogSearch?dept=All&keyword=' },
+  { key:'samsclub', name:"Sam's Club", type:'会员仓储', url:'https://www.samsclub.com/s/' },
+  { key:'bestbuy', name:'Best Buy', type:'电器', url:'https://www.bestbuy.com/site/searchpage.jsp?st=' },
+  { key:'tjmaxx', name:'TJ Maxx', type:'家居 / 清仓', url:'https://tjmaxx.tjx.com/store/shop/?_dyncharset=utf-8&initSubmit=true&Ntt=' },
+  { key:'macys', name:"Macy's", type:'百货', url:'https://www.macys.com/shop/featured/' },
+  { key:'google', name:'Google Shopping', type:'全网比价', url:'https://www.google.com/search?tbm=shop&q=' }
+];
+const DEAL_QUERY_TRANSLATIONS = [
+  ['鸡胸肉', 'chicken breast'],
+  ['生活纸品', 'paper towels'],
+  ['厨房用品', 'kitchenware'],
+  ['小家电', 'small appliances'],
+  ['大屏电视', 'tv'],
+  ['食用油', 'cooking oil'],
+  ['大米', 'rice'],
+  ['白米', 'rice'],
+  ['米', 'rice'],
+  ['鸡蛋', 'eggs'],
+  ['蛋', 'eggs'],
+  ['牛奶', 'milk'],
+  ['鸡肉', 'chicken'],
+  ['牛肉', 'beef'],
+  ['猪肉', 'pork'],
+  ['海鲜', 'seafood'],
+  ['蔬果', 'produce'],
+  ['水果', 'fruit'],
+  ['蔬菜', 'vegetables'],
+  ['香蕉', 'banana'],
+  ['面粉', 'flour'],
+  ['纸巾', 'paper towels'],
+  ['纸品', 'paper towels'],
+  ['洗衣液', 'laundry detergent'],
+  ['清洁', 'cleaning supplies'],
+  ['家居', 'home goods'],
+  ['床品', 'bedding'],
+  ['行李箱', 'luggage'],
+  ['玩具', 'toys'],
+  ['电视', 'tv'],
+  ['耳机', 'headphones'],
+  ['电脑', 'laptop'],
+  ['笔记本', 'laptop'],
+  ['火锅', 'hot pot'],
+  ['清仓', 'clearance'],
+  ['折扣', 'deals'],
+  ['优惠', 'deals']
+];
 const DEALS = [
   { id:1, dealType:'product', store:'costco', storeName:'Costco', location:'Torrance / Alhambra', name:'Kirkland 生活纸品家庭装', rating:5, origPrice:24.99, curPrice:18.99, percentOff:24, inStock:true, hot:true, tags:['costco','纸品','家庭装'], url:'https://www.costco.com/CatalogSearch?dept=All&keyword=Kirkland%20paper' },
   { id:2, dealType:'product', store:'costco', storeName:'Costco', location:'Cypress / Monterey Park', name:'LG / Samsung 大屏电视', rating:5, origPrice:1499, curPrice:1099, percentOff:27, inStock:true, hot:true, tags:['costco','电视','电器','bestbuy'], url:'https://www.costco.com/CatalogSearch?dept=All&keyword=oled%20tv' },
@@ -2646,6 +2704,24 @@ function refreshDealsIfNeeded(){
   if(last !== key) localStorage.setItem('leshenghuo_deals_refresh_date', key);
   const time = document.getElementById('dealsUpdateTime');
   if(time) time.textContent = `自动刷新：${new Date().toLocaleDateString('zh-CN')} 06:00`;
+}
+function normalizeDealSearchQuery(raw){
+  let q = (raw || '').trim();
+  if(!q) return 'grocery deals';
+  DEAL_QUERY_TRANSLATIONS.forEach(([cn, en]) => {
+    q = q.replaceAll(cn, ` ${en} `);
+  });
+  q = q.replace(/[，。、“”‘’]/g, ' ').replace(/\s+/g, ' ').trim();
+  if(/[\u4e00-\u9fff]/.test(q)) return 'deals';
+  return q || 'deals';
+}
+function dealSearchUrl(target, query){
+  if(target.key === 'macys') return `${target.url}${encodeURIComponent(query)}`;
+  return `${target.url}${encodeURIComponent(query)}`;
+}
+function hideDealsSearchPanel(){
+  const panel = document.getElementById('dealsSearchPanel');
+  if(panel) panel.style.display = 'none';
 }
 function currentDealsList(){
   const kw = (document.getElementById('dealsSearchInput')?.value || '').trim().toLowerCase();
@@ -2773,15 +2849,39 @@ function openDealDetail(id){
   window.open(d.url, '_blank', 'noopener');
 }
 function openRetailerSearch(){
-  const kw = (document.getElementById('dealsSearchInput')?.value || '').trim();
-  const retailer = DEAL_RETAILERS.find(r => r.key === dealsFilter && r.url) || DEAL_RETAILERS.find(r => r.key === 'walmart');
-  let url = retailer.url;
-  if(url.endsWith('=') || url.endsWith('/s/')) url += encodeURIComponent(kw || 'deals');
-  window.open(url, '_blank', 'noopener');
+  const raw = (document.getElementById('dealsSearchInput')?.value || '').trim();
+  const query = normalizeDealSearchQuery(raw);
+  const panel = document.getElementById('dealsSearchPanel');
+  if(!panel) return;
+  const preferred = DEAL_SEARCH_TARGETS.filter(t => t.key === dealsFilter);
+  const rest = DEAL_SEARCH_TARGETS.filter(t => t.key !== dealsFilter);
+  const targets = [...preferred, ...rest];
+  panel.innerHTML = `
+    <div class="deals-search-panel-head">
+      <div class="deals-search-panel-title">
+        全网搜索入口
+        <span>已将「${raw || '优惠'}」转换为英文搜索词：${query}</span>
+      </div>
+      <button class="deals-search-panel-close" onclick="hideDealsSearchPanel()">×</button>
+    </div>
+    <div class="deals-search-links">
+      ${targets.map(t => `
+        <button class="deals-search-link" onclick="openDealSearchTarget('${t.key}', '${query.replace(/'/g, "\\'")}')">
+          ${t.name}<span>${t.type}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+  panel.style.display = 'block';
 }
 function openFoodSearch(query){
-  const q = encodeURIComponent(query || 'grocery deals');
-  window.open(`https://www.walmart.com/search?q=${q}`, '_blank', 'noopener');
+  const input = document.getElementById('dealsSearchInput');
+  if(input) input.value = query || '';
+  openRetailerSearch();
+}
+function openDealSearchTarget(key, query){
+  const target = DEAL_SEARCH_TARGETS.find(t => t.key === key) || DEAL_SEARCH_TARGETS[0];
+  window.open(dealSearchUrl(target, query || 'deals'), '_blank', 'noopener');
 }
 
 /* ================= 搜索页面 ================= */
@@ -5156,7 +5256,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.22 - 省钱板块类别优惠价格展示修复】');
+console.log('✓ 页面初始化完成 【版本 3.23 - 省钱板块全网搜索与中英关键词修复】');
 </script>
 </body>
 </html>
