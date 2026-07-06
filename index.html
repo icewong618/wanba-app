@@ -2589,19 +2589,19 @@ const DEAL_RETAILERS = [
   { key:'clearance', name:'清仓' }
 ];
 const DEALS = [
-  { id:1, store:'costco', storeName:'Costco', location:'Torrance / Alhambra', name:'Kirkland 生活纸品家庭装', rating:5, origPrice:24.99, curPrice:18.99, percentOff:24, inStock:true, hot:true, tags:['costco','纸品','家庭装'], url:'https://www.costco.com/CatalogSearch?dept=All&keyword=Kirkland%20paper' },
-  { id:2, store:'costco', storeName:'Costco', location:'Cypress / Monterey Park', name:'LG / Samsung 大屏电视', rating:5, origPrice:1499, curPrice:1099, percentOff:27, inStock:true, hot:true, tags:['costco','电视','电器','bestbuy'], url:'https://www.costco.com/CatalogSearch?dept=All&keyword=oled%20tv' },
-  { id:3, store:'samsclub', storeName:"Sam's Club", location:'Hawthorne / Cerritos', name:'冷冻鸡胸肉 10lb', rating:4, origPrice:29.99, curPrice:22.99, percentOff:23, inStock:true, tags:['samsclub','生鲜','鸡肉'], url:'https://www.samsclub.com/s/chicken%20breast' },
-  { id:4, store:'walmart', storeName:'Walmart', location:'全美门店 / 网购', name:'家用清洁与洗衣用品组合', rating:4, origPrice:58.99, curPrice:39.88, percentOff:32, inStock:true, tags:['walmart','日用品','清洁'], url:'https://www.walmart.com/search?q=household%20essentials%20deals' },
-  { id:5, store:'target', storeName:'Target', location:'Carson / Pasadena', name:'儿童玩具与家居清仓区', rating:4, origPrice:49.99, curPrice:24.99, percentOff:50, inStock:true, hot:true, tags:['target','玩具','家居','clearance'], url:'https://www.target.com/s?searchTerm=clearance' },
-  { id:6, store:'aldi', storeName:'ALDI', location:'本周广告', name:'本周蔬果、肉类和早餐食品', rating:4, origPrice:34.50, curPrice:24.75, percentOff:28, inStock:true, tags:['aldi','超市','weekly ad'], url:'https://www.aldi.us/weekly-specials/our-weekly-ads/' },
-  { id:7, store:'99ranch', storeName:'99 Ranch Market', location:'Arcadia / Gardena / Irvine', name:'亚洲蔬果、海鲜与火锅食材', rating:4, origPrice:88.00, curPrice:68.00, percentOff:23, inStock:true, tags:['99大华','99ranch','亚洲超市','海鲜'], url:'https://www.99ranch.com/' },
-  { id:8, store:'gw', storeName:'GW Supermarket', location:'Rowland Heights / San Gabriel', name:'华人超市周末生鲜组合', rating:4, origPrice:76.00, curPrice:59.00, percentOff:22, inStock:true, tags:['gw','华人超市','生鲜'], url:'https://www.gw-supermarket.com/' },
-  { id:9, store:'bestbuy', storeName:'Best Buy', location:'网购 / 门店自取', name:'Sony / Bose 降噪耳机', rating:5, origPrice:399.99, curPrice:249.99, percentOff:38, inStock:true, hot:true, tags:['bestbuy','耳机','电器'], url:'https://www.bestbuy.com/site/searchpage.jsp?st=noise%20canceling%20headphones' },
-  { id:10, store:'bestbuy', storeName:'Best Buy', location:'网购 / 门店自取', name:'笔记本电脑 Back to School 优惠', rating:4, origPrice:899.99, curPrice:649.99, percentOff:28, inStock:true, tags:['bestbuy','laptop','电脑'], url:'https://www.bestbuy.com/site/searchpage.jsp?st=laptop%20deals' },
-  { id:11, store:'tjmaxx', storeName:'TJ Maxx', location:'门店 / 网购', name:'厨房用品、行李箱、家居折扣', rating:4, origPrice:120.00, curPrice:69.99, percentOff:42, inStock:true, tags:['tjmaxx','家居','行李箱','clearance'], url:'https://tjmaxx.tjx.com/store/shop/clearance/_/N-3951437597' },
-  { id:12, store:'macys', storeName:"Macy's", location:'网购 / 门店', name:'床品、锅具、小家电 Sale', rating:4, origPrice:199.00, curPrice:99.00, percentOff:50, inStock:true, tags:['macys','百货','床品','小家电'], url:'https://www.macys.com/shop/sale' },
-  { id:13, store:'clearance', storeName:'Home Depot', location:'Gardena / Torrance', name:'工具、电池、收纳清仓', rating:4, origPrice:299.00, curPrice:179.00, percentOff:40, inStock:true, tags:['home depot','工具','clearance'], url:'https://www.homedepot.com/SpecialBuy/SpecialBuyOfTheDay' },
+  { id:1, dealType:'product', store:'costco', storeName:'Costco', location:'Torrance / Alhambra', name:'Kirkland 生活纸品家庭装', rating:5, origPrice:24.99, curPrice:18.99, percentOff:24, inStock:true, hot:true, tags:['costco','纸品','家庭装'], url:'https://www.costco.com/CatalogSearch?dept=All&keyword=Kirkland%20paper' },
+  { id:2, dealType:'product', store:'costco', storeName:'Costco', location:'Cypress / Monterey Park', name:'LG / Samsung 大屏电视', rating:5, origPrice:1499, curPrice:1099, percentOff:27, inStock:true, hot:true, tags:['costco','电视','电器','bestbuy'], url:'https://www.costco.com/CatalogSearch?dept=All&keyword=oled%20tv' },
+  { id:3, dealType:'product', store:'samsclub', storeName:"Sam's Club", location:'Hawthorne / Cerritos', name:'冷冻鸡胸肉 10lb', rating:4, origPrice:29.99, curPrice:22.99, percentOff:23, inStock:true, tags:['samsclub','生鲜','鸡肉'], url:'https://www.samsclub.com/s/chicken%20breast' },
+  { id:4, dealType:'category', store:'walmart', storeName:'Walmart', location:'全美门店 / 网购', name:'家用清洁与洗衣用品组合', rating:4, discountText:'低至 7 折', percentOff:30, dealNote:'纸品、洗衣液、厨房清洁和家庭日用品，具体价格以官网为准', inStock:true, tags:['walmart','日用品','清洁'], url:'https://www.walmart.com/search?q=household%20essentials%20deals' },
+  { id:5, dealType:'category', store:'target', storeName:'Target', location:'Carson / Pasadena', name:'儿童玩具与家居清仓区', rating:4, discountText:'低至 5 折', percentOff:50, dealNote:'玩具、家居、收纳、季节清仓，部分门店库存不同', inStock:true, hot:true, tags:['target','玩具','家居','clearance'], url:'https://www.target.com/s?searchTerm=clearance' },
+  { id:6, dealType:'weekly_ad', store:'aldi', storeName:'ALDI', location:'本周广告', name:'本周蔬果、肉类和早餐食品', rating:4, discountText:'周广告价', percentOff:28, dealNote:'食品价格以当周广告和门店库存为准', inStock:true, tags:['aldi','超市','weekly ad'], url:'https://www.aldi.us/weekly-specials/our-weekly-ads/' },
+  { id:7, dealType:'weekly_ad', store:'99ranch', storeName:'99 Ranch Market', location:'Arcadia / Gardena / Irvine', name:'亚洲蔬果、海鲜与火锅食材', rating:4, discountText:'本周特价', percentOff:23, dealNote:'适合看海鲜、火锅食材、亚洲蔬果，价格按门店广告核对', inStock:true, tags:['99大华','99ranch','亚洲超市','海鲜'], url:'https://www.99ranch.com/' },
+  { id:8, dealType:'weekly_ad', store:'gw', storeName:'GW Supermarket', location:'Rowland Heights / San Gabriel', name:'华人超市周末生鲜组合', rating:4, discountText:'周末特价', percentOff:22, dealNote:'生鲜、肉类、蔬果和米面粮油，建议到店核对', inStock:true, tags:['gw','华人超市','生鲜'], url:'https://www.gw-supermarket.com/' },
+  { id:9, dealType:'product', store:'bestbuy', storeName:'Best Buy', location:'网购 / 门店自取', name:'Sony / Bose 降噪耳机', rating:5, origPrice:399.99, curPrice:249.99, percentOff:38, inStock:true, hot:true, tags:['bestbuy','耳机','电器'], url:'https://www.bestbuy.com/site/searchpage.jsp?st=noise%20canceling%20headphones' },
+  { id:10, dealType:'product', store:'bestbuy', storeName:'Best Buy', location:'网购 / 门店自取', name:'Lenovo / HP 笔记本电脑', rating:4, origPrice:899.99, curPrice:649.99, percentOff:28, inStock:true, tags:['bestbuy','laptop','电脑'], url:'https://www.bestbuy.com/site/searchpage.jsp?st=laptop%20deals' },
+  { id:11, dealType:'category', store:'tjmaxx', storeName:'TJ Maxx', location:'门店 / 网购', name:'厨房用品、行李箱、家居清仓', rating:4, discountText:'低至 3 折', percentOff:70, dealNote:'适合看锅具、餐具、行李箱、收纳和家居装饰，不代表单一商品价格', inStock:true, tags:['tjmaxx','家居','行李箱','clearance'], url:'https://tjmaxx.tjx.com/store/shop/clearance/_/N-3951437597' },
+  { id:12, dealType:'category', store:'macys', storeName:"Macy's", location:'网购 / 门店', name:'床品、锅具、小家电 Sale', rating:4, discountText:'最高 6 折', percentOff:60, dealNote:'百货类促销集合，需进入官网核对具体品牌和型号', inStock:true, tags:['macys','百货','床品','小家电'], url:'https://www.macys.com/shop/sale' },
+  { id:13, dealType:'category', store:'clearance', storeName:'Home Depot', location:'Gardena / Torrance', name:'工具、电池、收纳清仓', rating:4, discountText:'最高 4 折', percentOff:40, dealNote:'工具、电池、收纳和季节品类清仓，门店库存差异较大', inStock:true, tags:['home depot','工具','clearance'], url:'https://www.homedepot.com/SpecialBuy/SpecialBuyOfTheDay' },
 ];
 const FOOD_LOW_PRICES = [
   { id:'eggs', name:'鸡蛋', price:'$2.99', unit:'12枚', store:'ALDI / Walmart', note:'适合每周采购，价格以门店和当日库存为准', query:'eggs' },
@@ -2661,6 +2661,45 @@ function currentDealsList(){
   }
   return list.sort((a,b) => (b.hot === true) - (a.hot === true) || b.percentOff - a.percentOff);
 }
+function isProductDeal(d){
+  return (d.dealType || 'product') === 'product';
+}
+function dealHotPriceHtml(d){
+  if(isProductDeal(d)){
+    return `
+      <div class="hot-pick-price-row">
+        <div><span class="deals-price-label">原价</span><span class="deals-price-orig">$${d.origPrice.toLocaleString()}</span></div>
+        <div><span class="deals-price-label">现在</span><span class="deals-price-cur">$${d.curPrice.toLocaleString()}</span></div>
+      </div>
+      <div class="hot-pick-save">省 ${d.percentOff}%</div>
+    `;
+  }
+  return `
+    <div class="hot-pick-price-row">
+      <div><span class="deals-price-label">优惠</span><span class="deals-price-cur">${d.discountText || '查看官网'}</span></div>
+    </div>
+    <div class="hot-pick-save">${d.dealType === 'weekly_ad' ? '周广告' : '类别优惠'}</div>
+  `;
+}
+function dealPriceHtml(d){
+  if(isProductDeal(d)){
+    return `
+      <div class="deal-price-row">
+        <div><span class="deals-price-label">原价</span> <span class="deals-price-orig">$${d.origPrice}</span></div>
+        <span>↓</span>
+        <div><span class="deals-price-label">现在</span> <span class="deals-price-cur">$${d.curPrice}</span></div>
+        <span class="deal-percent">省${d.percentOff}%</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="deal-price-row">
+      <div><span class="deals-price-label">优惠</span> <span class="deals-price-cur">${d.discountText || '查看官网'}</span></div>
+      <span class="deal-percent">${d.dealType === 'weekly_ad' ? '周广告' : '类别优惠'}</span>
+    </div>
+    <div style="font-size:12px;color:var(--ink-soft);line-height:1.55;margin-bottom:8px;">${d.dealNote || '进入官网核对具体商品和门店价格'}</div>
+  `;
+}
 function renderHotPicks(){
   const el = document.getElementById('dealsHotScroll');
   if(!el) return;
@@ -2669,11 +2708,7 @@ function renderHotPicks(){
     <div class="hot-pick-card">
       <div class="hot-pick-store">${d.storeName}</div>
       <div class="hot-pick-name">${d.name}</div>
-      <div class="hot-pick-price-row">
-        <div><span class="deals-price-label">原价</span><span class="deals-price-orig">$${d.origPrice.toLocaleString()}</span></div>
-        <div><span class="deals-price-label">现在</span><span class="deals-price-cur">$${d.curPrice.toLocaleString()}</span></div>
-      </div>
-      <div class="hot-pick-save">省 ${d.percentOff}%</div>
+      ${dealHotPriceHtml(d)}
       <button class="hot-pick-btn" onclick="openDealDetail(${d.id})">去核对</button>
     </div>
   `).join('');
@@ -2713,12 +2748,7 @@ function renderDealsList(){
       </div>
       <div class="deal-store-row"><span>${d.storeName}</span><span>${uiIcon('map',12)} ${d.location}</span></div>
       <div class="deal-rating">${'★'.repeat(d.rating)}</div>
-      <div class="deal-price-row">
-        <div><span class="deals-price-label">原价</span> <span class="deals-price-orig">$${d.origPrice}</span></div>
-        <span>↓</span>
-        <div><span class="deals-price-label">现在</span> <span class="deals-price-cur">$${d.curPrice}</span></div>
-        <span class="deal-percent">省${d.percentOff}%</span>
-      </div>
+      ${dealPriceHtml(d)}
       <div class="deal-stock" style="color:${d.inStock ? 'var(--sage-dark)' : 'var(--berry)'};">${d.inStock ? '✓ 官网/门店可核对' : '✕ 库存不足'}</div>
       <div class="deal-actions">
         <button class="${dealLikes[d.id] ? 'liked' : ''}" onclick="toggleDealLike(${d.id})">${dealLikes[d.id] ? '已收藏' : '收藏'}</button>
@@ -5126,7 +5156,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.21 - 省钱板块食品低价与TOP10修复】');
+console.log('✓ 页面初始化完成 【版本 3.22 - 省钱板块类别优惠价格展示修复】');
 </script>
 </body>
 </html>
