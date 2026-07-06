@@ -162,11 +162,26 @@
   .deals-search-panel{margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:var(--shadow);}
   .deals-search-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;}
   .deals-search-panel-title{font-size:13px;font-weight:900;color:var(--ink);}
-  .deals-search-panel-title span{display:block;font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:3px;}
+  .deals-search-panel-title span{display:block;font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:3px;line-height:1.5;}
   .deals-search-panel-close{width:26px;height:26px;border-radius:50%;background:var(--bg-alt);color:var(--ink-faint);font-size:16px;font-weight:900;line-height:1;}
-  .deals-search-links{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:8px;}
-  .deals-search-link{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:10px;background:var(--bg-alt);color:var(--ink);font-size:12px;font-weight:800;text-align:left;}
-  .deals-search-link span{font-size:11px;color:var(--ink-faint);font-weight:700;white-space:nowrap;}
+  .deals-result-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;font-size:11px;color:var(--ink-faint);}
+  .deals-result-toolbar b{color:var(--sage-dark);}
+  .deals-result-list{display:flex;flex-direction:column;gap:9px;}
+  .deals-result-card{border:1px solid var(--line);border-radius:12px;background:var(--bg-alt);padding:11px;}
+  .deals-result-top{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;}
+  .deals-result-name{font-size:13px;font-weight:900;color:var(--ink);line-height:1.35;}
+  .deals-result-name span{display:block;font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;}
+  .deals-result-price{text-align:right;flex-shrink:0;}
+  .deals-result-price b{display:block;font-size:17px;color:var(--berry);}
+  .deals-result-price span{font-size:10.5px;color:var(--ink-faint);}
+  .deals-result-meta{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:6px;margin:8px 0;}
+  .deals-result-meta div{font-size:11px;color:var(--ink-soft);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px;}
+  .deals-result-meta b{display:block;font-size:10px;color:var(--ink-faint);margin-bottom:2px;}
+  .deals-result-note{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin:6px 0 9px;}
+  .deals-result-actions{display:flex;gap:8px;}
+  .deals-result-actions button{flex:1;border-radius:999px;padding:8px 10px;font-size:12px;font-weight:800;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);}
+  .deals-result-actions .primary{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .deals-empty-panel{text-align:center;color:var(--ink-faint);font-size:12px;line-height:1.6;padding:16px 6px;}
   .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:8px 16px 4px;}
   .deals-section-header{font-size:15px;font-weight:800;color:var(--ink);margin:12px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .deals-section-header span{font-size:11.5px;font-weight:600;color:var(--ink-faint);}
@@ -203,7 +218,7 @@
   .deal-actions{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px;}
   .deal-actions button{flex:1;padding:8px;border-radius:8px;background:var(--bg-alt);color:var(--ink-soft);font-size:12px;font-weight:600;}
   .deal-actions button.liked{background:var(--berry-light);color:var(--berry-dark);}
-  @media(min-width:720px){.food-price-grid{grid-template-columns:repeat(4, minmax(0,1fr));}.deals-search-links{grid-template-columns:repeat(4, minmax(0,1fr));}}
+  @media(min-width:720px){.food-price-grid{grid-template-columns:repeat(4, minmax(0,1fr));}.deals-result-meta{grid-template-columns:repeat(4, minmax(0,1fr));}}
 
   /* ---------- 商家专属底部导航（含中间凸起"发布"按钮）---------- */
   .nav-btn-fab{
@@ -2672,6 +2687,7 @@ const FOOD_LOW_PRICES = [
   { id:'flour', name:'面粉', price:'$3.29', unit:'5 lb', store:'Target / Walmart', note:'烘焙和家用基础食品', query:'flour 5 lb' }
 ];
 let dealLikes = {};
+let unifiedDealRows = [];
 
 function renderDealsPage(){
   refreshDealsIfNeeded();
@@ -2715,13 +2731,108 @@ function normalizeDealSearchQuery(raw){
   if(/[\u4e00-\u9fff]/.test(q)) return 'deals';
   return q || 'deals';
 }
-function dealSearchUrl(target, query){
-  if(target.key === 'macys') return `${target.url}${encodeURIComponent(query)}`;
-  return `${target.url}${encodeURIComponent(query)}`;
-}
 function hideDealsSearchPanel(){
   const panel = document.getElementById('dealsSearchPanel');
   if(panel) panel.style.display = 'none';
+}
+function dealSearchTerms(raw, query){
+  const terms = [raw, query, ...String(query || '').split(' ')]
+    .map(t => String(t || '').trim())
+    .filter(t => t.length >= 2 && t !== 'deals');
+  return [...new Set(terms)].slice(0, 6);
+}
+function moneyText(v){
+  if(v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? `$${n.toFixed(n % 1 === 0 ? 0 : 2)}` : String(v);
+}
+function dealDateText(v){
+  if(!v) return '今日';
+  const d = new Date(v);
+  if(Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString('zh-CN', { month:'numeric', day:'numeric' });
+}
+async function fetchUnifiedDealResults(raw, query){
+  const terms = dealSearchTerms(raw, query);
+  const select = 'id,deal_date,retailer_key,retailer_name,category,product_name,product_name_cn,original_price,current_price,unit,percent_off,save_amount,location,source_url,is_hot,is_food_low_price,stock_status,price_note,ai_summary_cn,source_type,updated_at';
+  const clauses = terms.flatMap(t => [
+    `product_name.ilike.*${t}*`,
+    `product_name_cn.ilike.*${t}*`,
+    `category.ilike.*${t}*`,
+    `retailer_name.ilike.*${t}*`
+  ]);
+  const orFilter = clauses.length ? `&or=${encodeURIComponent(`(${clauses.join(',')})`)}` : '';
+  const url = `${SUPABASE_URL}/rest/v1/deals?select=${select}${orFilter}&order=deal_date.desc&order=is_hot.desc&limit=20`;
+  const res = await authedFetch(url, { method:'GET' });
+  if(!res.ok){
+    const message = await res.text();
+    throw new Error(message || `HTTP ${res.status}`);
+  }
+  const rows = await res.json();
+  return rows.sort((a,b) =>
+    (b.is_food_low_price === true) - (a.is_food_low_price === true) ||
+    (b.is_hot === true) - (a.is_hot === true) ||
+    Number(a.current_price || 999999) - Number(b.current_price || 999999)
+  );
+}
+function unifiedDealCardHtml(d, i){
+  const price = moneyText(d.current_price) || d.price_note || '查看详情';
+  const orig = moneyText(d.original_price);
+  const save = d.percent_off ? `省 ${d.percent_off}%` : (d.save_amount ? `省 ${moneyText(d.save_amount)}` : (d.is_food_low_price ? '食品低价' : '已收录'));
+  const stock = d.stock_status === 'in_stock' ? '有货' : (d.stock_status === 'out_of_stock' ? '缺货' : '需核对');
+  const source = d.source_type || '数据库';
+  return `
+    <div class="deals-result-card">
+      <div class="deals-result-top">
+        <div class="deals-result-name">
+          ${i + 1}. ${d.product_name_cn || d.product_name || '未命名商品'}
+          <span>${d.product_name || ''}</span>
+        </div>
+        <div class="deals-result-price">
+          <b>${price}</b>
+          <span>${d.unit || '单位待核对'}</span>
+        </div>
+      </div>
+      <div class="deals-result-meta">
+        <div><b>商家</b>${d.retailer_name || d.retailer_key || '未知'}</div>
+        <div><b>地区</b>${d.location || '网购 / 门店'}</div>
+        <div><b>状态</b>${stock}</div>
+        <div><b>更新</b>${dealDateText(d.updated_at || d.deal_date)}</div>
+      </div>
+      <div class="deals-result-note">
+        ${orig ? `原价 ${orig}，` : ''}${save}。${d.ai_summary_cn || d.price_note || '价格来自数据库记录，请进入来源链接最终核对。'}
+      </div>
+      <div class="deals-result-actions">
+        <button onclick="copyUnifiedDeal('${String(d.id).replace(/'/g, '')}')">复制</button>
+        <button class="primary" onclick="openDealSource('${String(d.source_url || '').replace(/'/g, "\\'")}')">${source}核对</button>
+      </div>
+    </div>
+  `;
+}
+function renderUnifiedDealPanel(raw, query, rows, error){
+  const panel = document.getElementById('dealsSearchPanel');
+  if(!panel) return;
+  unifiedDealRows = rows || [];
+  const hasRows = rows && rows.length;
+  panel.innerHTML = `
+    <div class="deals-search-panel-head">
+      <div class="deals-search-panel-title">
+        站内统一搜索结果
+        <span>搜索「${raw || '优惠'}」；英文关键词：${query}。结果来自 Supabase deals 表，不由 AI 编造价格。</span>
+      </div>
+      <button class="deals-search-panel-close" onclick="hideDealsSearchPanel()">×</button>
+    </div>
+    ${hasRows ? `
+      <div class="deals-result-toolbar"><b>找到 ${rows.length} 条真实记录</b><span>按食品低价、热门和价格排序</span></div>
+      <div class="deals-result-list">${rows.map(unifiedDealCardHtml).join('')}</div>
+    ` : `
+      <div class="deals-empty-panel">
+        ${error ? '数据库查询失败，可能还没有创建 deals 表或读取权限未开放。' : '数据库暂时没有这个关键词的真实价格。'}<br>
+        请先在 Supabase 的 deals 表中录入或刷新相关商品，再回到这里搜索。
+      </div>
+    `}
+  `;
+  panel.style.display = 'block';
 }
 function currentDealsList(){
   const kw = (document.getElementById('dealsSearchInput')?.value || '').trim().toLowerCase();
@@ -2848,40 +2959,45 @@ function openDealDetail(id){
   if(!d) return;
   window.open(d.url, '_blank', 'noopener');
 }
-function openRetailerSearch(){
+async function openRetailerSearch(){
   const raw = (document.getElementById('dealsSearchInput')?.value || '').trim();
   const query = normalizeDealSearchQuery(raw);
   const panel = document.getElementById('dealsSearchPanel');
   if(!panel) return;
-  const preferred = DEAL_SEARCH_TARGETS.filter(t => t.key === dealsFilter);
-  const rest = DEAL_SEARCH_TARGETS.filter(t => t.key !== dealsFilter);
-  const targets = [...preferred, ...rest];
   panel.innerHTML = `
     <div class="deals-search-panel-head">
       <div class="deals-search-panel-title">
-        全网搜索入口
-        <span>已将「${raw || '优惠'}」转换为英文搜索词：${query}</span>
+        正在查询数据库
+        <span>已将「${raw || '优惠'}」转换为英文搜索词：${query}，正在读取 Supabase deals 表。</span>
       </div>
       <button class="deals-search-panel-close" onclick="hideDealsSearchPanel()">×</button>
     </div>
-    <div class="deals-search-links">
-      ${targets.map(t => `
-        <button class="deals-search-link" onclick="openDealSearchTarget('${t.key}', '${query.replace(/'/g, "\\'")}')">
-          ${t.name}<span>${t.type}</span>
-        </button>
-      `).join('')}
-    </div>
+    <div class="deals-empty-panel">正在整理真实价格...</div>
   `;
   panel.style.display = 'block';
+  try {
+    const rows = await fetchUnifiedDealResults(raw, query);
+    renderUnifiedDealPanel(raw, query, rows, null);
+  } catch(e) {
+    console.warn('省钱统一搜索失败:', e.message);
+    renderUnifiedDealPanel(raw, query, [], e);
+  }
 }
 function openFoodSearch(query){
   const input = document.getElementById('dealsSearchInput');
   if(input) input.value = query || '';
   openRetailerSearch();
 }
-function openDealSearchTarget(key, query){
-  const target = DEAL_SEARCH_TARGETS.find(t => t.key === key) || DEAL_SEARCH_TARGETS[0];
-  window.open(dealSearchUrl(target, query || 'deals'), '_blank', 'noopener');
+function openDealSource(url){
+  if(!url){ showToast('这条记录还没有来源链接'); return; }
+  window.open(url, '_blank', 'noopener');
+}
+function copyUnifiedDeal(id){
+  const d = unifiedDealRows.find(x => String(x.id) === String(id));
+  if(!d){ showToast('没有找到这条优惠'); return; }
+  const text = `${d.product_name_cn || d.product_name}｜${d.retailer_name || d.retailer_key}｜${moneyText(d.current_price) || d.price_note || '查看详情'} ${d.unit || ''}｜${d.source_url || ''}`;
+  if(navigator.clipboard) navigator.clipboard.writeText(text);
+  showToast('已复制该优惠摘要');
 }
 
 /* ================= 搜索页面 ================= */
@@ -5256,7 +5372,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.23 - 省钱板块全网搜索与中英关键词修复】');
+console.log('✓ 页面初始化完成 【版本 3.40 - 省钱板块数据库统一搜索】');
 </script>
 </body>
 </html>
