@@ -161,6 +161,48 @@
   .deal-actions button{flex:1;padding:8px;border-radius:8px;background:var(--bg-alt);color:var(--ink-soft);font-size:12px;font-weight:600;}
   .deal-actions button.liked{background:var(--berry-light);color:var(--berry-dark);}
 
+  /* ---------- 商家专属底部导航（含中间凸起"发布"按钮）---------- */
+  .nav-btn-fab{
+    flex:1;height:100%;display:flex;align-items:center;justify-content:center;position:relative;
+  }
+  .nav-btn-fab .fab-circle{
+    width:52px;height:52px;border-radius:50%;background:var(--berry);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:26px;
+    box-shadow:0 6px 16px rgba(194,65,107,0.35);
+    margin-top:-22px;border:4px solid var(--bg);
+    transition:transform .15s ease;
+  }
+  .nav-btn-fab:hover .fab-circle{transform:translateY(-2px);}
+
+  /* ---------- 商家仪表盘（"首页"对认证商家显示此内容）---------- */
+  .merchant-dash-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .merchant-dash-greeting{font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;}
+  .merchant-dash-sub{font-size:12.5px;color:var(--ink-faint);}
+  .merchant-dash-shopbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid var(--line-strong);border-radius:999px;background:var(--card);color:var(--ink-soft);font-size:12.5px;font-weight:700;white-space:nowrap;}
+  .merchant-ai-banner{background:var(--sage-light);border-radius:14px;padding:16px;margin-bottom:14px;display:flex;align-items:center;gap:14px;}
+  .merchant-ai-banner .ai-ico{font-size:30px;flex-shrink:0;}
+  .merchant-ai-banner .ai-text{flex:1;}
+  .merchant-ai-banner .ai-title{font-size:14px;font-weight:700;color:var(--sage-dark);margin-bottom:4px;}
+  .merchant-ai-banner .ai-sub{font-size:12.5px;color:var(--ink-soft);}
+  .merchant-ai-banner .ai-sub b{color:var(--berry);}
+  .merchant-ai-banner button{flex-shrink:0;padding:9px 16px;border-radius:999px;border:none;background:var(--sage-dark);color:#fff;font-size:12.5px;font-weight:700;white-space:nowrap;}
+  .merchant-quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+  .merchant-quick-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);}
+  .merchant-quick-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:10px;}
+  .merchant-quick-title{font-size:14.5px;font-weight:700;color:var(--ink);margin-bottom:3px;}
+  .merchant-quick-sub{font-size:11.5px;color:var(--ink-faint);margin-bottom:12px;min-height:16px;}
+  .merchant-quick-btn{width:100%;padding:10px;border-radius:10px;border:none;color:#fff;font-size:13px;font-weight:700;}
+  .merchant-stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px;}
+  .merchant-stat-box{background:var(--bg-alt);border-radius:10px;padding:12px;}
+  .merchant-stat-label{font-size:11.5px;color:var(--ink-soft);display:flex;align-items:center;gap:4px;margin-bottom:6px;}
+  .merchant-stat-num{font-size:20px;font-weight:700;color:var(--ink);}
+  .merchant-recent-row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
+  .merchant-recent-row:last-child{border-bottom:none;}
+  .merchant-recent-img{width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--bg-alt);}
+  .merchant-recent-title{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:3px;}
+  .merchant-recent-meta{font-size:11.5px;color:var(--ink-faint);}
+  .merchant-badge-ok{background:var(--sage-light);color:var(--sage-dark);font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
+
   /* ---------- feed grid ---------- */
   .feed{
     display:grid;
@@ -785,7 +827,7 @@
 </div>
 
 <!-- Bottom Navigation -->
-<div class="bottom-nav">
+<div class="bottom-nav" id="normalBottomNav">
   <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
     <span class="nav-icon">🏠</span>
     <span class="nav-label">首页</span>
@@ -808,9 +850,50 @@
   </button>
 </div>
 
+<!-- 认证商家专属底部导航（默认隐藏，登录后若是已认证商家才切换显示） -->
+<div class="bottom-nav" id="merchantBottomNav" style="display:none;">
+  <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">首页</span>
+  </button>
+  <button class="nav-btn" data-tab="aiassist" onclick="switchTab('aiassist')">
+    <span class="nav-icon">🤖</span>
+    <span class="nav-label">AI助手</span>
+  </button>
+  <button class="nav-btn-fab" onclick="openCompose()" title="发布">
+    <span class="fab-circle">＋</span>
+  </button>
+  <button class="nav-btn" data-tab="data" onclick="switchTab('data')">
+    <span class="nav-icon">📊</span>
+    <span class="nav-label">数据</span>
+  </button>
+  <button class="nav-btn" data-tab="profile" onclick="switchTab('profile')">
+    <span class="nav-icon">👤</span>
+    <span class="nav-label">我</span>
+  </button>
+</div>
+
 <!-- Pages -->
 <div class="page" id="page-home">
-  <div class="feed" id="feed"></div>
+  <div id="communityHomeWrap">
+    <div class="feed" id="feed"></div>
+  </div>
+  <!-- 认证商家的"首页"：显示AI创作/发布仪表盘，内容由 renderMerchantDashboard() 填充 -->
+  <div id="merchantDashboardWrap" style="display:none;padding:16px;"></div>
+</div>
+<div class="page" id="page-aiassist" style="display:none;">
+  <div class="page-header">🤖 AI 助手</div>
+  <div style="text-align:center;padding:60px 20px;color:var(--ink-faint);">
+    <span style="font-size:40px;display:block;margin-bottom:12px;">🤖</span>
+    <p>AI 助手功能开发中，敬请期待</p>
+  </div>
+</div>
+<div class="page" id="page-data" style="display:none;">
+  <div class="page-header">📊 数据</div>
+  <div style="text-align:center;padding:60px 20px;color:var(--ink-faint);">
+    <span style="font-size:40px;display:block;margin-bottom:12px;">📊</span>
+    <p>完整数据分析功能开发中，敬请期待</p>
+  </div>
 </div>
 <div class="page" id="page-week" style="display:none;">
   <div class="page-header">📅 本周活动</div>
@@ -988,6 +1071,7 @@
 
 <script>
 /* ---------------- state ---------------- */
+let currentTab = 'home';
 const CATS = [
   {key:'全部'},
   {key:'美食', emoji:'🍜', code:'1f35c'},
@@ -1404,16 +1488,24 @@ async function fetchProfileFromDb(){
 /* 拉取当前账号的商家资料。若存在且已通过认证(verified=true)，"我"页会显示商家专属主页而非普通个人页 */
 let currentMerchant = null;
 async function fetchMerchantProfile(){
-  if(!(session && session.user)){ currentMerchant = null; return; }
+  if(!(session && session.user)){ currentMerchant = null; updateNavForMerchant(); return; }
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${session.user.id}&select=*`);
-    if(!res.ok){ currentMerchant = null; return; }
+    if(!res.ok){ currentMerchant = null; updateNavForMerchant(); return; }
     const rows = await res.json();
     currentMerchant = (rows && rows[0]) || null;
-    // 若当前正停留在"我"页，刷新一下让商家主页/普通个人页及时切换
-    const activeTab = document.querySelector('.nav-btn.active');
-    if(activeTab && activeTab.dataset.tab === 'profile') initProfilePage();
-  } catch(e){ console.warn('商家资料拉取失败:', e.message); currentMerchant = null; }
+    updateNavForMerchant();
+    // 若当前正停留在"我"页或"首页"，重新触发一次switchTab，让商家仪表盘/普通视图及时切换
+    if(currentTab === 'profile' || currentTab === 'home') switchTab(currentTab);
+  } catch(e){ console.warn('商家资料拉取失败:', e.message); currentMerchant = null; updateNavForMerchant(); }
+}
+/* 根据当前账号是否为已认证商家，切换显示"普通底部导航"或"商家专属底部导航" */
+function updateNavForMerchant(){
+  const isM = !!(currentMerchant && currentMerchant.verified);
+  const normalNav = document.getElementById('normalBottomNav');
+  const merchantNav = document.getElementById('merchantBottomNav');
+  if(normalNav) normalNav.style.display = isM ? 'none' : '';
+  if(merchantNav) merchantNav.style.display = isM ? '' : 'none';
 }
 /* 属性值安全转义，防止商家资料里的引号破坏 value="..." 属性 */
 function escAttr(s){ return (s == null ? '' : String(s)).replace(/"/g,'&quot;'); }
@@ -1615,6 +1707,129 @@ async function saveMerchantProfile(){
     showToast('✓ 商家资料已保存');
   } catch(e){ console.warn('商家资料保存失败:', e.message); showToast('保存失败：' + e.message); }
 }
+
+/* ====== 商家仪表盘："首页"对已认证商家显示此内容 ====== */
+function renderMerchantDashboard(){
+  const wrap = document.getElementById('merchantDashboardWrap');
+  if(!wrap || !(session && session.user)) return;
+  const m = currentMerchant || {};
+  const displayName = (currentUser && currentUser.name) || m.business_name || '老板';
+  const myId = session.user.id;
+  const myPosts = posts
+    .filter(p => p.user_id === myId)
+    .sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const latest = myPosts[0];
+  const recent = myPosts.slice(0, 5);
+
+  wrap.innerHTML = `
+    <div class="merchant-dash-card" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+      <div>
+        <div class="merchant-dash-greeting">👋 早上好，${displayName}</div>
+        <div class="merchant-dash-sub">让 AI 帮你轻松创作并发布内容，提升品牌影响力！</div>
+      </div>
+      <button class="merchant-dash-shopbtn" onclick="switchTab('profile')">🏪 店铺主页 ›</button>
+    </div>
+
+    <div class="merchant-ai-banner">
+      <span class="ai-ico">🤖</span>
+      <div class="ai-text">
+        <div class="ai-title">今天建议：发布新内容</div>
+        <div class="ai-sub">保持更新频率，有助于<b>提升曝光</b></div>
+      </div>
+      <button onclick="showToast('AI 内容生成功能开发中，敬请期待')">立即生成</button>
+    </div>
+
+    <div class="merchant-quick-grid">
+      <div class="merchant-quick-card">
+        <div class="merchant-quick-ico" style="background:var(--berry-light);">✨</div>
+        <div class="merchant-quick-title">AI 发一篇</div>
+        <div class="merchant-quick-sub">AI 帮你生成优质内容</div>
+        <button class="merchant-quick-btn" style="background:var(--berry);" onclick="showToast('AI 创作功能开发中，敬请期待')">开始创作</button>
+      </div>
+      <div class="merchant-quick-card">
+        <div class="merchant-quick-ico" style="background:var(--sage-light);">✏️</div>
+        <div class="merchant-quick-title">手动发一篇</div>
+        <div class="merchant-quick-sub">自己编辑已有内容</div>
+        <button class="merchant-quick-btn" style="background:var(--sage);" onclick="openCompose()">开始发布</button>
+      </div>
+    </div>
+
+    <div class="merchant-dash-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-size:15px;font-weight:700;">上一次发布效果</span>
+        ${myPosts.length ? `<span style="font-size:12px;color:var(--ink-faint);cursor:pointer;" onclick="switchTab('profile')">查看全部 ›</span>` : ''}
+      </div>
+      ${latest ? `
+        <div style="display:flex;gap:10px;align-items:center;">
+          ${latest.image ? `<img src="${latest.image}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : ''}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${latest.title}</div>
+            <div style="font-size:11.5px;color:var(--ink-faint);margin-top:2px;">${latest.time || ''}</div>
+          </div>
+          <span class="merchant-badge-ok">已发布</span>
+        </div>
+        <div class="merchant-stats-grid" id="merchantLatestStats">
+          <div class="merchant-stat-box"><div class="merchant-stat-label">👁️ 浏览量</div><div class="merchant-stat-num">·</div></div>
+          <div class="merchant-stat-box"><div class="merchant-stat-label">💬 互动数</div><div class="merchant-stat-num">·</div></div>
+          <div class="merchant-stat-box"><div class="merchant-stat-label">❤️ 收藏数</div><div class="merchant-stat-num">·</div></div>
+          <div class="merchant-stat-box"><div class="merchant-stat-label">📞 咨询数</div><div class="merchant-stat-num">0</div></div>
+        </div>
+      ` : `<div style="text-align:center;color:var(--ink-faint);font-size:13px;padding:20px 0;">还没有发布过笔记</div>`}
+    </div>
+
+    <div class="merchant-dash-card">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px;">最近发布</div>
+      ${recent.length ? recent.map(p => `
+        <div class="merchant-recent-row" onclick="openPost(${p.id})" style="cursor:pointer;">
+          <img class="merchant-recent-img" src="${p.image || ''}" alt="">
+          <div style="flex:1;min-width:0;">
+            <div class="merchant-recent-title">${p.title}</div>
+            <div class="merchant-recent-meta">${p.time || ''}</div>
+          </div>
+          <span class="merchant-badge-ok">已发布</span>
+        </div>
+      `).join('') : `<div style="text-align:center;color:var(--ink-faint);font-size:13px;padding:20px 0;">还没有发布过笔记</div>`}
+    </div>
+  `;
+
+  if(latest){
+    fetchPostStats(latest.id).then(stats => {
+      const box = document.getElementById('merchantLatestStats');
+      if(!box) return;
+      box.innerHTML = `
+        <div class="merchant-stat-box"><div class="merchant-stat-label">👁️ 浏览量</div><div class="merchant-stat-num">${stats.views}</div></div>
+        <div class="merchant-stat-box"><div class="merchant-stat-label">💬 互动数</div><div class="merchant-stat-num">${stats.engagement}</div></div>
+        <div class="merchant-stat-box"><div class="merchant-stat-label">❤️ 收藏数</div><div class="merchant-stat-num">${stats.favs}</div></div>
+        <div class="merchant-stat-box"><div class="merchant-stat-label">📞 咨询数</div><div class="merchant-stat-num">0</div></div>
+      `;
+    });
+  }
+}
+/* 拉取某条笔记的真实浏览量/互动数(赞+评论)/收藏数 */
+async function fetchPostStats(postId){
+  try {
+    const [vRes, lRes, cRes, fRes] = await Promise.all([
+      authedFetch(`${SUPABASE_URL}/rest/v1/post_views?post_id=eq.${postId}&select=id`),
+      authedFetch(`${SUPABASE_URL}/rest/v1/likes?post_id=eq.${postId}&select=user_id`),
+      authedFetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${postId}&select=id`),
+      authedFetch(`${SUPABASE_URL}/rest/v1/favorites?post_id=eq.${postId}&select=user_id`)
+    ]);
+    const views = vRes.ok ? (await vRes.json()).length : 0;
+    const likesN = lRes.ok ? (await lRes.json()).length : 0;
+    const commentsN = cRes.ok ? (await cRes.json()).length : 0;
+    const favsN = fRes.ok ? (await fRes.json()).length : 0;
+    return { views, engagement: likesN + commentsN, favs: favsN };
+  } catch(e){ console.warn('数据统计加载失败:', e.message); return { views:0, engagement:0, favs:0 }; }
+}
+/* 记录一次真实浏览（仅登录用户，游客暂不记录）。每次打开笔记详情调用一次 */
+function recordPostView(postId){
+  if(!(session && session.user)) return;
+  authedFetch(`${SUPABASE_URL}/rest/v1/post_views`, {
+    method: 'POST',
+    body: JSON.stringify({ post_id: postId, user_id: session.user.id })
+  }).catch(e => console.warn('浏览记录失败:', e.message));
+}
+
 /* 真实IP属地（免费接口 ipapi.co，缓存24小时） */
 async function fetchIpLocation(){
   try {
@@ -1968,6 +2183,7 @@ function openPost(id){
   renderPostModal();
   document.getElementById('postOverlay').classList.add('open');
   loadCommentsFromDb(id); // 从数据库加载评论
+  recordPostView(id); // 记录一次真实浏览（供商家仪表盘"浏览量"统计使用）
   // 2.94修复：兜底确保笔记作者头像已缓存（一般在首页加载时已批量拉过）
   const p = getPost();
   if(p) ensureAvatarsFor([p.user_id]).then(changed => { if(changed && activePostId === id) renderPostModal(); });
@@ -3896,6 +4112,7 @@ async function loadPostsFromSupabase(){
         visibility: p.visibility || 'public',
         pinned: !!p.pinned,
         time: p.created_at ? new Date(p.created_at).toLocaleString('zh-CN') : new Date().toLocaleString('zh-CN'),
+        created_at: p.created_at || null,
         comments: []
       }));
       renderChips();
@@ -3911,6 +4128,8 @@ async function loadPostsFromSupabase(){
           if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
         }
       });
+      // 商家仪表盘依赖同一份posts数据，数据到齐后刷新一次
+      if(currentTab === 'home' && currentMerchant && currentMerchant.verified) renderMerchantDashboard();
     } else {
       console.log('📭 暂无数据或数据格式不正确');
     }
@@ -3923,6 +4142,7 @@ async function loadPostsFromSupabase(){
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
+  currentTab = tab;
   // 隐藏所有页面（同时清除内联样式）
   document.querySelectorAll('.page').forEach(p => {
     p.classList.remove('active');
@@ -3936,19 +4156,29 @@ window.switchTab = function(tab){
     page.classList.add('active');
     page.style.display = 'block';
   }
-  const btn = document.querySelector(`[data-tab="${tab}"]`);
-  if(btn) btn.classList.add('active');
+  // 普通导航栏和商家导航栏里，同名data-tab的按钮都要同步高亮（两条导航同一时刻只显示一条，但都要维护好状态）
+  document.querySelectorAll(`[data-tab="${tab}"]`).forEach(b => b.classList.add('active'));
 
-  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
+  const isMerchantView = !!(currentMerchant && currentMerchant.verified);
+  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅"普通用户的主页"显示；商家账号整套隐藏
   const topWrap = document.querySelector('header.top .top-wrap');
-  if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
-  // 2.94修复：绿色quick-bar（遛娃/免费活动/本月活动/本周末活动）在首页/本周/消息都显示，只在"我的"页隐藏
+  if(topWrap) topWrap.style.display = (tab === 'home' && !isMerchantView) ? '' : 'none';
+  // 2.94修复：绿色quick-bar 在首页/本周/消息都显示，只在"我的"页隐藏；商家账号整套隐藏（导航结构不一样，quick-bar不适用）
   const quickBar = document.querySelector('header.top .quick-bar');
-  if(quickBar) quickBar.style.display = (tab === 'profile') ? 'none' : '';
+  if(quickBar) quickBar.style.display = (tab === 'profile' || isMerchantView) ? 'none' : '';
   
   // 根据标签页处理逻辑
   if(tab === 'home'){
-    console.log('🏠 主页已切换，加载最新数据...');
+    if(isMerchantView){
+      console.log('🏪 商家主页（仪表盘）已切换');
+      document.getElementById('communityHomeWrap').style.display = 'none';
+      document.getElementById('merchantDashboardWrap').style.display = 'block';
+      renderMerchantDashboard();
+    } else {
+      console.log('🏠 主页已切换，加载最新数据...');
+      document.getElementById('communityHomeWrap').style.display = '';
+      document.getElementById('merchantDashboardWrap').style.display = 'none';
+    }
     loadPostsFromSupabase();
   } else if(tab === 'week'){
     console.log('📅 周末活动已切换');
@@ -3997,7 +4227,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 2.97 - 省钱(Deals)第一页】');
+console.log('✓ 页面初始化完成 【版本 2.98 - 商家专属仪表盘首页】');
 </script>
 </body>
 </html>
