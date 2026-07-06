@@ -203,6 +203,29 @@
   .merchant-recent-meta{font-size:11.5px;color:var(--ink-faint);}
   .merchant-badge-ok{background:var(--sage-light);color:var(--sage-dark);font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
 
+  /* ---------- 搜索页面 ---------- */
+  .search-section-title{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:700;color:var(--ink);margin:6px 0 12px;}
+  .search-history-tags{display:flex;flex-wrap:wrap;gap:8px;}
+  .search-history-tag{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;background:var(--card);border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--ink-soft);cursor:pointer;}
+  .search-history-tag .rm{color:var(--ink-faint);font-size:11px;}
+  .search-hot-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+  .search-hot-row:last-child{border-bottom:none;}
+  .search-hot-rank{width:20px;font-size:14px;font-weight:800;color:var(--ink-faint);flex-shrink:0;text-align:center;}
+  .search-hot-rank.top3{color:var(--berry);}
+  .search-hot-text{flex:1;font-size:13.5px;color:var(--ink);}
+  .search-hot-badge{font-size:10.5px;background:var(--berry-light);color:var(--berry-dark);padding:2px 7px;border-radius:6px;font-weight:700;flex-shrink:0;}
+  .search-filter-row{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none;}
+  .search-filter-row::-webkit-scrollbar{display:none;}
+  .search-filter-chip{flex-shrink:0;padding:7px 14px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--card);font-size:12.5px;font-weight:600;color:var(--ink-soft);white-space:nowrap;}
+  .search-filter-chip.active{background:var(--sage);border-color:var(--sage-dark);color:#fff;}
+  .search-filter-row.type-row .search-filter-chip.active{background:var(--berry);border-color:var(--berry-dark);}
+  .search-result-group-title{font-size:12.5px;font-weight:700;color:var(--ink-faint);margin:14px 0 8px;}
+  .search-result-user{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+  .search-result-post{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+  .search-result-post img{width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--bg-alt);}
+  .search-result-place{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+  .search-empty{text-align:center;color:var(--ink-faint);font-size:13px;padding:40px 0;}
+
   /* ---------- feed grid ---------- */
   .feed{
     display:grid;
@@ -688,7 +711,7 @@
         <span class="tag">藏在村里的吃喝玩乐</span>
       </div>
       <div class="top-actions">
-        <div class="search">🔍 搜一搜村里的新鲜事</div>
+        <div class="search" onclick="openSearchPage()">🔍 搜一搜村里的新鲜事</div>
         <button class="btn-post" onclick="handlePublishClick()">＋ 发布</button>
       </div>
     </div>
@@ -750,6 +773,18 @@
   </div>
 </div>
 
+<!-- 搜索页面：点击顶部搜索框弹出 -->
+<div class="overlay" id="searchOverlay" onclick="if(event.target.id==='searchOverlay')closeSearchPage()">
+  <div class="modal" id="searchModal" style="position:relative;">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-shrink:0;">
+      <button onclick="closeSearchPage()" style="border:none;background:none;font-size:20px;color:var(--ink);cursor:pointer;flex-shrink:0;">‹</button>
+      <input type="text" id="searchInput" placeholder="搜索用户、笔记、地点..." style="flex:1;padding:9px 14px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-family:inherit;background:var(--bg-alt);" onkeydown="if(event.key==='Enter')performSearch(this.value)">
+      <button onclick="performSearch(document.getElementById('searchInput').value)" style="border:none;background:none;color:var(--berry);font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;">搜索</button>
+    </div>
+    <div id="searchBody" style="padding:16px;overflow-y:auto;flex:1;"></div>
+  </div>
+</div>
+
 <div class="overlay" id="postOverlay">
   <div class="modal" style="position:relative;" id="postModal"></div>
 </div>
@@ -784,6 +819,15 @@
       <div class="form-field">
         <label>内容 <span class="char-count"><span id="contentCount">0</span>/1000</span></label>
         <textarea id="fContent" placeholder="说说这个地方 / 这次活动值得一去的理由" maxlength="1000" oninput="updateContentCount()"></textarea>
+      </div>
+
+      <div class="form-field" style="position:relative;">
+        <label>📍 标记地点 <span style="font-weight:400;color:var(--ink-faint);">（可选，从已有地点里选，或直接输入新地点）</span></label>
+        <input type="text" id="fLocation" placeholder="搜索或输入地点名称..." autocomplete="off"
+          style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;"
+          oninput="onLocationInput(this.value)"
+          onblur="setTimeout(()=>{const b=document.getElementById('locationSuggestions'); if(b) b.style.display='none';},200)">
+        <div id="locationSuggestions" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;max-height:180px;overflow-y:auto;z-index:20;box-shadow:var(--shadow);"></div>
       </div>
 
       <div class="form-row">
@@ -2430,6 +2474,199 @@ function openDealDetail(id){
   showToast('商品详情页开发中，敬请期待');
 }
 
+/* ================= 搜索页面 ================= */
+const SEARCH_HISTORY_KEY = 'wanba_search_history';
+/* 热搜词条：想给大家多曝光什么内容，直接在这个数组里加一条就行（badge可选，不填就不显示小标签） */
+const HOT_SEARCHES = [
+  { text: '洛杉矶 ADU 改建', badge: '热' },
+  { text: '周末免费活动' },
+  { text: '社区菜市场推荐' },
+  { text: '施工现场实拍' },
+  { text: '奶茶探店' },
+  { text: '搬家清单' },
+];
+let searchCatFilter = '全部';
+let searchTypeFilter = '全部';
+let searchKeyword = '';
+
+function openSearchPage(){
+  document.getElementById('searchOverlay').classList.add('open');
+  document.getElementById('searchInput').value = '';
+  searchKeyword = '';
+  renderSearchHome();
+  setTimeout(() => { const el = document.getElementById('searchInput'); if(el) el.focus(); }, 100);
+}
+function closeSearchPage(){
+  document.getElementById('searchOverlay').classList.remove('open');
+}
+function getSearchHistory(){
+  try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch(e){ return []; }
+}
+function addSearchHistory(kw){
+  if(!kw) return;
+  let list = getSearchHistory().filter(x => x !== kw);
+  list.unshift(kw);
+  list = list.slice(0, 10);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list));
+}
+function removeSearchHistoryItem(kw){
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(getSearchHistory().filter(x => x !== kw)));
+  renderSearchHome();
+}
+function clearSearchHistory(){
+  localStorage.removeItem(SEARCH_HISTORY_KEY);
+  renderSearchHome();
+}
+/* 初始状态（还没搜索时）：历史记录 + 热搜 */
+function renderSearchHome(){
+  const body = document.getElementById('searchBody');
+  if(!body) return;
+  const history = getSearchHistory();
+  body.innerHTML = `
+    ${history.length ? `
+      <div class="search-section-title">
+        <span>最近搜索</span>
+        <span style="font-size:12px;color:var(--ink-faint);font-weight:400;cursor:pointer;" onclick="clearSearchHistory()">清空</span>
+      </div>
+      <div class="search-history-tags" style="margin-bottom:22px;">
+        ${history.map(kw => `
+          <span class="search-history-tag" onclick="performSearch('${kw.replace(/'/g,'')}')">
+            ${kw}
+            <span class="rm" onclick="event.stopPropagation();removeSearchHistoryItem('${kw.replace(/'/g,'')}')">✕</span>
+          </span>
+        `).join('')}
+      </div>
+    ` : ''}
+    <div class="search-section-title"><span>🔥 近期热搜</span></div>
+    <div>
+      ${HOT_SEARCHES.map((h, i) => `
+        <div class="search-hot-row" onclick="performSearch('${h.text.replace(/'/g,'')}')">
+          <span class="search-hot-rank ${i < 3 ? 'top3' : ''}">${i+1}</span>
+          <span class="search-hot-text">${h.text}</span>
+          ${h.badge ? `<span class="search-hot-badge">${h.badge}</span>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function setSearchCatFilter(cat){ searchCatFilter = cat; renderSearchResults(); }
+function setSearchTypeFilter(type){ searchTypeFilter = type; renderSearchResults(); }
+async function performSearch(kw){
+  kw = (kw || '').trim();
+  if(!kw) return;
+  searchKeyword = kw;
+  const input = document.getElementById('searchInput');
+  if(input) input.value = kw;
+  addSearchHistory(kw);
+  searchCatFilter = '全部';
+  searchTypeFilter = '全部';
+  await renderSearchResults();
+}
+/* 渲染一级分类筛选 + 二级类型筛选 + 结果 */
+async function renderSearchResults(){
+  const body = document.getElementById('searchBody');
+  if(!body) return;
+  if(!searchKeyword){ renderSearchHome(); return; }
+  const catOptions = ['全部', ...CATS.filter(c => c.code).map(c => c.key)];
+  const typeOptions = ['全部', '用户', '笔记', '地点', '群聊'];
+  body.innerHTML = `
+    <div class="search-filter-row">
+      ${catOptions.map(c => `<button class="search-filter-chip ${searchCatFilter===c?'active':''}" onclick="setSearchCatFilter('${c}')">${c}</button>`).join('')}
+    </div>
+    <div class="search-filter-row type-row">
+      ${typeOptions.map(t => `<button class="search-filter-chip ${searchTypeFilter===t?'active':''}" onclick="setSearchTypeFilter('${t}')">${t}</button>`).join('')}
+    </div>
+    <div id="searchResultsBox"><div class="search-empty">搜索中...</div></div>
+  `;
+  const kwAtRequestTime = searchKeyword;
+  const results = await runSearch(searchKeyword, searchCatFilter, searchTypeFilter);
+  if(kwAtRequestTime !== searchKeyword) return; // 搜索期间关键词已变化，结果作废
+  const box = document.getElementById('searchResultsBox');
+  if(box) box.innerHTML = renderSearchResultsHtml(results);
+}
+/* 真正执行搜索：笔记本地过滤；用户/地点(认证商家)走数据库真实查询；群聊功能暂未上线 */
+async function runSearch(kw, cat, type){
+  const kwLower = kw.toLowerCase();
+  const result = { users: [], posts: [], places: [] };
+
+  if(type === '全部' || type === '笔记'){
+    result.posts = posts.filter(p => {
+      const matchKw = (p.title||'').toLowerCase().includes(kwLower)
+        || (p.content||'').toLowerCase().includes(kwLower)
+        || (p.tags||[]).some(t => (t||'').toLowerCase().includes(kwLower));
+      const matchCat = (cat === '全部') || p.category === cat;
+      return matchKw && matchCat && (p.visibility === 'public' || !p.visibility);
+    }).slice(0, 30);
+  }
+
+  if(type === '全部' || type === '用户'){
+    try {
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?name=ilike.*${encodeURIComponent(kw)}*&select=user_id,name,avatar&limit=20`);
+      result.users = res.ok ? await res.json() : [];
+      result.users.forEach(u => { window._avatarCache[u.user_id] = u.avatar || null; }); // 顺便预热头像缓存
+    } catch(e){ console.warn('用户搜索失败:', e.message); }
+  }
+
+  if(type === '全部' || type === '地点'){
+    try {
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?verified=eq.true&or=(business_name.ilike.*${encodeURIComponent(kw)}*,address.ilike.*${encodeURIComponent(kw)}*)&select=user_id,business_name,category,address,logo&limit=20`);
+      let list = res.ok ? await res.json() : [];
+      if(cat !== '全部') list = list.filter(m => m.category === cat);
+      result.places = list;
+    } catch(e){ console.warn('地点搜索失败:', e.message); }
+  }
+  // 群聊：暂无此功能，始终空结果
+  return result;
+}
+function renderSearchResultsHtml(r){
+  const total = r.users.length + r.posts.length + r.places.length;
+  if(!total && searchTypeFilter !== '群聊'){
+    return `<div class="search-empty">没有找到"${searchKeyword}"相关的内容<br>换个关键词试试吧</div>`;
+  }
+  let html = '';
+  if(r.users.length){
+    html += `<div class="search-result-group-title">用户 (${r.users.length})</div>`;
+    html += r.users.map(u => `
+      <div class="search-result-user" onclick="showToast('用户主页功能开发中')">
+        ${u.avatar
+          ? `<span class="avatar" style="overflow:hidden;padding:0;width:40px;height:40px;"><img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;"></span>`
+          : `<span class="avatar" style="background:${avatarColor(u.name||'友')};width:40px;height:40px;font-size:15px;">${initials(u.name||'友')}</span>`}
+        <span style="font-size:14px;color:var(--ink);font-weight:600;">${u.name || '用户'}</span>
+      </div>
+    `).join('');
+  }
+  if(r.posts.length){
+    html += `<div class="search-result-group-title">笔记 (${r.posts.length})</div>`;
+    html += r.posts.map(p => `
+      <div class="search-result-post" onclick="closeSearchPage();openPost(${p.id});">
+        ${p.image ? `<img src="${p.image}" alt="">` : ''}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${p.title}</div>
+          <div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">${catIcon(p.category,14)} ${p.author} · ${p.time || ''}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+  if(r.places.length){
+    html += `<div class="search-result-group-title">地点 (${r.places.length})</div>`;
+    html += r.places.map(m => `
+      <div class="search-result-place" onclick="showToast('商家主页访问功能开发中')">
+        <div style="width:44px;height:44px;border-radius:10px;overflow:hidden;background:var(--bg-alt);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">
+          ${m.logo ? `<img src="${m.logo}" style="width:100%;height:100%;object-fit:cover;">` : '🏪'}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);">${m.business_name || '商家'}</div>
+          <div style="font-size:12px;color:var(--ink-faint);margin-top:2px;">📍 ${m.address || ''}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+  if(searchTypeFilter === '全部' || searchTypeFilter === '群聊'){
+    html += `<div class="search-result-group-title">群聊</div><div class="search-empty" style="padding:16px 0;">群聊功能暂未上线，敬请期待</div>`;
+  }
+  return html;
+}
+
 /* ---- text validation ---- */
 function updateTitleCount(){
   const titleInput = document.getElementById('fTitle');
@@ -2561,6 +2798,7 @@ function renderPostModal(){
         <h2 class="modal-title display">${p.title}</h2>
         <div class="modal-content">${p.content}</div>
         <div class="xhs-tags">${catIcon(p.category, 18)}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
+        ${p.location ? `<div style="font-size:13px;color:var(--ink-faint);margin:-6px 0 10px;">📍 ${p.location}</div>` : ''}
         <div class="xhs-time">编辑于 ${p.time} · 洛杉矶</div>
         ${eventBlock}
         <div class="xhs-comments-count">共 ${countComments(p)} 条评论</div>
@@ -2927,10 +3165,66 @@ function closeCompose(){
   document.getElementById('uploadBox').style.display = 'flex';
   document.getElementById('titleCount').textContent = '0';
   document.getElementById('contentCount').textContent = '0';
+  const locInput = document.getElementById('fLocation');
+  if(locInput) locInput.value = '';
+  const locBox = document.getElementById('locationSuggestions');
+  if(locBox){ locBox.style.display = 'none'; locBox.innerHTML = ''; }
 }
 function pickCat(c){
   selectedCat = c;
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c===c));
+}
+/* ====== 标记地点：自建地点库（不依赖Google Maps），输入时先搜本地已有地点，没有就直接用新地点 ====== */
+let locationSearchTimer = null;
+function onLocationInput(val){
+  clearTimeout(locationSearchTimer);
+  const box = document.getElementById('locationSuggestions');
+  if(!box) return;
+  if(!val || !val.trim()){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  locationSearchTimer = setTimeout(() => searchLocations(val.trim()), 250);
+}
+async function searchLocations(kw){
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/locations?name=ilike.*${encodeURIComponent(kw)}*&select=id,name,use_count&order=use_count.desc&limit=8`);
+    const rows = res.ok ? await res.json() : [];
+    renderLocationSuggestions(rows, kw);
+  } catch(e){ console.warn('地点搜索失败:', e.message); }
+}
+function renderLocationSuggestions(rows, kw){
+  const box = document.getElementById('locationSuggestions');
+  if(!box) return;
+  const exactMatch = rows.some(r => r.name === kw);
+  let html = rows.map(r => `
+    <div onmousedown="pickLocation('${r.name.replace(/'/g,'')}')" style="padding:9px 12px;font-size:13.5px;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--line);">📍 ${r.name}</div>
+  `).join('');
+  if(!exactMatch && kw){
+    html += `<div onmousedown="pickLocation('${kw.replace(/'/g,'')}')" style="padding:9px 12px;font-size:13.5px;color:var(--sage-dark);cursor:pointer;font-weight:600;">＋ 使用新地点"${kw}"</div>`;
+  }
+  box.innerHTML = html || `<div style="padding:9px 12px;font-size:13px;color:var(--ink-faint);">没有匹配，直接使用"${kw}"就行</div>`;
+  box.style.display = 'block';
+}
+function pickLocation(name){
+  const input = document.getElementById('fLocation');
+  if(input) input.value = name;
+  const box = document.getElementById('locationSuggestions');
+  if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+}
+/* 发布/编辑成功后调用：地点库里有就使用次数+1，没有就新建一条（不需要Google Maps，纯本地库） */
+async function upsertLocation(name){
+  if(!name || !(session && session.user)) return;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/locations?name=eq.${encodeURIComponent(name)}&select=id,use_count`);
+    const rows = res.ok ? await res.json() : [];
+    if(rows.length){
+      await authedFetch(`${SUPABASE_URL}/rest/v1/locations?id=eq.${rows[0].id}`, {
+        method: 'PATCH', body: JSON.stringify({ use_count: (rows[0].use_count || 1) + 1 })
+      });
+    } else {
+      await authedFetch(`${SUPABASE_URL}/rest/v1/locations`, {
+        method: 'POST', body: JSON.stringify({ name, use_count: 1, created_by: session.user.id })
+      });
+    }
+  } catch(e){ console.warn('地点保存失败:', e.message); }
 }
 /* ---- image compression ---- */
 function compressImage(dataUrl, callback, quality=0.7, maxWidth=800){
@@ -3675,6 +3969,7 @@ function editPost(id){
   document.getElementById('fTitle').value = p.title || '';
   document.getElementById('fContent').value = p.content || '';
   document.getElementById('fYoutube').value = p.youtube ? ('https://youtu.be/' + p.youtube) : '';
+  document.getElementById('fLocation').value = p.location || '';
   document.getElementById('titleCount').textContent = (p.title || '').length;
   document.getElementById('contentCount').textContent = (p.content || '').length;
   selectedCat = p.category;
@@ -3727,6 +4022,7 @@ async function submitPost(){
   const title = document.getElementById('fTitle').value.trim();
   const content = document.getElementById('fContent').value.trim();
   const ytUrl = document.getElementById('fYoutube').value.trim();
+  const location = (document.getElementById('fLocation').value || '').trim();
   if(!session || !session.user){
     showToast('请先登录后再发布');
     openAuth('login');
@@ -3767,6 +4063,7 @@ async function submitPost(){
     if(p){
       p.title = title; p.content = content; p.excerpt = excerpt;
       p.category = cat; p.youtube = ytId; p.event = event; p.tags = tagsArr;
+      p.location = location || null;
       if(uploadedImages.length > 0){ p.image = image; p.images = images; }
     }
     const idToUpdate = editingPostId;
@@ -3774,8 +4071,9 @@ async function submitPost(){
     closeCompose();
     renderChips(); renderFeed(); initProfilePage(); savePosts();
     showToast('✓ 已更新');
+    if(location) upsertLocation(location);
     try {
-      const fields = { title, content, excerpt, category:cat, youtube:ytId, event, tags: tagsArr };
+      const fields = { title, content, excerpt, category:cat, youtube:ytId, event, tags: tagsArr, location: location || null };
       if(uploadedImages.length > 0){ fields.image = image; fields.images = images; }
       await supabaseUpdatePost(idToUpdate, fields);
       console.log('✓ 数据库已同步更新 id=', idToUpdate);
@@ -3790,7 +4088,7 @@ async function submitPost(){
   const localPost = {
     id: nextPostId++, category:cat, title, excerpt,
     user_id: session.user.id,
-    content, image, images, tags: tagsArr,
+    content, image, images, tags: tagsArr, location: location || null,
     youtube: ytId, author: authorName, time:'刚刚', likes:0, liked:false,
     event, comments:[]
   };
@@ -3802,13 +4100,14 @@ async function submitPost(){
   renderFeed();
   savePosts();
   showToast(selectedVideos.length ? '发布成功 🎉（视频未保存，等待YouTube接口上线）' : '发布成功 🎉');
+  if(location) upsertLocation(location);
 
   // 同步保存到 Supabase 数据库
   try {
     const saved = await supabaseInsertPost({
       title, content, excerpt, category:cat,
       author: authorName, image, images, youtube: ytId,
-      likes: 0, event, tags: tagsArr,
+      likes: 0, event, tags: tagsArr, location: location || null,
       user_id: session.user.id, visibility: 'public', pinned: false
     });
     if(saved && saved.id){
@@ -4086,6 +4385,7 @@ async function loadPostsFromSupabase(){
         pinned: !!p.pinned,
         time: p.created_at ? new Date(p.created_at).toLocaleString('zh-CN') : new Date().toLocaleString('zh-CN'),
         created_at: p.created_at || null,
+        location: p.location || null,
         comments: []
       }));
       renderChips();
@@ -4191,7 +4491,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 2.99 - 商家发布弹层（点击发布按钮触发，首页/导航栏不变）】');
+console.log('✓ 页面初始化完成 【版本 3.01 - 发布页标记地点（自建地点库）】');
 </script>
 </body>
 </html>
