@@ -164,6 +164,15 @@
   .deals-section-header span{font-size:11.5px;font-weight:600;color:var(--ink-faint);}
   .deals-hot-scroll{display:flex;gap:12px;overflow-x:auto;padding:0 16px 8px;scrollbar-width:none;}
   .deals-hot-scroll::-webkit-scrollbar{display:none;}
+  .food-price-grid{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:10px;padding:0 16px 8px;}
+  .food-price-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:var(--shadow);}
+  .food-price-name{font-size:14px;font-weight:900;color:var(--ink);margin-bottom:8px;}
+  .food-price-main{display:flex;align-items:baseline;gap:6px;margin-bottom:5px;}
+  .food-price-main b{font-size:19px;color:var(--berry);}
+  .food-price-main span{font-size:11px;color:var(--ink-faint);}
+  .food-price-store{font-size:12px;font-weight:800;color:var(--sage-dark);margin-bottom:3px;}
+  .food-price-note{font-size:11px;color:var(--ink-faint);line-height:1.45;min-height:31px;}
+  .food-price-card button{width:100%;margin-top:9px;padding:8px;border-radius:999px;background:var(--bg-alt);color:var(--ink-soft);font-size:12px;font-weight:800;}
   .hot-pick-card{flex-shrink:0;width:172px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow);}
   .hot-pick-store{font-size:11px;color:var(--sage-dark);font-weight:700;margin-bottom:4px;}
   .hot-pick-name{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:10px;line-height:1.3;min-height:34px;}
@@ -186,6 +195,7 @@
   .deal-actions{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px;}
   .deal-actions button{flex:1;padding:8px;border-radius:8px;background:var(--bg-alt);color:var(--ink-soft);font-size:12px;font-weight:600;}
   .deal-actions button.liked{background:var(--berry-light);color:var(--berry-dark);}
+  @media(min-width:720px){.food-price-grid{grid-template-columns:repeat(4, minmax(0,1fr));}}
 
   /* ---------- 商家专属底部导航（含中间凸起"发布"按钮）---------- */
   .nav-btn-fab{
@@ -1057,7 +1067,7 @@
     </div>
     <div class="deals-banner" id="dealsBanner"></div>
     <div class="deals-search-wrap">
-      <input type="text" id="dealsSearchInput" class="deals-search" placeholder="搜索 Best Buy、Macy's、牛肉、电视..." oninput="renderDealsList()" onkeydown="if(event.key==='Enter')openRetailerSearch()">
+      <input type="text" id="dealsSearchInput" class="deals-search" placeholder="搜索鸡蛋、牛奶、大米、Best Buy..." oninput="renderFoodLowPrices();renderDealsList()" onkeydown="if(event.key==='Enter')openRetailerSearch()">
       <button class="deals-search-btn" onclick="openRetailerSearch()">全网找</button>
     </div>
   </div>
@@ -1069,8 +1079,12 @@
     <div class="deals-section-header">今日爆款 <span>可直接跳转商家页面核对</span></div>
   </div>
   <div id="dealsHotScroll" class="deals-hot-scroll"></div>
+  <div style="padding:0 16px;">
+    <div class="deals-section-header">每日食品低价 <span>鸡蛋、牛奶、大米等高频刚需</span></div>
+  </div>
+  <div id="foodPriceGrid" class="food-price-grid"></div>
   <div style="padding:0 16px 20px;">
-    <div class="deals-section-header">优惠列表 <span>每日自动刷新排序</span></div>
+    <div class="deals-section-header">今日降价 TOP 10 <span>按折扣力度排序</span></div>
     <div id="dealsList"></div>
   </div>
 </div>
@@ -2589,12 +2603,23 @@ const DEALS = [
   { id:12, store:'macys', storeName:"Macy's", location:'网购 / 门店', name:'床品、锅具、小家电 Sale', rating:4, origPrice:199.00, curPrice:99.00, percentOff:50, inStock:true, tags:['macys','百货','床品','小家电'], url:'https://www.macys.com/shop/sale' },
   { id:13, store:'clearance', storeName:'Home Depot', location:'Gardena / Torrance', name:'工具、电池、收纳清仓', rating:4, origPrice:299.00, curPrice:179.00, percentOff:40, inStock:true, tags:['home depot','工具','clearance'], url:'https://www.homedepot.com/SpecialBuy/SpecialBuyOfTheDay' },
 ];
+const FOOD_LOW_PRICES = [
+  { id:'eggs', name:'鸡蛋', price:'$2.99', unit:'12枚', store:'ALDI / Walmart', note:'适合每周采购，价格以门店和当日库存为准', query:'eggs' },
+  { id:'milk', name:'牛奶', price:'$3.49', unit:'1 gallon', store:'Walmart / Target', note:'全脂或 2% 牛奶常见低价区间', query:'milk gallon' },
+  { id:'rice', name:'大米', price:'$18.99', unit:'25 lb', store:'99大华 / GW超市', note:'适合华人家庭囤货，需核对品牌和重量', query:'rice 25 lb' },
+  { id:'chicken', name:'鸡胸肉', price:'$2.29', unit:'每磅', store:"Sam's Club / ALDI", note:'冷冻大包装通常更划算', query:'chicken breast' },
+  { id:'beef', name:'牛肉', price:'$5.99', unit:'每磅', store:'Costco / 99大华', note:'适合火锅、炖肉或家庭分装', query:'beef' },
+  { id:'oil', name:'食用油', price:'$9.99', unit:'48 oz', store:'Walmart / Costco', note:'看单位容量比只看瓶价更准确', query:'cooking oil' },
+  { id:'banana', name:'香蕉', price:'$0.49', unit:'每磅', store:'ALDI / Walmart', note:'水果类价格波动小，适合日常参考', query:'banana' },
+  { id:'flour', name:'面粉', price:'$3.29', unit:'5 lb', store:'Target / Walmart', note:'烘焙和家用基础食品', query:'flour 5 lb' }
+];
 let dealLikes = {};
 
 function renderDealsPage(){
   refreshDealsIfNeeded();
   renderDealsTabs();
   renderHotPicks();
+  renderFoodLowPrices();
   renderDealsList();
 }
 function renderDealsTabs(){
@@ -2608,6 +2633,7 @@ function setDealsFilter(store){
   dealsFilter = store;
   document.querySelectorAll('.deals-tab').forEach(b => b.classList.toggle('active', b.dataset.store === store));
   renderHotPicks();
+  renderFoodLowPrices();
   renderDealsList();
 }
 function todayDealKey(){
@@ -2652,6 +2678,23 @@ function renderHotPicks(){
     </div>
   `).join('');
 }
+function renderFoodLowPrices(){
+  const el = document.getElementById('foodPriceGrid');
+  if(!el) return;
+  const kw = (document.getElementById('dealsSearchInput')?.value || '').trim().toLowerCase();
+  const list = kw
+    ? FOOD_LOW_PRICES.filter(f => `${f.name} ${f.store} ${f.note} ${f.query}`.toLowerCase().includes(kw))
+    : FOOD_LOW_PRICES;
+  el.innerHTML = (list.length ? list : FOOD_LOW_PRICES.slice(0, 4)).map(f => `
+    <div class="food-price-card">
+      <div class="food-price-name">${f.name}</div>
+      <div class="food-price-main"><b>${f.price}</b><span>/ ${f.unit}</span></div>
+      <div class="food-price-store">${f.store}</div>
+      <div class="food-price-note">${f.note}</div>
+      <button onclick="openFoodSearch('${f.query.replace(/'/g,'')}')">查看哪里买</button>
+    </div>
+  `).join('');
+}
 function renderDealsList(){
   const el = document.getElementById('dealsList');
   if(!el) return;
@@ -2662,10 +2705,10 @@ function renderDealsList(){
     el.innerHTML = '<div style="text-align:center;color:var(--ink-faint);font-size:13px;padding:30px 0;">没有找到符合条件的优惠。可以点“全网找”去商家官网搜索。</div>';
     return;
   }
-  el.innerHTML = list.map(d => `
+  el.innerHTML = list.slice(0, 10).map((d, i) => `
     <div class="deal-card ${d.hot ? 'hot' : ''}">
       <div class="deal-card-head">
-        <div class="deal-name">${d.name}</div>
+        <div class="deal-name">${i + 1}. ${d.name}</div>
         ${d.hot ? '<span class="deal-badge">热门</span>' : ''}
       </div>
       <div class="deal-store-row"><span>${d.storeName}</span><span>${uiIcon('map',12)} ${d.location}</span></div>
@@ -2705,6 +2748,10 @@ function openRetailerSearch(){
   let url = retailer.url;
   if(url.endsWith('=') || url.endsWith('/s/')) url += encodeURIComponent(kw || 'deals');
   window.open(url, '_blank', 'noopener');
+}
+function openFoodSearch(query){
+  const q = encodeURIComponent(query || 'grocery deals');
+  window.open(`https://www.walmart.com/search?q=${q}`, '_blank', 'noopener');
 }
 
 /* ================= 搜索页面 ================= */
@@ -5079,7 +5126,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.20 - 省钱板块商家筛选与每日刷新】');
+console.log('✓ 页面初始化完成 【版本 3.21 - 省钱板块食品低价与TOP10修复】');
 </script>
 </body>
 </html>
