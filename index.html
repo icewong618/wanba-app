@@ -2263,7 +2263,7 @@ function renderChips(){
   const row = document.getElementById('chipRow');
   row.innerHTML = CATS.map(c => `
     <button class="chip ${currentFilter===c.key?'active':''}" onclick="setFilter('${c.key}')">
-      ${c.code ? catIcon(c.key, 18) + ' ' : ''}${c.key}
+      ${c.icon ? catIcon(c.key, 18) + ' ' : ''}${c.key}
     </button>
   `).join('');
 }
@@ -2274,7 +2274,7 @@ function renderQuicklinks(){
   const row = document.getElementById('quickRow');
   row.innerHTML = QUICKLINKS.map(q => `
     <button class="quick-link ${currentTag===q.key?'active':''}" onclick="setTagFilter('${q.key}')">
-      <span class="ic">${q.icon}</span>${q.key}
+      <span class="ic">${uiIcon(q.icon, 14)}</span>${q.key}
     </button>
   `).join('');
 }
