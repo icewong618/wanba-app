@@ -826,6 +826,85 @@
   .empty-state p{margin:0;line-height:1.6;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
+  .launch-screen{
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      radial-gradient(circle at 50% 18%, rgba(255,107,53,.10), transparent 34%),
+      linear-gradient(180deg,#fffaf7 0%,#ffffff 58%,#fff6f2 100%);
+    transition:opacity .42s ease, visibility .42s ease;
+  }
+  .launch-screen.done{
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+  }
+  .launch-inner{
+    width:min(82vw,320px);
+    text-align:center;
+    color:var(--ink);
+  }
+  .launch-logo{
+    width:86px;
+    height:86px;
+    margin:0 auto 18px;
+    border-radius:24px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    font-size:48px;
+    font-weight:900;
+    line-height:1;
+    box-shadow:0 18px 42px rgba(255,86,45,.24);
+    background:linear-gradient(135deg,#ff8a00 0%,#ff5a28 45%,#f01772 100%);
+  }
+  .launch-brand{
+    font-size:26px;
+    font-weight:900;
+    letter-spacing:0;
+    margin-bottom:6px;
+  }
+  .launch-slogan{
+    font-size:13px;
+    color:var(--ink-soft);
+    font-weight:600;
+    margin-bottom:26px;
+  }
+  .launch-status{
+    min-height:20px;
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-bottom:13px;
+  }
+  .launch-progress{
+    height:4px;
+    border-radius:999px;
+    overflow:hidden;
+    background:rgba(255,107,53,.14);
+  }
+  .launch-progress span{
+    display:block;
+    width:42%;
+    height:100%;
+    border-radius:999px;
+    background:linear-gradient(90deg,#ff8a00,#ff5a28,#f01772);
+    animation:launchLoading 1.1s ease-in-out infinite;
+  }
+  .launch-foot{
+    margin-top:14px;
+    font-size:12px;
+    color:var(--ink-faint);
+  }
+  @keyframes launchLoading{
+    0%{transform:translateX(-105%);}
+    100%{transform:translateX(250%);}
+  }
+
   .empty{text-align:center;padding:60px 20px;color:var(--ink-faint);}
   .empty .display{font-size:20px;color:var(--ink-soft);display:block;margin-bottom:6px;}
 
@@ -858,6 +937,17 @@
 </style>
 </head>
 <body>
+
+<div class="launch-screen" id="launchScreen" aria-live="polite">
+  <div class="launch-inner">
+    <div class="launch-logo">乐</div>
+    <div class="launch-brand">乐生活</div>
+    <div class="launch-slogan">发现身边的精彩生活</div>
+    <div class="launch-status" id="launchStatus">正在为你更新本地内容…</div>
+    <div class="launch-progress"><span></span></div>
+    <div class="launch-foot">内容很快就到</div>
+  </div>
+</div>
 
 <header class="top">
   <div class="quick-bar">
@@ -1183,9 +1273,9 @@
           <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="onAvatarFileSelected(event)">
         </div>
         <div style="flex:1;min-width:0;text-align:left;">
-          <div style="font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;" id="userNameDisplay">游客用户</div>
-          <div style="font-size:12px;color:var(--ink-faint);margin-bottom:2px;" id="userIdDisplay">ID: #888888</div>
-          <div style="font-size:12px;color:var(--ink-faint);" id="userLocationDisplay">IP属地：洛杉矶</div>
+          <div style="font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;" id="userNameDisplay">未登录用户</div>
+          <div style="font-size:12px;color:var(--ink-faint);margin-bottom:2px;" id="userIdDisplay">ID：登录后生成</div>
+          <div style="font-size:12px;color:var(--ink-faint);" id="userLocationDisplay">IP属地：登录后显示</div>
         </div>
       </div>
 
@@ -1366,15 +1456,41 @@ function avatarCircleHtml(name, user_id){
 }
 
 // ====== 用户信息管理 ======
+const APP_VERSION = '3.62';
+const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
+
+function clearOldVersionCache(){
+  const last = localStorage.getItem(APP_CACHE_VERSION_KEY);
+  if(last === APP_VERSION) return;
+  [
+    'wanba_posts',
+    'userProfile',
+    'userProfile_guest'
+  ].forEach(key => localStorage.removeItem(key));
+  localStorage.setItem(APP_CACHE_VERSION_KEY, APP_VERSION);
+}
+
+function setLaunchStatus(text){
+  const el = document.getElementById('launchStatus');
+  if(el) el.textContent = text;
+}
+
+function hideLaunchScreen(){
+  const el = document.getElementById('launchScreen');
+  if(!el) return;
+  el.classList.add('done');
+  setTimeout(() => { el.remove(); }, 520);
+}
+
 let currentUser = {
-  name: '游客用户',
-  bio: '还没有介绍呢',
-  gender: '🚹',
+  name: '未登录用户',
+  bio: '登录后可编辑个人资料',
+  gender: '',
   birth: '',          // 出生年月，如 '1999-06'
-  age: 25,
-  location: '洛杉矶',
+  age: null,
+  location: '',
   tags: [],
-  id: '#888888'
+  id: ''
 };
 
 /* ====== 用户注册/登录（Supabase Auth）====== */
@@ -1397,7 +1513,7 @@ function loadSession(){
         fetchProfileFromDb();
         fetchMerchantProfile();
       }
-      else { console.warn('令牌续期失败，需重新登录'); logoutUser(); }
+      else { console.warn('令牌续期失败，已清理本地登录状态'); logoutUser(true); }
     });
   }
 }
@@ -1416,7 +1532,8 @@ function updateAuthUI(){
   } else {
     status.textContent = '未登录（游客模式）';
     inBtn.style.display = 'block'; regBtn.style.display = 'block'; outBtn.style.display = 'none';
-    loadUserProfile(); // 回到游客档案
+    currentMerchant = null;
+    loadUserProfile(); // 回到干净游客档案
   }
 }
 function openAuth(){
@@ -1548,11 +1665,14 @@ async function submitAuth(){
     msg.textContent = '网络错误：' + e.message;
   }
 }
-function logoutUser(){
+function logoutUser(silent){
   session = null;
   localStorage.removeItem('wanba_session');
+  currentMerchant = null;
+  currentUser = defaultProfile();
   updateAuthUI();
-  showToast('已退出登录');
+  initProfilePage();
+  if(!silent) showToast('已退出登录');
 }
 
 /* 邮箱验证链接会跳回本站并在URL带上令牌，自动完成登录 */
@@ -1605,19 +1725,22 @@ function profileKey(){
 function defaultProfile(){
   const nick = (session && session.user)
     ? ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0])
-    : '游客用户';
+    : '未登录用户';
   return {
-    name: nick, bio: '还没有介绍呢', gender: '🚹',
+    name: nick,
+    bio: (session && session.user) ? '还没有介绍呢' : '登录后可编辑个人资料',
+    gender: (session && session.user) ? '🚹' : '',
     birth: '', age: null, location: '',
-    tags: [], id: (session && session.user) ? uidToNumericId(session.user.id) : '00000000'
+    tags: [], id: (session && session.user) ? uidToNumericId(session.user.id) : ''
   };
 }
 function loadUserProfile(){
-  const legacy = localStorage.getItem('userProfile');
-  if(legacy && !localStorage.getItem('userProfile_guest')){
-    localStorage.setItem('userProfile_guest', legacy);
-    localStorage.removeItem('userProfile');
+  if(!(session && session.user)){
+    currentUser = defaultProfile();
+    updateProfileDisplay();
+    return;
   }
+  localStorage.removeItem('userProfile');
   const saved = localStorage.getItem(profileKey());
   if(saved){
     try { currentUser = JSON.parse(saved); } catch(e){ currentUser = defaultProfile(); }
@@ -1633,6 +1756,7 @@ function loadUserProfile(){
 
 // 保存用户信息到当前账号的档案
 function saveUserProfileToStorage(){
+  if(!(session && session.user)) return;
   localStorage.setItem(profileKey(), JSON.stringify(currentUser));
 }
 /* 由账号UUID确定性生成8位纯数字专属ID（同一账号任何设备都相同） */
@@ -2083,12 +2207,18 @@ async function fetchIpLocation(){
 }
 function applyIpLocation(loc){
   window._ipLocation = loc;
+  if(!(session && session.user)) return;
   const el = document.getElementById('userLocationDisplay');
   if(el) el.textContent = `IP属地：${loc}`;
 }
 
 // 进入编辑模式
 function enterEditMode(){
+  if(!(session && session.user)){
+    showToast('请先登录后再编辑资料');
+    openAuth();
+    return;
+  }
   document.getElementById('profileViewMode').style.display = 'none';
   document.getElementById('profileEditMode').style.display = 'block';
   
@@ -2180,24 +2310,27 @@ function saveUserProfile(){
 // 更新个人资料显示
 function updateProfileDisplay(){
   const avatarEl = document.getElementById('userAvatarDisplay');
+  const isLoggedIn = !!(session && session.user);
   if(currentUser.avatar){
     avatarEl.innerHTML = `<img src="${currentUser.avatar}" alt="头像" style="width:100%;height:100%;object-fit:cover;">`;
   } else {
     avatarEl.innerHTML = '';
-    avatarEl.textContent = currentUser.name.slice(0,1);
+    avatarEl.textContent = isLoggedIn ? currentUser.name.slice(0,1) : '未';
   }
   document.getElementById('userNameDisplay').textContent = currentUser.name;
-  document.getElementById('userIdDisplay').textContent = `ID: ${String(currentUser.id||'').replace('#','')}`;
-  document.getElementById('userLocationDisplay').textContent = `IP属地：${window._ipLocation || (currentUser.location||'').replace('📍','').trim() || '获取中…'}`;
+  document.getElementById('userIdDisplay').textContent = isLoggedIn ? `ID: ${String(currentUser.id||'').replace('#','')}` : 'ID：登录后生成';
+  document.getElementById('userLocationDisplay').textContent = isLoggedIn ? `IP属地：${window._ipLocation || (currentUser.location||'').replace('📍','').trim() || '获取中…'}` : 'IP属地：登录后显示';
   document.getElementById('userBioDisplay').textContent = currentUser.bio;
   
   // 更新标签显示（年龄由出生年月自动计算）
   const ageNum = calcAge(currentUser.birth) ?? currentUser.age;
-  const ageText = ageNum ? `${currentUser.gender} ${ageNum}岁` : `${currentUser.gender}`;
-  const tagsHtml = `
-    <span style="font-weight:600;">${ageText}</span>
-    ${currentUser.tags.map(tag => `<span style="background:var(--bg-alt);color:var(--ink-soft);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;">${tag}</span>`).join('')}
-  `;
+  const ageText = isLoggedIn ? (ageNum ? `${currentUser.gender} ${ageNum}岁` : `${currentUser.gender || '未填写'}`) : '游客模式';
+  const tagsHtml = isLoggedIn
+    ? `
+      <span style="font-weight:600;">${ageText}</span>
+      ${currentUser.tags.map(tag => `<span style="background:var(--bg-alt);color:var(--ink-soft);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;">${tag}</span>`).join('')}
+    `
+    : '<span style="font-weight:600;">游客模式</span><span style="background:var(--bg-alt);color:var(--ink-soft);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;">请登录</span>';
   document.getElementById('userTagsDisplay').innerHTML = tagsHtml;
 }
 
@@ -5132,7 +5265,7 @@ async function submitPost(){
   const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[coverImageIndex] : 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
   const images = uploadedImages.length > 0 ? uploadedImages : null;
   // 2.93：优先取"我的"页可编辑的昵称
-  const authorName = (typeof currentUser !== 'undefined' && currentUser.name && currentUser.name !== '游客用户')
+  const authorName = (typeof currentUser !== 'undefined' && currentUser.name && currentUser.name !== '未登录用户')
     ? currentUser.name
     : (session && session.user)
       ? ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0])
@@ -5542,20 +5675,40 @@ window.switchTab = function(tab){
 };
 
 /* init */
-loadPosts();
-loadUserProfile(); // 加载用户信息
-loadSession();     // 加载登录会话
-fetchIpLocation(); // 获取真实IP属地
-setTimeout(() => { if(session) loadDms().then(updateNavMsgDot); }, 3000); // 私信未读红点
-handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
-renderChips();
-renderQuicklinks();
-renderFeed();
+async function bootApp(){
+  const startedAt = Date.now();
+  const minSplashMs = 850;
+  const maxSplashMs = 4600;
 
-// 首次尝试从 Supabase 加载（2秒后）
-setTimeout(() => {
-  loadPostsFromSupabase();
-}, 2000);
+  clearOldVersionCache();
+  setLaunchStatus('正在检查登录状态…');
+  if(!loadPosts()) posts = [];
+  loadUserProfile(); // 加载用户信息
+  loadSession();     // 加载登录会话
+  fetchIpLocation(); // 获取真实IP属地
+  setTimeout(() => { if(session) loadDms().then(updateNavMsgDot); }, 3000); // 私信未读红点
+  await handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
+
+  renderChips();
+  renderQuicklinks();
+  renderFeed();
+
+  setLaunchStatus('正在加载附近的新鲜事…');
+  const firstRefresh = loadPostsFromSupabase();
+  await Promise.race([
+    firstRefresh,
+    new Promise(resolve => setTimeout(resolve, maxSplashMs))
+  ]);
+
+  setLaunchStatus('内容很快就到…');
+  const elapsed = Date.now() - startedAt;
+  if(elapsed < minSplashMs){
+    await new Promise(resolve => setTimeout(resolve, minSplashMs - elapsed));
+  }
+  hideLaunchScreen();
+}
+
+bootApp();
 
 // 定时自动刷新（每30秒）
 setInterval(() => {
@@ -5572,7 +5725,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.60 - 省钱运营闭环】');
+console.log('✓ 页面初始化完成 【版本 3.62 - 启动加载页与缓存保护】');
 </script>
 </body>
 </html>
