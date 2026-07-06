@@ -1456,7 +1456,7 @@ function avatarCircleHtml(name, user_id){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '3.62';
+const APP_VERSION = '3.63';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -5680,32 +5680,40 @@ async function bootApp(){
   const minSplashMs = 850;
   const maxSplashMs = 4600;
 
-  clearOldVersionCache();
-  setLaunchStatus('正在检查登录状态…');
-  if(!loadPosts()) posts = [];
-  loadUserProfile(); // 加载用户信息
-  loadSession();     // 加载登录会话
-  fetchIpLocation(); // 获取真实IP属地
-  setTimeout(() => { if(session) loadDms().then(updateNavMsgDot); }, 3000); // 私信未读红点
-  await handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
+  try {
+    clearOldVersionCache();
+    setLaunchStatus('正在检查登录状态…');
+    if(!loadPosts()) posts = [];
+    loadUserProfile(); // 加载用户信息
+    loadSession();     // 加载登录会话
+    fetchIpLocation(); // 获取真实IP属地
+    setTimeout(() => { if(session) loadDms().then(updateNavMsgDot); }, 3000); // 私信未读红点
+    await handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
 
-  renderChips();
-  renderQuicklinks();
-  renderFeed();
+    renderChips();
+    renderQuicklinks();
+    renderFeed();
 
-  setLaunchStatus('正在加载附近的新鲜事…');
-  const firstRefresh = loadPostsFromSupabase();
-  await Promise.race([
-    firstRefresh,
-    new Promise(resolve => setTimeout(resolve, maxSplashMs))
-  ]);
+    setLaunchStatus('正在加载附近的新鲜事…');
+    const firstRefresh = loadPostsFromSupabase();
+    await Promise.race([
+      firstRefresh,
+      new Promise(resolve => setTimeout(resolve, maxSplashMs))
+    ]);
 
-  setLaunchStatus('内容很快就到…');
-  const elapsed = Date.now() - startedAt;
-  if(elapsed < minSplashMs){
-    await new Promise(resolve => setTimeout(resolve, minSplashMs - elapsed));
+    setLaunchStatus('内容很快就到…');
+  } catch(e){
+    console.warn('启动流程出现异常，继续进入页面:', e.message);
+    renderChips();
+    renderQuicklinks();
+    renderFeed();
+  } finally {
+    const elapsed = Date.now() - startedAt;
+    if(elapsed < minSplashMs){
+      await new Promise(resolve => setTimeout(resolve, minSplashMs - elapsed));
+    }
+    hideLaunchScreen();
   }
-  hideLaunchScreen();
 }
 
 bootApp();
@@ -5725,7 +5733,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.62 - 启动加载页与缓存保护】');
+console.log('✓ 页面初始化完成 【版本 3.63 - 测试检查与启动兜底】');
 </script>
 </body>
 </html>
