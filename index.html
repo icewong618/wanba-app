@@ -159,6 +159,9 @@
   .deals-search-wrap{display:flex;gap:8px;align-items:center;}
   .deals-search{width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:999px;font-size:13.5px;font-family:inherit;background:var(--card);}
   .deals-search-btn{flex-shrink:0;padding:10px 14px;border-radius:999px;background:var(--sage);color:#fff;font-size:12.5px;font-weight:800;}
+  .deals-action-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;}
+  .deals-action-row button{min-height:38px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);font-size:12px;font-weight:800;}
+  .deals-action-row button.primary{background:var(--berry);border-color:var(--berry);color:#fff;}
   .deals-search-panel{margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:var(--shadow);}
   .deals-search-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;}
   .deals-search-panel-title{font-size:13px;font-weight:900;color:var(--ink);}
@@ -181,7 +184,18 @@
   .deals-result-actions{display:flex;gap:8px;}
   .deals-result-actions button{flex:1;border-radius:999px;padding:8px 10px;font-size:12px;font-weight:800;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);}
   .deals-result-actions .primary{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .deals-result-actions .liked{background:var(--berry-light);border-color:var(--berry-light);color:var(--berry-dark);}
   .deals-empty-panel{text-align:center;color:var(--ink-faint);font-size:12px;line-height:1.6;padding:16px 6px;}
+  .deal-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .deal-form-field{margin-bottom:9px;}
+  .deal-form-field.full{grid-column:1/-1;}
+  .deal-form-field label{display:block;font-size:11px;font-weight:800;color:var(--ink-faint);margin-bottom:4px;}
+  .deal-form-field input,.deal-form-field select,.deal-form-field textarea{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--card);padding:9px 10px;font-family:inherit;font-size:13px;color:var(--ink);}
+  .deal-form-field textarea{min-height:70px;resize:vertical;line-height:1.5;}
+  .deal-form-actions{display:flex;gap:8px;margin-top:10px;}
+  .deal-form-actions button{flex:1;border-radius:999px;padding:10px;font-size:13px;font-weight:900;background:var(--bg-alt);color:var(--ink-soft);}
+  .deal-form-actions .primary{background:var(--sage);color:#fff;}
+  .deal-source-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;background:var(--sage-light);color:var(--sage-dark);font-size:10.5px;font-weight:800;padding:3px 7px;margin-left:6px;}
   .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:8px 16px 4px;}
   .deals-section-header{font-size:15px;font-weight:800;color:var(--ink);margin:12px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .deals-section-header span{font-size:11.5px;font-weight:600;color:var(--ink-faint);}
@@ -1093,6 +1107,11 @@
       <input type="text" id="dealsSearchInput" class="deals-search" placeholder="搜索鸡蛋、牛奶、大米、Best Buy..." oninput="hideDealsSearchPanel();renderFoodLowPrices();renderDealsList()" onkeydown="if(event.key==='Enter')openRetailerSearch()">
       <button class="deals-search-btn" onclick="openRetailerSearch()">全网找</button>
     </div>
+    <div class="deals-action-row">
+      <button class="primary" onclick="openDealReportForm('user_report')">用户爆料</button>
+      <button onclick="openDealReportForm('merchant_submit')">商家优惠</button>
+      <button onclick="openDealRankings()">实时热榜</button>
+    </div>
     <div id="dealsSearchPanel" class="deals-search-panel" style="display:none;"></div>
   </div>
   <div class="deals-meta-row">
@@ -1961,6 +1980,12 @@ function renderMerchantDashboard(){
         <div class="merchant-quick-sub">自己编辑已有内容</div>
         <button class="merchant-quick-btn" style="background:var(--sage);" onclick="closeMerchantPublishDashboard();openCompose();">开始发布</button>
       </div>
+      <div class="merchant-quick-card">
+        <div class="merchant-quick-ico" style="background:var(--sky-light);color:#4C7C83;">${uiIcon('store',20)}</div>
+        <div class="merchant-quick-title">提交优惠</div>
+        <div class="merchant-quick-sub">进入省钱页审核池</div>
+        <button class="merchant-quick-btn" style="background:var(--sky);" onclick="closeMerchantPublishDashboard();switchTab('deals');setTimeout(()=>openDealReportForm('merchant_submit'),80);">提交优惠</button>
+      </div>
     </div>
 
     <div class="merchant-dash-card">
@@ -2688,6 +2713,7 @@ const FOOD_LOW_PRICES = [
 ];
 let dealLikes = {};
 let unifiedDealRows = [];
+let unifiedDealFavorites = {};
 
 function renderDealsPage(){
   refreshDealsIfNeeded();
@@ -2752,6 +2778,20 @@ function dealDateText(v){
   if(Number.isNaN(d.getTime())) return String(v);
   return d.toLocaleDateString('zh-CN', { month:'numeric', day:'numeric' });
 }
+function dealSourceButtonText(sourceType){
+  return '官网核对';
+}
+function dealSourceLabel(sourceType){
+  const map = {
+    manual: '人工维护',
+    user_report: '用户爆料',
+    merchant_submit: '商家提交',
+    bestbuy_api: '官方 API',
+    json_feed: '联盟 Feed',
+    manual_json: '人工 Feed'
+  };
+  return map[sourceType] || '真实来源';
+}
 async function fetchUnifiedDealResults(raw, query){
   const terms = dealSearchTerms(raw, query);
   const select = 'id,deal_date,retailer_key,retailer_name,category,product_name,product_name_cn,original_price,current_price,unit,percent_off,save_amount,location,source_url,is_hot,is_food_low_price,stock_status,price_note,ai_summary_cn,source_type,updated_at';
@@ -2780,7 +2820,7 @@ function unifiedDealCardHtml(d, i){
   const orig = moneyText(d.original_price);
   const save = d.percent_off ? `省 ${d.percent_off}%` : (d.save_amount ? `省 ${moneyText(d.save_amount)}` : (d.is_food_low_price ? '食品低价' : '已收录'));
   const stock = d.stock_status === 'in_stock' ? '有货' : (d.stock_status === 'out_of_stock' ? '缺货' : '需核对');
-  const source = d.source_type || '数据库';
+  const sourceLabel = dealSourceButtonText(d.source_type);
   return `
     <div class="deals-result-card">
       <div class="deals-result-top">
@@ -2800,14 +2840,165 @@ function unifiedDealCardHtml(d, i){
         <div><b>更新</b>${dealDateText(d.updated_at || d.deal_date)}</div>
       </div>
       <div class="deals-result-note">
-        ${orig ? `原价 ${orig}，` : ''}${save}。${d.ai_summary_cn || d.price_note || '价格来自数据库记录，请进入来源链接最终核对。'}
+        ${orig ? `原价 ${orig}，` : ''}${save}<span class="deal-source-pill">${dealSourceLabel(d.source_type)}</span>。${d.ai_summary_cn || d.price_note || '价格来自数据库记录，请进入来源链接最终核对。'}
       </div>
       <div class="deals-result-actions">
         <button onclick="copyUnifiedDeal('${String(d.id).replace(/'/g, '')}')">复制</button>
-        <button class="primary" onclick="openDealSource('${String(d.source_url || '').replace(/'/g, "\\'")}')">${source}核对</button>
+        <button class="${unifiedDealFavorites[d.id] ? 'liked' : ''}" onclick="favoriteUnifiedDeal('${String(d.id).replace(/'/g, '')}')">${unifiedDealFavorites[d.id] ? '已收藏' : '收藏'}</button>
+        <button class="primary" onclick="openDealSource('${String(d.source_url || '').replace(/'/g, "\\'")}', '${String(d.id).replace(/'/g, '')}')">${sourceLabel}</button>
       </div>
     </div>
   `;
+}
+function renderDealPanelShell(title, sub, body){
+  const panel = document.getElementById('dealsSearchPanel');
+  if(!panel) return;
+  panel.innerHTML = `
+    <div class="deals-search-panel-head">
+      <div class="deals-search-panel-title">${title}<span>${sub}</span></div>
+      <button class="deals-search-panel-close" onclick="hideDealsSearchPanel()">×</button>
+    </div>
+    ${body}
+  `;
+  panel.style.display = 'block';
+}
+function openDealReportForm(type){
+  const isMerchant = type === 'merchant_submit';
+  renderDealPanelShell(
+    isMerchant ? '商家提交优惠' : '用户爆料',
+    isMerchant ? '商家提交后进入审核，审核通过才展示到省钱页。' : '请填写你看到的真实优惠，乐生活核对后发布。',
+    `
+      <div class="deal-form-grid">
+        <div class="deal-form-field">
+          <label>商家名称</label>
+          <input id="dealReportRetailer" placeholder="例如 Walmart / ALDI">
+        </div>
+        <div class="deal-form-field">
+          <label>分类</label>
+          <select id="dealReportCategory">
+            <option value="food">食品刚需</option>
+            <option value="household">日用品</option>
+            <option value="electronics">电器数码</option>
+            <option value="home">家居百货</option>
+            <option value="clearance">清仓折扣</option>
+          </select>
+        </div>
+        <div class="deal-form-field full">
+          <label>商品名称</label>
+          <input id="dealReportProduct" placeholder="例如 Great Value Long Grain Rice 20 lb">
+        </div>
+        <div class="deal-form-field">
+          <label>中文名称</label>
+          <input id="dealReportProductCn" placeholder="例如 长粒米 20磅">
+        </div>
+        <div class="deal-form-field">
+          <label>现价</label>
+          <input id="dealReportPrice" type="number" step="0.01" placeholder="12.98">
+        </div>
+        <div class="deal-form-field">
+          <label>原价（可选）</label>
+          <input id="dealReportOrigPrice" type="number" step="0.01" placeholder="15.98">
+        </div>
+        <div class="deal-form-field">
+          <label>单位</label>
+          <input id="dealReportUnit" placeholder="20 lb / 每磅 / 12枚">
+        </div>
+        <div class="deal-form-field">
+          <label>地区/门店</label>
+          <input id="dealReportLocation" placeholder="网购 / 门店 / LA周边">
+        </div>
+        <div class="deal-form-field full">
+          <label>来源链接</label>
+          <input id="dealReportUrl" placeholder="官网商品页、周广告或可核对链接">
+        </div>
+        <div class="deal-form-field full">
+          <label>补充说明</label>
+          <textarea id="dealReportNote" placeholder="例如会员价、限时、门店库存差异、优惠码等"></textarea>
+        </div>
+      </div>
+      <div class="deal-form-actions">
+        <button onclick="hideDealsSearchPanel()">取消</button>
+        <button class="primary" onclick="submitDealReport('${type}')">提交审核</button>
+      </div>
+    `
+  );
+}
+async function submitDealReport(type){
+  const retailer = document.getElementById('dealReportRetailer')?.value.trim();
+  const product = document.getElementById('dealReportProduct')?.value.trim();
+  const price = document.getElementById('dealReportPrice')?.value;
+  const url = document.getElementById('dealReportUrl')?.value.trim();
+  if(!retailer || !product || !price || !url){ showToast('请填写商家、商品、现价和来源链接'); return; }
+  const payload = {
+    report_type: type,
+    status: 'pending',
+    user_id: session && session.user ? session.user.id : null,
+    user_name: currentUser && currentUser.name ? currentUser.name : null,
+    merchant_id: type === 'merchant_submit' && currentMerchant ? currentMerchant.id : null,
+    retailer_key: retailer.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 30) || null,
+    retailer_name: retailer,
+    category: document.getElementById('dealReportCategory')?.value || 'general',
+    product_name: product,
+    product_name_cn: document.getElementById('dealReportProductCn')?.value.trim() || null,
+    original_price: document.getElementById('dealReportOrigPrice')?.value || null,
+    current_price: price,
+    unit: document.getElementById('dealReportUnit')?.value.trim() || null,
+    location: document.getElementById('dealReportLocation')?.value.trim() || '网购 / 门店',
+    source_url: url,
+    price_note: document.getElementById('dealReportNote')?.value.trim() || '提交后待乐生活核对',
+    submit_note: type === 'merchant_submit' ? '商家后台提交优惠' : '用户爆料'
+  };
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/deal_reports`, {
+      method:'POST',
+      headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error(await res.text());
+    showToast('已提交，审核后展示');
+    hideDealsSearchPanel();
+  } catch(e){
+    console.warn('提交优惠失败:', e.message);
+    showToast('提交失败，请确认数据库升级 SQL 已执行');
+  }
+}
+async function openDealRankings(){
+  renderDealPanelShell('实时热榜', '按最近 7 天点击、复制、收藏和精选权重排序。', '<div class="deals-empty-panel">正在读取热榜...</div>');
+  try {
+    const select = 'id,deal_date,retailer_key,retailer_name,category,product_name,product_name_cn,original_price,current_price,unit,percent_off,save_amount,location,source_url,is_hot,is_food_low_price,stock_status,price_note,ai_summary_cn,source_type,updated_at,click_count,favorite_count,copy_count,hot_score';
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/deal_rankings?select=${select}&order=hot_score.desc&limit=20`, { method:'GET' });
+    if(!res.ok) throw new Error(await res.text());
+    const rows = await res.json();
+    renderUnifiedDealPanel('实时热榜', 'hot ranking', rows, null);
+  } catch(e){
+    console.warn('读取热榜失败:', e.message);
+    renderDealPanelShell('实时热榜', '请先执行 3.60 数据库升级 SQL。', '<div class="deals-empty-panel">热榜暂时不可用。</div>');
+  }
+}
+function dealSessionKey(){
+  let key = localStorage.getItem('leshenghuo_deal_session_key');
+  if(!key){
+    key = 'deal_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('leshenghuo_deal_session_key', key);
+  }
+  return key;
+}
+async function recordDealInteraction(id, type){
+  if(!id) return;
+  try {
+    await authedFetch(`${SUPABASE_URL}/rest/v1/deal_interactions`, {
+      method:'POST',
+      headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({
+        deal_id: id,
+        event_type: type,
+        user_id: session && session.user ? session.user.id : null,
+        session_key: dealSessionKey()
+      })
+    });
+  } catch(e){
+    console.warn('互动记录失败:', e.message);
+  }
 }
 function renderUnifiedDealPanel(raw, query, rows, error){
   const panel = document.getElementById('dealsSearchPanel');
@@ -2988,8 +3179,9 @@ function openFoodSearch(query){
   if(input) input.value = query || '';
   openRetailerSearch();
 }
-function openDealSource(url){
+function openDealSource(url, id){
   if(!url){ showToast('这条记录还没有来源链接'); return; }
+  if(id) recordDealInteraction(id, 'click');
   window.open(url, '_blank', 'noopener');
 }
 function copyUnifiedDeal(id){
@@ -2997,7 +3189,15 @@ function copyUnifiedDeal(id){
   if(!d){ showToast('没有找到这条优惠'); return; }
   const text = `${d.product_name_cn || d.product_name}｜${d.retailer_name || d.retailer_key}｜${moneyText(d.current_price) || d.price_note || '查看详情'} ${d.unit || ''}｜${d.source_url || ''}`;
   if(navigator.clipboard) navigator.clipboard.writeText(text);
+  recordDealInteraction(id, 'copy');
   showToast('已复制该优惠摘要');
+}
+function favoriteUnifiedDeal(id){
+  unifiedDealFavorites[id] = !unifiedDealFavorites[id];
+  if(unifiedDealFavorites[id]) recordDealInteraction(id, 'favorite');
+  const raw = document.getElementById('dealsSearchInput')?.value || '实时热榜';
+  renderUnifiedDealPanel(raw, normalizeDealSearchQuery(raw), unifiedDealRows, null);
+  showToast(unifiedDealFavorites[id] ? '已收藏优惠' : '已取消收藏');
 }
 
 /* ================= 搜索页面 ================= */
@@ -5372,7 +5572,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.40 - 省钱板块数据库统一搜索】');
+console.log('✓ 页面初始化完成 【版本 3.60 - 省钱运营闭环】');
 </script>
 </body>
 </html>
