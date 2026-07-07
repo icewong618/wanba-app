@@ -1390,6 +1390,36 @@ const CATS = [
   {key:'生活', icon:'home'},
   {key:'社区', icon:'message'},
 ];
+const CAT_ALIASES = {
+  '吃喝':'美食',
+  '喝喝':'美食',
+  '吃吃':'美食',
+  '餐饮':'美食',
+  '美食餐饮':'美食',
+  'food':'美食',
+  'restaurant':'美食',
+  '玩玩':'玩乐',
+  '看看':'玩乐',
+  '活动':'玩乐',
+  '娱乐':'玩乐',
+  'event':'玩乐',
+  'events':'玩乐',
+  'fun':'玩乐',
+  '买买':'好物',
+  '购物':'好物',
+  '省钱':'好物',
+  '折扣':'好物',
+  'deal':'好物',
+  'deals':'好物',
+  'shop':'好物',
+  'shopping':'好物',
+  '日常':'生活',
+  '本地':'生活',
+  'local':'生活',
+  '邻里':'社区',
+  '公告':'社区',
+  'community':'社区'
+};
 const ICONS = {
   search:'<circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>',
   home:'<path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path>',
@@ -1417,14 +1447,20 @@ function uiIcon(name, size=18, extra=''){
   const body = ICONS[name] || ICONS.spark;
   return `<span class="ui-icon ${extra}" style="width:${size}px;height:${size}px;"><svg viewBox="0 0 24 24">${body}</svg></span>`;
 }
+function normalizeCategory(cat){
+  const raw = String(cat || '').trim();
+  if(!raw) return '生活';
+  if(CATS.some(x => x.key === raw)) return raw;
+  return CAT_ALIASES[raw] || '生活';
+}
 function catIcon(cat, size){
-  const c = CATS.find(x => x.key === cat);
-  if(!c || !c.icon) return cat || '';
+  const c = CATS.find(x => x.key === normalizeCategory(cat));
+  if(!c || !c.icon) return uiIcon('home', size);
   return uiIcon(c.icon, size);
 }
 function catLabel(cat){
-  const c = CATS.find(x => x.key === cat);
-  return (c && c.label) || cat || '生活';
+  const c = CATS.find(x => x.key === normalizeCategory(cat));
+  return (c && c.label) || c?.key || '生活';
 }
 function cardCategoryTag(cat){
   return `<span class="cat-tag">${catIcon(cat, 13)}<span>${catLabel(cat)}</span></span>`;
@@ -1472,7 +1508,7 @@ function avatarCircleHtml(name, user_id){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '3.72';
+const APP_VERSION = '3.73';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -1911,7 +1947,7 @@ function renderMerchantPage(){
       <div style="display:flex;align-items:center;gap:16px;margin-top:8px;font-size:13px;color:var(--ink-soft);" id="merchantStatsRow">
         <span>· 关注</span><span>♥ ·</span>
       </div>
-      ${m.category ? `<div style="margin-top:10px;"><span style="display:inline-flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12.5px;color:var(--ink-soft);font-weight:500;">${catIcon(m.category,16)} ${m.category}${m.subcategory ? (' / ' + m.subcategory) : ''}</span></div>` : ''}
+      ${m.category ? `<div style="margin-top:10px;"><span style="display:inline-flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12.5px;color:var(--ink-soft);font-weight:500;">${catIcon(m.category,16)} ${catLabel(m.category)}${m.subcategory ? (' / ' + m.subcategory) : ''}</span></div>` : ''}
       <div style="display:flex;align-items:center;gap:5px;margin-top:10px;color:var(--ink-faint);font-size:12.5px;">
         <span>${uiIcon('map',14)}</span><span>${m.address || '还没有填写地址'}</span>
       </div>
@@ -2533,7 +2569,7 @@ function renderFeed(){
   if(currentTag){
     list = posts.filter(p=>p.tags && p.tags.includes(currentTag));
   } else {
-    list = currentFilter==='全部' ? posts : posts.filter(p=>p.category===currentFilter);
+    list = currentFilter==='全部' ? posts : posts.filter(p=>normalizeCategory(p.category)===currentFilter);
   }
   if(list.length===0){
     el.innerHTML = `<div class="empty" style="grid-column:1/-1;">
@@ -3689,7 +3725,7 @@ async function runSearch(kw, cat, type){
       const matchKw = (p.title||'').toLowerCase().includes(kwLower)
         || (p.content||'').toLowerCase().includes(kwLower)
         || (p.tags||[]).some(t => (t||'').toLowerCase().includes(kwLower));
-      const matchCat = (cat === '全部') || p.category === cat;
+      const matchCat = (cat === '全部') || normalizeCategory(p.category) === cat;
       return matchKw && matchCat && (p.visibility === 'public' || !p.visibility);
     }).slice(0, 30);
   }
@@ -3706,7 +3742,7 @@ async function runSearch(kw, cat, type){
     try {
       const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?verified=eq.true&or=(business_name.ilike.*${encodeURIComponent(kw)}*,address.ilike.*${encodeURIComponent(kw)}*)&select=user_id,business_name,category,address,logo&limit=20`);
       let list = res.ok ? await res.json() : [];
-      if(cat !== '全部') list = list.filter(m => m.category === cat);
+      if(cat !== '全部') list = list.filter(m => normalizeCategory(m.category) === cat);
       result.places = list;
     } catch(e){ console.warn('地点搜索失败:', e.message); }
   }
@@ -5969,7 +6005,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.72 - 首页分类角标修复】');
+console.log('✓ 页面初始化完成 【版本 3.73 - 分类角标兼容修复】');
 </script>
 </body>
 </html>
