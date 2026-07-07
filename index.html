@@ -49,7 +49,7 @@
   ::selection{background:var(--sage-light);}
 
   /* ---------- layout shell ---------- */
-  .app{max-width:var(--container-w);margin:0 auto;padding:0 20px 100px;}
+  .app{max-width:var(--container-w);margin:0 auto;padding:0;}
 
   /* ---------- header ---------- */
   header.top{
@@ -60,6 +60,7 @@
     padding:0;
     margin-bottom:0;
   }
+  header.top.is-hidden{display:none;}
   .quick-bar{
     background:var(--sage-dark);
   }
@@ -778,7 +779,7 @@
   }
   .page.active{display:block;}
   #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
-  #page-home{padding-top:4px;}
+  #page-home{padding-top:0;}
   #page-home .feed{margin-top:0;}
   #page-deals,#page-profile{padding-left:0;padding-right:0;}
   .page-header{
@@ -1702,7 +1703,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.12';
+const APP_VERSION = '4.13';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -6907,12 +6908,22 @@ window.switchTab = function(tab){
   const btn = document.querySelector(`[data-tab="${tab}"]`);
   if(btn) btn.classList.add('active');
 
-  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
+  // 4.13：非首页不再保留空 header 占位，避免页面顶部出现整块空白
+  const topHeader = document.querySelector('header.top');
+  if(topHeader) topHeader.classList.toggle('is-hidden', tab !== 'home');
+
+  // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示
   const topWrap = document.querySelector('header.top .top-wrap');
   if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
-  // 4.12：绿色quick-bar只在首页显示，避免省钱/消息/本周页顶部留白过大
+  // 4.13：绿色quick-bar只在首页显示，避免省钱/消息/本周页顶部留白过大
   const quickBar = document.querySelector('header.top .quick-bar');
   if(quickBar) quickBar.style.display = (tab === 'home') ? '' : 'none';
+  if(tab === 'home'){
+    const feed = document.getElementById('feed');
+    const home = document.getElementById('page-home');
+    if(home){ home.style.marginTop = '0'; home.style.paddingTop = '0'; }
+    if(feed){ feed.style.marginTop = '0'; feed.style.paddingTop = '0'; }
+  }
   
   // 根据标签页处理逻辑（首页/导航栏不区分商家与普通用户，两者完全一致）
   if(tab === 'home'){
@@ -6998,13 +7009,9 @@ setInterval(() => {
   }
 }, 30000);
 
-// Initialize pages - show home by default
-const homePage = document.getElementById('page-home');
-homePage.classList.add('active');
-homePage.style.display = 'block';
-const firstNavBtn = document.querySelector('[data-tab="home"]');
-if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 4.12 - 顶部内容贴合修复】');
+// Initialize pages - show home by default through the same layout path as tab switching
+switchTab('home');
+console.log('✓ 页面初始化完成 【版本 4.13 - 顶部空白占位修复】');
 </script>
 </body>
 </html>
