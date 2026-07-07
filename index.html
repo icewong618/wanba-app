@@ -412,16 +412,23 @@
   }
   .play-badge svg{width:46px;height:46px;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.35));}
   .cat-tag{
-    position:absolute;top:10px;left:10px;
-    padding:4px 10px;border-radius:6px;
-    font-size:11.5px;font-weight:700;letter-spacing:.5px;color:#fff;
-  }
-  /* 印章图标角标（替代文字色块） */
-  .cat-tag-icon{
     position:absolute;top:8px;left:8px;z-index:2;
-    filter:drop-shadow(0 1px 3px rgba(0,0,0,.35));
+    display:inline-flex;align-items:center;gap:4px;
+    max-width:calc(100% - 16px);
+    min-height:24px;
+    padding:4px 8px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.72);
+    background:rgba(255,255,255,.88);
+    color:var(--ink);
+    font-size:11.5px;
+    font-weight:800;
+    line-height:1;
+    box-shadow:0 4px 14px rgba(42,39,33,.12);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
   }
-  .cat-tag-icon img{display:block;}
+  .cat-tag .ui-icon{color:var(--berry);flex-shrink:0;}
 
   .stub{
     position:absolute;bottom:10px;right:10px;
@@ -1377,7 +1384,7 @@
 let currentTab = 'home';
 const CATS = [
   {key:'全部'},
-  {key:'美食', icon:'food'},
+  {key:'美食', icon:'food', label:'吃喝'},
   {key:'玩乐', icon:'calendar'},
   {key:'好物', icon:'bag'},
   {key:'生活', icon:'home'},
@@ -1414,6 +1421,13 @@ function catIcon(cat, size){
   const c = CATS.find(x => x.key === cat);
   if(!c || !c.icon) return cat || '';
   return uiIcon(c.icon, size);
+}
+function catLabel(cat){
+  const c = CATS.find(x => x.key === cat);
+  return (c && c.label) || cat || '生活';
+}
+function cardCategoryTag(cat){
+  return `<span class="cat-tag">${catIcon(cat, 13)}<span>${catLabel(cat)}</span></span>`;
 }
 const QUICKLINKS = [
   {key:'遛娃', icon:'home'},
@@ -1458,7 +1472,7 @@ function avatarCircleHtml(name, user_id){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '3.70';
+const APP_VERSION = '3.72';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -1496,6 +1510,7 @@ let currentUser = {
 };
 let isDealAdmin = false;
 let dealReviewRows = [];
+let dealReviewBusy = {};
 
 /* ====== 用户注册/登录（Supabase Auth）====== */
 let authMode = 'login';
@@ -2536,7 +2551,7 @@ function renderFeed(){
     <div class="card" onclick="openPost(${p.id})">
       <div class="card-media">
         ${media}
-        <span class="cat-tag-icon">${catIcon(p.category, 34)}</span>
+        ${cardCategoryTag(p.category)}
         ${stub}
       </div>
       <div class="card-body">
@@ -2746,7 +2761,7 @@ function renderWeekFeed(){
         <div class="card" onclick="openPost(${p.id})">
           <div class="card-media">
             ${p.image ? `<img src="${p.image}" alt="">` : '<div style="width:100%;height:100%;background:var(--bg-alt);"></div>'}
-            <span class="cat-tag-icon">${catIcon(p.category, 34)}</span>
+            ${cardCategoryTag(p.category)}
           </div>
           <div class="card-body">
             <div class="card-title">${p.title}</div>
@@ -2860,6 +2875,7 @@ let unifiedDealFavorites = {};
 
 function renderDealsPage(){
   refreshDealsIfNeeded();
+  updateDealReviewButton();
   renderDealsTabs();
   renderHotPicks();
   renderFoodLowPrices();
@@ -2938,6 +2954,23 @@ function dealSourceLabel(sourceType){
 function updateDealReviewButton(){
   const btn = document.getElementById('dealReviewBtn');
   if(btn) btn.style.display = isDealAdmin ? '' : 'none';
+}
+function friendlyDealReviewError(message){
+  const raw = String(message || '');
+  const lower = raw.toLowerCase();
+  if(lower.includes('permission denied') || lower.includes('row-level security') || lower.includes('violates row-level security')){
+    return '权限不足：请确认已执行 3.70 管理审核 SQL，并把当前账号加入 deal_admins。';
+  }
+  if(lower.includes('relation') && lower.includes('does not exist')){
+    return '数据库表缺失：请先执行 3.60 和 3.70 的 Supabase SQL。';
+  }
+  if(lower.includes('duplicate') || lower.includes('unique')){
+    return '这条优惠可能已经发布过，请刷新审核池后再确认。';
+  }
+  if(lower.includes('jwt') || lower.includes('401')){
+    return '登录状态已过期，请重新登录管理员账号。';
+  }
+  return '操作失败，请稍后重试或检查 Supabase 权限设置。';
 }
 async function checkDealAdmin(){
   if(!(session && session.user)){
@@ -3145,6 +3178,8 @@ function reviewReportCardHtml(r, i){
   const orig = moneyText(r.original_price);
   const typeLabel = r.report_type === 'merchant_submit' ? '商家提交' : '用户爆料';
   const created = dealDateText(r.created_at);
+  const busy = !!dealReviewBusy[r.id];
+  const statusLabel = busy ? '处理中' : (r.status || 'pending');
   return `
     <div class="deals-result-card">
       <div class="deals-result-top">
@@ -3162,14 +3197,15 @@ function reviewReportCardHtml(r, i){
         <div><b>商家</b>${r.retailer_name || '未知'}</div>
         <div><b>分类</b>${r.category || 'general'}</div>
         <div><b>提交</b>${created}</div>
+        <div><b>状态</b>${statusLabel}</div>
       </div>
       <div class="deals-result-note">
         ${orig ? `原价 ${orig}，` : ''}${r.price_note || r.submit_note || '待人工核对'}${r.location ? `。地区：${r.location}` : ''}
       </div>
       <div class="deals-result-actions">
         <button onclick="openDealSource('${String(r.source_url || '').replace(/'/g, "\\'")}')">官网核对</button>
-        <button class="primary" onclick="approveDealReport('${String(r.id).replace(/'/g, '')}')">通过并发布</button>
-        <button class="danger" onclick="rejectDealReport('${String(r.id).replace(/'/g, '')}')">驳回</button>
+        <button class="primary" ${busy ? 'disabled' : ''} onclick="approveDealReport('${String(r.id).replace(/'/g, '')}')">${busy ? '发布中...' : '通过并发布'}</button>
+        <button class="danger" ${busy ? 'disabled' : ''} onclick="rejectDealReport('${String(r.id).replace(/'/g, '')}')">${busy ? '处理中...' : '驳回'}</button>
       </div>
     </div>
   `;
@@ -3191,16 +3227,17 @@ async function openDealReviewQueue(){
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/deal_reports?select=${select}&status=eq.pending&order=created_at.desc&limit=50`, { method:'GET' });
     if(!res.ok) throw new Error(await res.text());
     dealReviewRows = await res.json();
+    dealReviewBusy = {};
     renderDealPanelShell(
       '优惠审核',
       `待审核 ${dealReviewRows.length} 条。价格只按提交值发布，AI 不生成价格。`,
       dealReviewRows.length
         ? `<div class="deals-result-list">${dealReviewRows.map(reviewReportCardHtml).join('')}</div>`
-        : '<div class="deals-empty-panel">目前没有待审核优惠。</div>'
+        : '<div class="deals-empty-panel">目前没有待审核优惠。可以先用“用户爆料”提交一条测试，再回到这里审核。</div>'
     );
   } catch(e){
     console.warn('读取优惠审核池失败:', e.message);
-    renderDealPanelShell('优惠审核', '请确认 3.70 管理审核 SQL 已执行。', '<div class="deals-empty-panel">审核池暂时不可用。</div>');
+    renderDealPanelShell('优惠审核', '请确认 3.70 管理审核 SQL 已执行。', `<div class="deals-empty-panel">${friendlyDealReviewError(e.message)}</div>`);
   }
 }
 function dealReportToDealPayload(r){
@@ -3233,9 +3270,17 @@ function dealReportToDealPayload(r){
   };
 }
 async function approveDealReport(id){
+  if(dealReviewBusy[id]) return;
   const r = dealReviewRows.find(x => String(x.id) === String(id));
   if(!r){ showToast('没有找到这条审核记录'); return; }
+  if(r.status && r.status !== 'pending'){ showToast('这条记录已经处理过，请刷新审核池'); return; }
   if(!confirm('确认通过并发布这条优惠？价格会按提交记录写入，不由 AI 生成。')) return;
+  dealReviewBusy[id] = true;
+  renderDealPanelShell(
+    '优惠审核',
+    `待审核 ${dealReviewRows.length} 条。价格只按提交值发布，AI 不生成价格。`,
+    `<div class="deals-result-list">${dealReviewRows.map(reviewReportCardHtml).join('')}</div>`
+  );
   try {
     const dealPayload = dealReportToDealPayload(r);
     const insertRes = await authedFetch(`${SUPABASE_URL}/rest/v1/deals`, {
@@ -3255,12 +3300,27 @@ async function approveDealReport(id){
     showToast('已通过并发布');
     openDealReviewQueue();
   } catch(e){
+    dealReviewBusy[id] = false;
     console.warn('通过发布失败:', e.message);
-    showToast('发布失败，请确认管理员 SQL 权限已执行');
+    showToast(friendlyDealReviewError(e.message));
+    renderDealPanelShell(
+      '优惠审核',
+      `待审核 ${dealReviewRows.length} 条。价格只按提交值发布，AI 不生成价格。`,
+      `<div class="deals-result-list">${dealReviewRows.map(reviewReportCardHtml).join('')}</div>`
+    );
   }
 }
 async function rejectDealReport(id){
+  if(dealReviewBusy[id]) return;
+  const r = dealReviewRows.find(x => String(x.id) === String(id));
+  if(r && r.status && r.status !== 'pending'){ showToast('这条记录已经处理过，请刷新审核池'); return; }
   if(!confirm('确认驳回这条优惠？')) return;
+  dealReviewBusy[id] = true;
+  renderDealPanelShell(
+    '优惠审核',
+    `待审核 ${dealReviewRows.length} 条。价格只按提交值发布，AI 不生成价格。`,
+    `<div class="deals-result-list">${dealReviewRows.map(reviewReportCardHtml).join('')}</div>`
+  );
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/deal_reports?id=eq.${encodeURIComponent(id)}`, {
       method:'PATCH',
@@ -3274,8 +3334,14 @@ async function rejectDealReport(id){
     showToast('已驳回');
     openDealReviewQueue();
   } catch(e){
+    dealReviewBusy[id] = false;
     console.warn('驳回失败:', e.message);
-    showToast('驳回失败，请确认管理员 SQL 权限已执行');
+    showToast(friendlyDealReviewError(e.message));
+    renderDealPanelShell(
+      '优惠审核',
+      `待审核 ${dealReviewRows.length} 条。价格只按提交值发布，AI 不生成价格。`,
+      `<div class="deals-result-list">${dealReviewRows.map(reviewReportCardHtml).join('')}</div>`
+    );
   }
 }
 function dealSessionKey(){
@@ -5903,7 +5969,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.70 - 管理审核页面第一版】');
+console.log('✓ 页面初始化完成 【版本 3.72 - 首页分类角标修复】');
 </script>
 </body>
 </html>
