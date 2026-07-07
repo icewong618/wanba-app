@@ -1547,6 +1547,30 @@ function isVerifiedMerchantUser(userId){
   if(session && session.user && userId === session.user.id && currentMerchant && currentMerchant.verified) return true;
   return !!window._merchantVerifiedCache[userId];
 }
+function refreshAvatarDisplays(userId){
+  if(!userId) return;
+  renderFeed();
+  const weekPage = document.getElementById('page-week');
+  if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
+  if(activePostId) renderPostModal();
+}
+function syncCurrentUserAuthorName(name){
+  if(!(session && session.user) || !name) return;
+  let changed = false;
+  posts.forEach(p => {
+    if(p.user_id === session.user.id && p.author !== name){
+      p.author = name;
+      changed = true;
+    }
+  });
+  if(changed){
+    savePosts();
+    renderFeed();
+    const weekPage = document.getElementById('page-week');
+    if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
+    if(activePostId) renderPostModal();
+  }
+}
 function resolveAvatarUrl(user_id){
   if(!user_id) return null;
   // 商家笔记优先显示店铺Logo；自己的商家资料用内存里的 currentMerchant，最新且不用等网络
@@ -1605,7 +1629,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.0';
+const APP_VERSION = '4.01';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -1972,8 +1996,10 @@ function onAvatarFileSelected(evt){
       ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
       currentUser.avatar = dataUrl;
+      if(session && session.user) window._avatarCache[session.user.id] = dataUrl;
       saveUserProfileToStorage();
       updateProfileDisplay();
+      if(session && session.user) refreshAvatarDisplays(session.user.id);
       syncProfileToDb();
     };
     img.onerror = function(){ showToast('图片读取失败，请换一张试试'); };
@@ -2229,6 +2255,7 @@ function publicUserCardHtml(p){
 function userPublicContentHtml(userId, profile){
   const name = profile.name || '乐生活用户';
   const avatar = profile.avatar || resolveAvatarUrl(userId);
+  const publicId = uidToNumericId(String(userId));
   const userPosts = posts
     .filter(p => p.user_id === userId && (p.visibility === 'public' || !p.visibility))
     .sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
@@ -2246,7 +2273,7 @@ function userPublicContentHtml(userId, profile){
         </div>
         <div class="profile-basic-info">
           <div class="profile-username">${escHtml(name)}</div>
-          <div class="profile-id">ID: ${String(userId).slice(0,6)}</div>
+          <div class="profile-id">ID: ${publicId}</div>
           <div class="profile-location">乐生活社区用户</div>
         </div>
       </div>
@@ -3022,6 +3049,7 @@ function saveUserProfile(){
   
   // 更新显示
   updateProfileDisplay();
+  syncCurrentUserAuthorName(name);
 
   // 同步昵称到 profiles 表（2.93）
   syncProfileToDb();
@@ -4582,7 +4610,7 @@ function renderPostModal(){
   const eventBlock = p.event ? `
     <div class="event-box">
       <div class="row">
-        <span class="label">📋 活动报名</span>
+        <span class="label">${uiIcon('calendar',14)} 活动报名</span>
         <span class="event-nums">截止 ${p.event.deadline}</span>
       </div>
       <div class="progress"><div class="progress-fill" style="width:${Math.min(100, p.event.registered/p.event.capacity*100)}%"></div></div>
@@ -4927,6 +4955,7 @@ async function toggleLike(){
   }
 }
 function rsvp(){
+  if(!session || !session.user){ showToast('请先登录后再报名'); openAuth(); return; }
   const p = getPost();
   if(!p.event || p.event.userJoined) return;
   if(p.event.registered >= p.event.capacity){ showToast('名额已满'); return; }
@@ -4935,7 +4964,7 @@ function rsvp(){
   renderPostModal();
   renderFeed();
   savePosts();
-  showToast('报名成功,已为你留好位置 🎟');
+  showToast('报名成功，已为你留好位置');
 }
 
 /* ---------------- compose ---------------- */
@@ -6689,7 +6718,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 4.0 - 上线候选版】');
+console.log('✓ 页面初始化完成 【版本 4.01 - 验收修复版】');
 </script>
 </body>
 </html>
