@@ -86,20 +86,29 @@
   .top-row{
     max-width:var(--container-w);margin:0 auto;padding:0 20px;
     display:flex;align-items:center;justify-content:space-between;gap:16px;
+    flex-wrap:nowrap;
   }
-  .brand{display:flex;align-items:center;gap:10px;}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;}
   .brand-logo{height:38px;width:38px;object-fit:cover;border-radius:12px;flex-shrink:0;box-shadow:var(--shadow);}
   .brand .mark{
     font-family:'ZCOOL XiaoWei',serif;font-size:26px;font-weight:700;color:var(--sage-dark);
     letter-spacing:1px;
+    white-space:nowrap;
   }
-  .brand .tag{font-size:12.5px;color:var(--ink-faint);letter-spacing:.5px;}
-  .top-actions{display:flex;align-items:center;gap:10px;}
+  .brand .tag{font-size:12.5px;color:var(--ink-faint);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .top-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .search{
     display:flex;align-items:center;gap:6px;
     background:var(--card);border:1px solid var(--line);border-radius:999px;
     padding:7px 14px;font-size:13px;color:var(--ink-faint);
     min-width:150px;
+  }
+  .search-icon-btn{
+    display:none;align-items:center;justify-content:center;
+    width:38px;height:38px;border-radius:999px;
+    border:1px solid var(--line);background:var(--card);color:var(--sage-dark);
+    box-shadow:0 2px 8px rgba(42,39,33,0.04);
+    flex-shrink:0;
   }
   .ui-icon{
     display:inline-flex;align-items:center;justify-content:center;
@@ -992,8 +1001,17 @@
     -webkit-overflow-scrolling:touch;
   }
   @media(max-width:640px){
-    .top-row{flex-wrap:wrap;}
+    .top-wrap{padding-top:12px;}
+    .top-row{flex-wrap:nowrap;gap:8px;padding:0 14px;}
+    .brand{gap:8px;min-width:0;}
+    .brand-logo{width:34px;height:34px;border-radius:10px;}
+    .brand .mark{font-size:22px;line-height:1;}
+    .brand .tag{display:none;}
+    .top-actions{gap:7px;}
     .search{display:none;}
+    .search-icon-btn{display:flex;}
+    .btn-post{padding:8px 13px;font-size:13px;}
+    .chip-row{padding:0 14px;margin-top:8px;}
     .modal{border-radius:0;height:100vh;height:100dvh;max-height:100dvh;}
     .overlay{padding:0;}
   }
@@ -1039,6 +1057,7 @@
       </div>
       <div class="top-actions">
         <div class="search" onclick="openSearchPage()"><span class="ui-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></span>搜一搜身边的新鲜事</div>
+        <button class="search-icon-btn" onclick="openSearchPage()" aria-label="搜索"><span class="ui-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></span></button>
         <button class="btn-post" onclick="handlePublishClick()">＋ 发布</button>
       </div>
     </div>
@@ -1703,7 +1722,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.13';
+const APP_VERSION = '4.14';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -7011,7 +7030,7 @@ setInterval(() => {
 
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
-console.log('✓ 页面初始化完成 【版本 4.13 - 顶部空白占位修复】');
+console.log('✓ 页面初始化完成 【版本 4.14 - 手机顶部适配修复】');
 </script>
 </body>
 </html>
