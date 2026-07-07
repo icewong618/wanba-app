@@ -1,0 +1,239 @@
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const BESTBUY_API_KEY = process.env.BESTBUY_API_KEY || '';
+const TRIGGER_TYPE = process.env.TRIGGER_TYPE || 'scheduled';
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false }
+});
+
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function readPath(obj, path) {
+  if (!path) return undefined;
+  return String(path).split('.').reduce((acc, key) => {
+    if (acc === null || acc === undefined) return undefined;
+    if (Array.isArray(acc) && /^\d+$/.test(key)) return acc[Number(key)];
+    return acc[key];
+  }, obj);
+}
+
+function priceMath(originalPrice, currentPrice) {
+  const original = numberOrNull(originalPrice);
+  const current = numberOrNull(currentPrice);
+  if (original === null || current === null || original <= current) {
+    return { percent_off: null, save_amount: null };
+  }
+  const save = Number((original - current).toFixed(2));
+  return {
+    percent_off: Math.round((save / original) * 100),
+    save_amount: save
+  };
+}
+
+async function createRun() {
+  const { data, error } = await supabase
+    .from('deal_price_refresh_runs')
+    .insert({ trigger_type: TRIGGER_TYPE, status: 'running' })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+async function finishRun(id, patch) {
+  await supabase
+    .from('deal_price_refresh_runs')
+    .update(Object.assign({ finished_at: new Date().toISOString() }, patch))
+    .eq('id', id);
+}
+
+async function loadProducts() {
+  const { data, error } = await supabase
+    .from('deal_tracked_products')
+    .select('*')
+    .eq('enabled', true)
+    .order('is_food_low_price', { ascending: false })
+    .order('is_hot', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchJsonFeed(product) {
+  const config = product.source_config || {};
+  if (!product.source_url) throw new Error('Missing source_url');
+  const response = await fetch(product.source_url, {
+    headers: {
+      'accept': 'application/json,text/plain,*/*',
+      'user-agent': 'leshenghuo-price-cache/4.40'
+    }
+  });
+  if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
+  const data = await response.json();
+  return {
+    current_price: numberOrNull(readPath(data, config.price_path)),
+    original_price: numberOrNull(readPath(data, config.original_price_path)),
+    stock_status: readPath(data, config.stock_path) || product.manual_stock_status || 'unknown',
+    raw_payload: data
+  };
+}
+
+async function fetchBestBuy(product) {
+  if (!BESTBUY_API_KEY) throw new Error('Missing BESTBUY_API_KEY');
+  const sku = product.product_key;
+  if (!sku) throw new Error('Missing Best Buy SKU in product_key');
+  const url = `https://api.bestbuy.com/v1/products(sku=${encodeURIComponent(sku)})?apiKey=${encodeURIComponent(BESTBUY_API_KEY)}&format=json&show=sku,name,salePrice,regularPrice,onlineAvailability,url`;
+  const response = await fetch(url, { headers: { 'accept': 'application/json' } });
+  if (!response.ok) throw new Error(`Best Buy HTTP ${response.status}`);
+  const json = await response.json();
+  const item = json.products && json.products[0];
+  if (!item) throw new Error('Best Buy product not found');
+  return {
+    current_price: numberOrNull(item.salePrice),
+    original_price: numberOrNull(item.regularPrice),
+    stock_status: item.onlineAvailability ? 'in_stock' : 'unknown',
+    source_url: item.url || product.source_url,
+    raw_payload: item
+  };
+}
+
+async function resolvePrice(product) {
+  if (product.source_type === 'bestbuy_api' || product.source_type === 'official_api') {
+    if (product.retailer_key === 'bestbuy') return fetchBestBuy(product);
+  }
+  if (product.source_type === 'json_feed' || product.source_type === 'affiliate_feed' || product.source_type === 'manual_json') {
+    return fetchJsonFeed(product);
+  }
+  return {
+    current_price: numberOrNull(product.manual_current_price),
+    original_price: numberOrNull(product.manual_original_price),
+    stock_status: product.manual_stock_status || 'unknown',
+    raw_payload: { source: 'manual_cache' }
+  };
+}
+
+async function upsertDailyCache(product, resolved) {
+  const currentPrice = numberOrNull(resolved.current_price);
+  const originalPrice = numberOrNull(resolved.original_price);
+  const math = priceMath(originalPrice, currentPrice);
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const expires = new Date(now.getTime() + 30 * 60 * 60 * 1000);
+
+  const payload = {
+    product_id: product.id,
+    price_date: today,
+    retailer_key: product.retailer_key,
+    retailer_name: product.retailer_name,
+    category: product.category || 'general',
+    product_name: product.product_name,
+    product_name_cn: product.product_name_cn,
+    original_price: originalPrice,
+    current_price: currentPrice,
+    unit: product.unit,
+    percent_off: math.percent_off,
+    save_amount: math.save_amount,
+    location: product.location,
+    source_url: resolved.source_url || product.source_url,
+    source_type: product.source_type,
+    stock_status: resolved.stock_status || 'unknown',
+    is_food_low_price: product.is_food_low_price === true,
+    is_hot: product.is_hot === true,
+    price_note: '每日缓存价格。用户访问页面时只读取乐生活数据库，不实时抓取外部网站。',
+    ai_summary_cn: product.ai_summary_cn,
+    raw_payload: resolved.raw_payload || {},
+    refreshed_at: now.toISOString(),
+    expires_at: expires.toISOString(),
+    updated_at: now.toISOString()
+  };
+
+  const { error } = await supabase
+    .from('deal_daily_price_cache')
+    .upsert(payload, { onConflict: 'product_id,price_date' });
+  if (error) throw error;
+
+  await supabase
+    .from('deal_tracked_products')
+    .update({
+      last_checked_at: now.toISOString(),
+      last_success_at: now.toISOString(),
+      last_error: null,
+      updated_at: now.toISOString()
+    })
+    .eq('id', product.id);
+}
+
+async function markProductError(product, message) {
+  await supabase
+    .from('deal_tracked_products')
+    .update({
+      last_checked_at: new Date().toISOString(),
+      last_error: String(message).slice(0, 1000),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', product.id);
+}
+
+async function main() {
+  const runId = await createRun();
+  let checked = 0;
+  let success = 0;
+  let failed = 0;
+  let skipped = 0;
+  const errors = [];
+
+  try {
+    const products = await loadProducts();
+    for (const product of products) {
+      checked += 1;
+      try {
+        const resolved = await resolvePrice(product);
+        if (resolved.current_price === null && !product.ai_summary_cn) {
+          skipped += 1;
+          continue;
+        }
+        await upsertDailyCache(product, resolved);
+        success += 1;
+      } catch (error) {
+        failed += 1;
+        errors.push(`${product.retailer_key}/${product.product_name}: ${error.message}`);
+        await markProductError(product, error.message);
+      }
+    }
+
+    await finishRun(runId, {
+      status: failed ? 'partial_success' : 'success',
+      checked_count: checked,
+      success_count: success,
+      failed_count: failed,
+      skipped_count: skipped,
+      error_message: errors.slice(0, 8).join('\n') || null
+    });
+  } catch (error) {
+    await finishRun(runId, {
+      status: 'failed',
+      checked_count: checked,
+      success_count: success,
+      failed_count: failed + 1,
+      skipped_count: skipped,
+      error_message: error.message
+    });
+    throw error;
+  }
+}
+
+main().catch(error => {
+  console.error(error);
+  process.exit(1);
+});

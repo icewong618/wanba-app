@@ -1,0 +1,12 @@
+{
+  "name": "leshenghuo-daily-price-cache",
+  "version": "4.40.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "sync:prices": "node scripts/sync-daily-prices.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}
