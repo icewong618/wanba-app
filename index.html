@@ -1529,9 +1529,23 @@ function initials(name){ return name.slice(0,1); }
 /* ====== 真实头像缓存（评论等处按 user_id 显示真实头像）（2.94修复） ====== */
 window._avatarCache = window._avatarCache || {};
 window._merchantLogoCache = window._merchantLogoCache || {};
+window._merchantVerifiedCache = window._merchantVerifiedCache || {};
+window._merchantNameCache = window._merchantNameCache || {};
 function setMerchantLogoCache(userId, logo){
   if(!userId) return;
   window._merchantLogoCache[userId] = logo || null;
+}
+function setMerchantIdentityCache(userId, merchant){
+  if(!userId) return;
+  const m = merchant || {};
+  window._merchantVerifiedCache[userId] = !!m.verified;
+  if(m.logo !== undefined) setMerchantLogoCache(userId, m.logo || null);
+  if(m.business_name) window._merchantNameCache[userId] = m.business_name;
+}
+function isVerifiedMerchantUser(userId){
+  if(!userId) return false;
+  if(session && session.user && userId === session.user.id && currentMerchant && currentMerchant.verified) return true;
+  return !!window._merchantVerifiedCache[userId];
 }
 function resolveAvatarUrl(user_id){
   if(!user_id) return null;
@@ -1558,10 +1572,10 @@ async function ensureAvatarsFor(userIds){
       needProfiles.forEach(uid => { if(!(uid in window._avatarCache)) window._avatarCache[uid] = null; });
     }
     if(needMerchants.length){
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${needMerchants.join(',')})&verified=eq.true&select=user_id,logo`);
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${needMerchants.join(',')})&verified=eq.true&select=user_id,logo,business_name,verified`);
       if(res.ok){
         const rows = await res.json();
-        rows.forEach(r => setMerchantLogoCache(r.user_id, r.logo || null));
+        rows.forEach(r => setMerchantIdentityCache(r.user_id, r));
       }
       needMerchants.forEach(uid => { if(!(uid in window._merchantLogoCache)) setMerchantLogoCache(uid, null); });
     }
@@ -1571,12 +1585,27 @@ async function ensureAvatarsFor(userIds){
 /* 头像圆圈：有真实头像显示图片，否则回退成色块+首字（class="avatar" 走已有CSS尺寸） */
 function avatarCircleHtml(name, user_id){
   const url = resolveAvatarUrl(user_id);
-  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
-  return `<span class="avatar" style="background:${avatarColor(name||'友')}">${initials(name||'友')}</span>`;
+  const merchantRing = isVerifiedMerchantUser(user_id) ? 'box-shadow:0 0 0 2px var(--sage-light);' : '';
+  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;${merchantRing}"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
+  return `<span class="avatar" style="background:${avatarColor(name||'友')};${merchantRing}">${initials(name||'友')}</span>`;
+}
+function avatarCircleSizedHtml(name, userId, size){
+  const url = resolveAvatarUrl(userId);
+  const merchantRing = isVerifiedMerchantUser(userId) ? 'box-shadow:0 0 0 2px var(--sage-light);' : '';
+  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;width:${size}px;height:${size}px;${merchantRing}"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
+  return `<span class="avatar" style="background:${avatarColor(name||'友')};width:${size}px;height:${size}px;font-size:${Math.max(10, Math.round(size * 0.38))}px;${merchantRing}">${initials(name||'友')}</span>`;
+}
+function identityBadgeHtml(userId){
+  return isVerifiedMerchantUser(userId)
+    ? `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--sage-light);color:var(--sage-dark);font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;white-space:nowrap;">✓ 商家</span>`
+    : '';
+}
+function authorNameHtml(name, userId){
+  return `<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(name || '乐生活用户')}</span>${identityBadgeHtml(userId)}`;
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '3.93';
+const APP_VERSION = '4.0';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -2000,7 +2029,7 @@ async function fetchMerchantProfile(){
     if(!res.ok){ currentMerchant = null; return; }
     const rows = await res.json();
     currentMerchant = (rows && rows[0]) || null;
-    if(currentMerchant) setMerchantLogoCache(currentMerchant.user_id || session.user.id, currentMerchant.logo || null);
+    if(currentMerchant) setMerchantIdentityCache(currentMerchant.user_id || session.user.id, currentMerchant);
     await loadMerchantApplicationStatus(false);
     // 若当前正停留在"我"页，刷新一下让商家主页/普通个人页及时切换
     if(currentTab === 'profile') initProfilePage();
@@ -2167,6 +2196,7 @@ async function openMerchantPublicPage(userId){
       body.innerHTML = '<div class="deals-empty-panel">没有找到这个商家主页，可能还未通过认证。</div>';
       return;
     }
+    setMerchantIdentityCache(m.user_id, m);
     body.innerHTML = merchantContentHtml(m, { isOwnerPage: false });
     await loadMerchantDeals(m);
     if(document.getElementById('merchantPublicOverlay')?.classList.contains('open')){
@@ -2259,6 +2289,11 @@ async function openUserPublicPage(userId, fallbackName){
     switchTab('profile');
     return;
   }
+  if(isVerifiedMerchantUser(userId)){
+    closeUserPublicPage();
+    openMerchantPublicPage(userId);
+    return;
+  }
   closeSearchPage();
   const overlay = document.getElementById('userPublicOverlay');
   const body = document.getElementById('userPublicBody');
@@ -2292,11 +2327,11 @@ async function openAuthorHome(userId){
     return;
   }
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(userId)}&verified=eq.true&select=user_id,logo&limit=1`, { method:'GET' });
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(userId)}&verified=eq.true&select=user_id,logo,business_name,verified&limit=1`, { method:'GET' });
     if(res.ok){
       const rows = await res.json();
       if(rows && rows[0]){
-        setMerchantLogoCache(userId, rows[0].logo || null);
+        setMerchantIdentityCache(userId, rows[0]);
         closePost();
         openMerchantPublicPage(userId);
         return;
@@ -2385,7 +2420,7 @@ function onMerchantImageSelected(event, type){
       if(!currentMerchant) currentMerchant = { user_id: session.user.id };
       if(type === 'logo'){
         currentMerchant.logo = compressedData;
-        setMerchantLogoCache(session.user.id, compressedData);
+        setMerchantIdentityCache(session.user.id, currentMerchant);
       }
       else currentMerchant.cover_image = compressedData;
       openMerchantEditSheet(); // 重新渲染面板，让新图片立即预览
@@ -2423,7 +2458,7 @@ async function saveMerchantProfile(){
     }
     if(!res.ok){ showToast('保存失败，请重试'); return; }
     currentMerchant = Object.assign({}, currentMerchant, payload, rows[0] || {});
-    setMerchantLogoCache(session.user.id, currentMerchant.logo || null);
+    setMerchantIdentityCache(session.user.id, currentMerchant);
     closeMerchantEditSheet();
     renderMerchantPage();
     renderFeed();
@@ -3223,7 +3258,7 @@ function renderFeed(){
         <div class="card-meta">
           <div class="author">
             ${avatarCircleHtml(p.author, p.user_id)}
-            <span class="author-name">${p.author}</span>
+            <span class="author-name" style="display:flex;align-items:center;gap:5px;min-width:0;">${authorNameHtml(p.author, p.user_id)}</span>
           </div>
           <div class="stat-row">
             <span>${p.liked?'♥':'♡'} ${p.likes}</span>
@@ -3434,7 +3469,7 @@ function renderWeekFeed(){
             <div class="card-meta">
               <div class="author">
                 ${avatarCircleHtml(p.author, p.user_id)}
-                <span class="author-name">${p.author}</span>
+                <span class="author-name" style="display:flex;align-items:center;gap:5px;min-width:0;">${authorNameHtml(p.author, p.user_id)}</span>
               </div>
               <div class="stat-row"><span>${p.liked?'♥':'♡'} ${p.likes}</span></div>
             </div>
@@ -4381,6 +4416,7 @@ async function runSearch(kw, cat, type){
       const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?name=ilike.*${encodeURIComponent(kw)}*&select=user_id,name,avatar&limit=20`);
       result.users = res.ok ? await res.json() : [];
       result.users.forEach(u => { window._avatarCache[u.user_id] = u.avatar || null; }); // 顺便预热头像缓存
+      await ensureAvatarsFor(result.users.map(u => u.user_id));
     } catch(e){ console.warn('用户搜索失败:', e.message); }
   }
 
@@ -4389,6 +4425,7 @@ async function runSearch(kw, cat, type){
       const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?verified=eq.true&or=(business_name.ilike.*${encodeURIComponent(kw)}*,address.ilike.*${encodeURIComponent(kw)}*)&select=user_id,business_name,category,address,logo,subcategory&limit=20`);
       let list = res.ok ? await res.json() : [];
       if(cat !== '全部') list = list.filter(m => normalizeCategory(m.category) === cat);
+      list.forEach(m => setMerchantIdentityCache(m.user_id, Object.assign({}, m, { verified: true })));
       result.places = list;
     } catch(e){ console.warn('地点搜索失败:', e.message); }
   }
@@ -4405,10 +4442,8 @@ function renderSearchResultsHtml(r){
     html += `<div class="search-result-group-title">用户 (${r.users.length})</div>`;
     html += r.users.map(u => `
       <div class="search-result-user" onclick="openUserPublicPage('${String(u.user_id || '').replace(/'/g, '')}','${String(u.name || '乐生活用户').replace(/'/g, '')}')">
-        ${u.avatar
-          ? `<span class="avatar" style="overflow:hidden;padding:0;width:40px;height:40px;"><img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;"></span>`
-          : `<span class="avatar" style="background:${avatarColor(u.name||'友')};width:40px;height:40px;font-size:15px;">${initials(u.name||'友')}</span>`}
-        <span style="font-size:14px;color:var(--ink);font-weight:600;">${u.name || '用户'}</span>
+        ${avatarCircleSizedHtml(u.name || '用户', u.user_id, 40)}
+        <span style="font-size:14px;color:var(--ink);font-weight:600;display:flex;align-items:center;gap:6px;min-width:0;">${authorNameHtml(u.name || '用户', u.user_id)}</span>
       </div>
     `).join('');
   }
@@ -4432,7 +4467,7 @@ function renderSearchResultsHtml(r){
           ${m.logo ? `<img src="${m.logo}" style="width:100%;height:100%;object-fit:cover;">` : uiIcon('store',22)}
         </div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:600;color:var(--ink);">${escHtml(m.business_name || '商家')}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${escHtml(m.business_name || '商家')} ${identityBadgeHtml(m.user_id)}</div>
           <div style="font-size:12px;color:var(--ink-faint);margin-top:2px;display:flex;align-items:center;gap:4px;">${uiIcon('map',12)} ${escHtml(m.address || '')}</div>
           <div style="font-size:11px;color:var(--sage-dark);margin-top:2px;">${catLabel(m.category)}${m.subcategory ? ' / ' + escHtml(m.subcategory) : ''}</div>
         </div>
@@ -4566,7 +4601,7 @@ function renderPostModal(){
     <div class="xhs-topbar">
       <button class="xhs-back" onclick="closePost()">‹</button>
       <span onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:inline-flex;">${avatarCircleHtml(p.author, p.user_id)}</span>
-      <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;">${safeAuthor}</span>
+      <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;">${safeAuthor}${identityBadgeHtml(p.user_id)}</span>
       ${p.user_id && (!session || !session.user || p.user_id !== session.user.id) ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
       ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${uiIcon('message',18)}</button>` : ''}
       ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" onclick="showToast('链接已复制')">↗</button>`}
@@ -4733,7 +4768,7 @@ function renderComment(c, isReply){
     <div class="comment">
       ${avatarCircleHtml(c.name, c.user_id)}
       <div class="comment-body">
-        <div class="comment-name">${c.name} <span style="font-weight:400;color:var(--ink-faint);font-size:11px;">${c.time || ''}</span></div>
+        <div class="comment-name" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">${authorNameHtml(c.name, c.user_id)} <span style="font-weight:400;color:var(--ink-faint);font-size:11px;">${c.time || ''}</span></div>
         <div class="comment-text">${replyPrefix}${c.text}</div>
         <div class="comment-actions">
           <button onclick="toggleReplyInput(${c.id})">回复</button>
@@ -6654,7 +6689,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.93 - 普通用户公开主页】');
+console.log('✓ 页面初始化完成 【版本 4.0 - 上线候选版】');
 </script>
 </body>
 </html>
