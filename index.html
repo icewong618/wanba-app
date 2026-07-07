@@ -1762,7 +1762,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.20';
+const APP_VERSION = '4.21';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -2199,11 +2199,11 @@ function escAttr(s){ return (s == null ? '' : String(s)).replace(/"/g,'&quot;');
 function escHtml(s){
   return (s == null ? '' : String(s)).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
-function youtubeThumbUrl(id, quality='maxresdefault'){
+function youtubeThumbUrl(id, quality='hqdefault'){
   return `https://img.youtube.com/vi/${encodeURIComponent(id)}/${quality}.jpg`;
 }
 function youtubeThumbImgHtml(id, alt=''){
-  return `<img src="${youtubeThumbUrl(id)}" onerror="this.onerror=null;this.src='${youtubeThumbUrl(id, 'hqdefault')}';" alt="${escHtml(alt)}">`;
+  return `<img src="${youtubeThumbUrl(id)}" onerror="this.onerror=null;this.src='${youtubeThumbUrl(id, 'default')}';" alt="${escHtml(alt)}">`;
 }
 function mediaWatermarkText(author){
   return `乐生活 · ${author || '乐生活用户'}`;
@@ -7229,7 +7229,7 @@ setInterval(() => {
 
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
-console.log('✓ 页面初始化完成 【版本 4.20 - 水印、管理页与 YouTube 修复】');
+console.log('✓ 页面初始化完成 【版本 4.21 - YouTube 封面 404 修复】');
 </script>
 </body>
 </html>
