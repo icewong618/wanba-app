@@ -16,7 +16,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 function numberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
+  const cleaned = String(value).replace(/[^0-9.]/g, '');
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -76,7 +77,7 @@ async function fetchJsonFeed(product) {
   const response = await fetch(product.source_url, {
     headers: {
       'accept': 'application/json,text/plain,*/*',
-      'user-agent': 'leshenghuo-price-cache/4.40'
+      'user-agent': 'leshenghuo-price-cache/4.50'
     }
   });
   if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
@@ -86,6 +87,113 @@ async function fetchJsonFeed(product) {
     original_price: numberOrNull(readPath(data, config.original_price_path)),
     stock_status: readPath(data, config.stock_path) || product.manual_stock_status || 'unknown',
     raw_payload: data
+  };
+}
+
+function stripHtml(value) {
+  return String(value || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractJsonLdObjects(html) {
+  const blocks = [];
+  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = re.exec(html))) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (Array.isArray(parsed)) blocks.push(...parsed);
+      else blocks.push(parsed);
+    } catch (_) {}
+  }
+  return blocks;
+}
+
+function flattenJsonLd(value, out = []) {
+  if (!value || typeof value !== 'object') return out;
+  if (Array.isArray(value)) {
+    value.forEach(item => flattenJsonLd(item, out));
+    return out;
+  }
+  out.push(value);
+  if (value['@graph']) flattenJsonLd(value['@graph'], out);
+  if (value.offers) flattenJsonLd(value.offers, out);
+  return out;
+}
+
+function firstPriceFromJsonLd(html) {
+  const nodes = extractJsonLdObjects(html).flatMap(item => flattenJsonLd(item, []));
+  for (const node of nodes) {
+    const type = Array.isArray(node['@type']) ? node['@type'].join(' ') : String(node['@type'] || '');
+    const looksRelevant = /Product|Offer|AggregateOffer/i.test(type) || node.price || node.lowPrice || node.highPrice || node.offers;
+    if (!looksRelevant) continue;
+    const price = numberOrNull(node.price ?? node.lowPrice ?? node.salePrice);
+    if (price !== null) return { price, raw: node };
+  }
+  return null;
+}
+
+function extractMetaContent(html, names) {
+  for (const name of names) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i');
+    const match = html.match(re);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function detectBlockedPage(html) {
+  const text = stripHtml(html).toLowerCase();
+  return text.includes('captcha') ||
+    text.includes('access denied') ||
+    text.includes('robot or human') ||
+    text.includes('verify you are a human') ||
+    text.includes('akamai') ||
+    text.includes('blocked');
+}
+
+async function fetchPublicProductPage(product) {
+  if (!product.source_url) throw new Error('Missing source_url');
+  const response = await fetch(product.source_url, {
+    redirect: 'follow',
+    headers: {
+      'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'accept-language': 'en-US,en;q=0.9',
+      'cache-control': 'no-cache',
+      'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.50; +https://escoopcity.com)'
+    }
+  });
+  if (!response.ok) throw new Error(`Public page HTTP ${response.status}`);
+  const html = await response.text();
+  if (detectBlockedPage(html)) throw new Error('Public page blocked or captcha required');
+
+  const jsonLdPrice = firstPriceFromJsonLd(html);
+  const metaPrice = numberOrNull(extractMetaContent(html, [
+    'product:price:amount',
+    'og:price:amount',
+    'twitter:data1'
+  ]));
+  const config = product.source_config || {};
+  const regexPrice = config.price_regex ? numberOrNull((html.match(new RegExp(config.price_regex, 'i')) || [])[1]) : null;
+  const currentPrice = jsonLdPrice?.price ?? metaPrice ?? regexPrice;
+  if (currentPrice === null) throw new Error('No price found in public page');
+
+  return {
+    current_price: currentPrice,
+    original_price: null,
+    stock_status: /out of stock|sold out|unavailable/i.test(stripHtml(html)) ? 'out_of_stock' : 'unknown',
+    source_url: response.url || product.source_url,
+    raw_payload: {
+      source: 'public_page',
+      final_url: response.url || product.source_url,
+      json_ld: jsonLdPrice?.raw || null,
+      extracted_at: new Date().toISOString()
+    }
   };
 }
 
@@ -114,6 +222,9 @@ async function resolvePrice(product) {
   }
   if (product.source_type === 'json_feed' || product.source_type === 'affiliate_feed' || product.source_type === 'manual_json') {
     return fetchJsonFeed(product);
+  }
+  if (product.source_type === 'public_page' || product.source_type === 'experimental_scraper') {
+    return fetchPublicProductPage(product);
   }
   return {
     current_price: numberOrNull(product.manual_current_price),
