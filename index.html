@@ -1108,6 +1108,14 @@
   </div>
 </div>
 
+<!-- 公开用户主页：普通用户头像/搜索结果进入，展示真实公开笔记 -->
+<div class="overlay" id="userPublicOverlay" onclick="if(event.target.id==='userPublicOverlay')closeUserPublicPage()">
+  <div class="modal" id="userPublicModal" style="position:relative;">
+    <button class="modal-close" onclick="closeUserPublicPage()">✕</button>
+    <div id="userPublicBody" style="padding:0;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- Compose modal -->
 <div class="overlay" id="composeOverlay">
   <div class="modal" style="position:relative;">
@@ -1296,7 +1304,7 @@
 </div>
 <div class="page" id="page-profile" style="display:none;">
   <div style="background:#fff;padding:20px;min-height:100vh;margin-bottom:60px;">
-    <h1 style="font-size:24px;font-weight:700;margin-bottom:20px;">👤 个人资料</h1>
+    <h1 style="font-size:24px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:8px;"><span class="ui-icon" style="width:22px;height:22px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>个人资料</h1>
 
     <!-- 认证商家专属主页：仅当前账号是已认证商家时显示，内容由 renderMerchantPage() 填充 -->
     <div id="merchantPageWrap" style="display:none;"></div>
@@ -1316,8 +1324,8 @@
       <!-- Profile Header：头像在左，名字/ID/IP在右侧齐平（小红书风格） -->
       <div style="display:flex;align-items:center;gap:16px;padding:10px 4px 18px;margin-bottom:4px;">
         <div style="position:relative;flex-shrink:0;">
-          <div style="width:72px;height:72px;border-radius:50%;background:var(--berry);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;border:3px solid var(--sage-light);cursor:pointer;overflow:hidden;" id="userAvatarDisplay" onclick="onAvatarClick()" title="点击更换头像">👤</div>
-          <div style="position:absolute;right:-2px;bottom:-2px;width:22px;height:22px;border-radius:50%;background:var(--sage-dark);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;pointer-events:none;">📷</div>
+          <div style="width:72px;height:72px;border-radius:50%;background:var(--berry);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;border:3px solid var(--sage-light);cursor:pointer;overflow:hidden;" id="userAvatarDisplay" onclick="onAvatarClick()" title="点击更换头像"><span class="ui-icon" style="width:30px;height:30px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span></div>
+          <div style="position:absolute;right:-2px;bottom:-2px;width:22px;height:22px;border-radius:50%;background:var(--sage-dark);display:flex;align-items:center;justify-content:center;border:2px solid #fff;pointer-events:none;color:#fff;"><span class="ui-icon" style="width:12px;height:12px;"><svg viewBox="0 0 24 24"><path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path><path d="M5 20h14"></path></svg></span></div>
           <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="onAvatarFileSelected(event)">
         </div>
         <div style="flex:1;min-width:0;text-align:left;">
@@ -1338,7 +1346,7 @@
       <!-- Action Buttons -->
       <div style="display:flex;gap:10px;margin-bottom:20px;">
         <button onclick="enterEditMode()" style="flex:1;padding:12px;border-radius:10px;background:var(--sage);color:#fff;border:none;cursor:pointer;font-weight:600;font-size:13px;">编辑资料</button>
-        <button class="action-btn" onclick="showToast('浏览记录功能开发中...')" style="flex:1;padding:12px;border-radius:10px;background:var(--bg-alt);border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:13px;">浏览记录</button>
+        <button class="action-btn" onclick="showProfileBrowsingHistory()" style="flex:1;padding:12px;border-radius:10px;background:var(--bg-alt);border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:13px;">浏览记录</button>
       </div>
       <div id="merchantApplyBlock"></div>
     </div>
@@ -1520,23 +1528,43 @@ function initials(name){ return name.slice(0,1); }
 
 /* ====== 真实头像缓存（评论等处按 user_id 显示真实头像）（2.94修复） ====== */
 window._avatarCache = window._avatarCache || {};
+window._merchantLogoCache = window._merchantLogoCache || {};
+function setMerchantLogoCache(userId, logo){
+  if(!userId) return;
+  window._merchantLogoCache[userId] = logo || null;
+}
 function resolveAvatarUrl(user_id){
   if(!user_id) return null;
-  // 自己的头像直接用内存里的 currentUser，最新且不用等网络
+  // 商家笔记优先显示店铺Logo；自己的商家资料用内存里的 currentMerchant，最新且不用等网络
+  if(session && session.user && user_id === session.user.id && currentMerchant && currentMerchant.logo) return currentMerchant.logo;
+  if(window._merchantLogoCache[user_id]) return window._merchantLogoCache[user_id];
+  // 普通用户头像仍然沿用 profiles.avatar
   if(session && session.user && user_id === session.user.id && currentUser.avatar) return currentUser.avatar;
   return window._avatarCache[user_id] || null;
 }
-/* 批量拉取一批 user_id 的头像并写入缓存，已缓存过的（含"确认没有头像"）不会重复请求 */
+/* 批量拉取一批 user_id 的头像并写入缓存，已认证商家优先使用店铺Logo */
 async function ensureAvatarsFor(userIds){
-  const need = [...new Set((userIds||[]).filter(Boolean))].filter(uid => !(uid in window._avatarCache));
-  if(!need.length) return false;
+  const ids = [...new Set((userIds||[]).filter(Boolean))];
+  const needProfiles = ids.filter(uid => !(uid in window._avatarCache));
+  const needMerchants = ids.filter(uid => !(uid in window._merchantLogoCache));
+  if(!needProfiles.length && !needMerchants.length) return false;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${need.join(',')})&select=user_id,avatar`);
-    if(res.ok){
-      const rows = await res.json();
-      rows.forEach(r => { window._avatarCache[r.user_id] = r.avatar || null; });
+    if(needProfiles.length){
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${needProfiles.join(',')})&select=user_id,avatar`);
+      if(res.ok){
+        const rows = await res.json();
+        rows.forEach(r => { window._avatarCache[r.user_id] = r.avatar || null; });
+      }
+      needProfiles.forEach(uid => { if(!(uid in window._avatarCache)) window._avatarCache[uid] = null; });
     }
-    need.forEach(uid => { if(!(uid in window._avatarCache)) window._avatarCache[uid] = null; });
+    if(needMerchants.length){
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${needMerchants.join(',')})&verified=eq.true&select=user_id,logo`);
+      if(res.ok){
+        const rows = await res.json();
+        rows.forEach(r => setMerchantLogoCache(r.user_id, r.logo || null));
+      }
+      needMerchants.forEach(uid => { if(!(uid in window._merchantLogoCache)) setMerchantLogoCache(uid, null); });
+    }
     return true;
   } catch(e){ console.warn('头像批量获取失败:', e.message); return false; }
 }
@@ -1548,7 +1576,7 @@ function avatarCircleHtml(name, user_id){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '3.90';
+const APP_VERSION = '3.93';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -1972,6 +2000,7 @@ async function fetchMerchantProfile(){
     if(!res.ok){ currentMerchant = null; return; }
     const rows = await res.json();
     currentMerchant = (rows && rows[0]) || null;
+    if(currentMerchant) setMerchantLogoCache(currentMerchant.user_id || session.user.id, currentMerchant.logo || null);
     await loadMerchantApplicationStatus(false);
     // 若当前正停留在"我"页，刷新一下让商家主页/普通个人页及时切换
     if(currentTab === 'profile') initProfilePage();
@@ -2152,6 +2181,132 @@ function closeMerchantPublicPage(){
   const overlay = document.getElementById('merchantPublicOverlay');
   if(overlay) overlay.classList.remove('open');
 }
+function publicUserCardHtml(p){
+  const img = p.image || (Array.isArray(p.images) && p.images[0]) || '';
+  return `
+    <div class="user-content-item" onclick="closeUserPublicPage();openPost(${JSON.stringify(p.id)})">
+      ${img ? `<img src="${img}" alt="">` : '<div style="aspect-ratio:3/4;background:var(--bg-alt);"></div>'}
+      <div class="user-content-item-info">
+        <div class="user-content-item-title">${escHtml(p.title || '未命名笔记')}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--ink-faint);">
+          <span>${catIcon(p.category,13)} ${escHtml(normalizeCategory(p.category) || '生活')}</span>
+          <span>♥ ${p.likes || 0}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function userPublicContentHtml(userId, profile){
+  const name = profile.name || '乐生活用户';
+  const avatar = profile.avatar || resolveAvatarUrl(userId);
+  const userPosts = posts
+    .filter(p => p.user_id === userId && (p.visibility === 'public' || !p.visibility))
+    .sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
+  const totalLikes = userPosts.reduce((sum,p) => sum + (Number(p.likes) || 0), 0);
+  const isSelf = session && session.user && session.user.id === userId;
+  const followBtn = isSelf
+    ? `<button class="action-btn" onclick="closeUserPublicPage();switchTab('profile');">${uiIcon('user',16)}我的主页</button>`
+    : `<button class="action-btn" id="userPublicFollowBtn" onclick="togglePublicUserFollow('${String(userId).replace(/'/g,'')}','${String(name).replace(/'/g,'')}')">${isFollowing(userId) ? '已关注' : '关注'}</button>`;
+  return `
+    <div class="profile-header">
+      <div class="profile-bg"></div>
+      <div class="profile-top">
+        <div class="profile-avatar-large" style="overflow:hidden;padding:0;">
+          ${avatar ? `<img src="${avatar}" alt="" style="width:100%;height:100%;object-fit:cover;">` : `<span>${initials(name)}</span>`}
+        </div>
+        <div class="profile-basic-info">
+          <div class="profile-username">${escHtml(name)}</div>
+          <div class="profile-id">ID: ${String(userId).slice(0,6)}</div>
+          <div class="profile-location">乐生活社区用户</div>
+        </div>
+      </div>
+      <div class="profile-bio-section">
+        <div class="profile-meta">
+          <span class="profile-gender-age">${userPosts.length} 篇笔记</span>
+          <span class="profile-gender-age">♥ ${totalLikes} 获赞</span>
+        </div>
+      </div>
+      <div class="profile-actions">
+        ${followBtn}
+        <button class="action-btn" onclick="showToast('链接已复制')">${uiIcon('share',16)}分享</button>
+      </div>
+    </div>
+    <div class="profile-content">
+      <div class="content-tabs">
+        <button class="content-tab active">笔记</button>
+      </div>
+      <div class="content-body">
+        ${userPosts.length
+          ? `<div class="user-content-grid">${userPosts.map(publicUserCardHtml).join('')}</div>`
+          : `<div class="empty-state" style="text-align:center;padding:40px 20px;"><span style="display:block;margin:0 auto 10px;width:40px;height:40px;color:var(--ink-faint);">${uiIcon('edit',40)}</span><p style="color:var(--ink-soft);">这个用户还没有公开笔记</p></div>`}
+      </div>
+    </div>
+  `;
+}
+function renderUserPublicFollowState(userId){
+  const btn = document.getElementById('userPublicFollowBtn');
+  if(btn) btn.textContent = isFollowing(userId) ? '已关注' : '关注';
+}
+async function togglePublicUserFollow(userId, name){
+  await toggleFollowUser(userId, name);
+  renderUserPublicFollowState(userId);
+}
+async function openUserPublicPage(userId, fallbackName){
+  if(!userId){ showToast('没有找到用户主页'); return; }
+  if(session && session.user && userId === session.user.id){
+    closeSearchPage();
+    closeUserPublicPage();
+    switchTab('profile');
+    return;
+  }
+  closeSearchPage();
+  const overlay = document.getElementById('userPublicOverlay');
+  const body = document.getElementById('userPublicBody');
+  if(!overlay || !body) return;
+  overlay.classList.add('open');
+  body.innerHTML = '<div class="deals-empty-panel" style="margin:20px;">正在打开用户主页...</div>';
+  try {
+    let profile = { user_id: userId, name: fallbackName || '乐生活用户', avatar: resolveAvatarUrl(userId) };
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${encodeURIComponent(userId)}&select=user_id,name,avatar&limit=1`, { method:'GET' });
+    if(res.ok){
+      const rows = await res.json();
+      if(rows && rows[0]) profile = Object.assign(profile, rows[0]);
+    }
+    if(profile.avatar) window._avatarCache[userId] = profile.avatar;
+    body.innerHTML = userPublicContentHtml(userId, profile);
+  } catch(e){
+    console.warn('打开用户主页失败:', e.message);
+    body.innerHTML = '<div class="deals-empty-panel" style="margin:20px;">用户主页暂时打不开，请稍后再试。</div>';
+  }
+}
+function closeUserPublicPage(){
+  const overlay = document.getElementById('userPublicOverlay');
+  if(overlay) overlay.classList.remove('open');
+}
+async function openAuthorHome(userId){
+  if(!userId){ showToast('没有找到作者主页'); return; }
+  const isSelf = session && session.user && userId === session.user.id;
+  if(isSelf){
+    closePost();
+    switchTab('profile');
+    return;
+  }
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(userId)}&verified=eq.true&select=user_id,logo&limit=1`, { method:'GET' });
+    if(res.ok){
+      const rows = await res.json();
+      if(rows && rows[0]){
+        setMerchantLogoCache(userId, rows[0].logo || null);
+        closePost();
+        openMerchantPublicPage(userId);
+        return;
+      }
+    }
+  } catch(e){ console.warn('作者主页检查失败:', e.message); }
+  closePost();
+  const p = posts.find(item => item.user_id === userId);
+  openUserPublicPage(userId, p ? p.author : '');
+}
 /* 打开商家资料编辑面板 */
 function openMerchantEditSheet(){
   const m = currentMerchant || {};
@@ -2228,7 +2383,10 @@ function onMerchantImageSelected(event, type){
   reader.onload = ev => {
     compressImage(ev.target.result, compressedData => {
       if(!currentMerchant) currentMerchant = { user_id: session.user.id };
-      if(type === 'logo') currentMerchant.logo = compressedData;
+      if(type === 'logo'){
+        currentMerchant.logo = compressedData;
+        setMerchantLogoCache(session.user.id, compressedData);
+      }
       else currentMerchant.cover_image = compressedData;
       openMerchantEditSheet(); // 重新渲染面板，让新图片立即预览
     }, type === 'logo' ? 0.85 : 0.75, type === 'logo' ? 300 : 900);
@@ -2265,8 +2423,13 @@ async function saveMerchantProfile(){
     }
     if(!res.ok){ showToast('保存失败，请重试'); return; }
     currentMerchant = Object.assign({}, currentMerchant, payload, rows[0] || {});
+    setMerchantLogoCache(session.user.id, currentMerchant.logo || null);
     closeMerchantEditSheet();
     renderMerchantPage();
+    renderFeed();
+    const weekPage = document.getElementById('page-week');
+    if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
+    if(activePostId) renderPostModal();
     showToast('✓ 商家资料已保存');
   } catch(e){ console.warn('商家资料保存失败:', e.message); showToast('保存失败：' + e.message); }
 }
@@ -4241,7 +4404,7 @@ function renderSearchResultsHtml(r){
   if(r.users.length){
     html += `<div class="search-result-group-title">用户 (${r.users.length})</div>`;
     html += r.users.map(u => `
-      <div class="search-result-user" onclick="showToast('用户主页功能开发中')">
+      <div class="search-result-user" onclick="openUserPublicPage('${String(u.user_id || '').replace(/'/g, '')}','${String(u.name || '乐生活用户').replace(/'/g, '')}')">
         ${u.avatar
           ? `<span class="avatar" style="overflow:hidden;padding:0;width:40px;height:40px;"><img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;"></span>`
           : `<span class="avatar" style="background:${avatarColor(u.name||'友')};width:40px;height:40px;font-size:15px;">${initials(u.name||'友')}</span>`}
@@ -4396,12 +4559,14 @@ function renderPostModal(){
 
   const commentThreads = buildCommentThreads(p.comments || []);
   const commentsHtml = commentThreads.map(t => renderCommentThread(t)).join('') || `<div style="font-size:13px;color:var(--ink-faint);padding:6px 0 12px;">还没有评论,来说第一句吧</div>`;
+  const authorUserId = String(p.user_id || '').replace(/'/g, '');
+  const safeAuthor = escHtml(p.author || '乐生活用户');
 
   document.getElementById('postModal').innerHTML = `
     <div class="xhs-topbar">
       <button class="xhs-back" onclick="closePost()">‹</button>
-      ${avatarCircleHtml(p.author, p.user_id)}
-      <span class="xhs-author-name">${p.author}</span>
+      <span onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:inline-flex;">${avatarCircleHtml(p.author, p.user_id)}</span>
+      <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;">${safeAuthor}</span>
       ${p.user_id && (!session || !session.user || p.user_id !== session.user.id) ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
       ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${uiIcon('message',18)}</button>` : ''}
       ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" onclick="showToast('链接已复制')">↗</button>`}
@@ -6489,7 +6654,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 3.90 - 商家主页真实内容】');
+console.log('✓ 页面初始化完成 【版本 3.93 - 普通用户公开主页】');
 </script>
 </body>
 </html>
