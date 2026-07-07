@@ -482,6 +482,43 @@
     background:linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.35) 100%);
   }
   .play-badge svg{width:46px;height:46px;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.35));}
+  .media-watermark{
+    position:absolute;right:8px;bottom:8px;z-index:6;
+    display:inline-flex;align-items:center;gap:4px;
+    max-width:calc(100% - 16px);
+    padding:4px 8px;border-radius:999px;
+    background:rgba(255,255,255,.76);
+    color:rgba(42,39,33,.72);
+    border:1px solid rgba(255,255,255,.7);
+    font-size:10.5px;font-weight:800;line-height:1;
+    box-shadow:0 4px 14px rgba(42,39,33,.12);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    pointer-events:none;
+  }
+  .card-media .media-watermark{left:8px;right:auto;}
+  .modal-media .media-watermark{right:12px;left:auto;bottom:12px;font-size:12px;padding:6px 10px;}
+  .media-download-btn{
+    position:absolute;right:12px;top:12px;z-index:9;
+    border:1px solid rgba(255,255,255,.72);
+    background:rgba(255,255,255,.88);
+    color:var(--ink);
+    border-radius:999px;
+    padding:7px 11px;
+    font-size:12px;font-weight:800;
+    box-shadow:0 4px 14px rgba(42,39,33,.14);
+    cursor:pointer;
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+  }
+  .youtube-preview{
+    display:none;margin-top:8px;border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;background:#fff;
+  }
+  .youtube-preview.open{display:block;}
+  .youtube-preview-thumb{position:relative;aspect-ratio:16/9;background:var(--bg-alt);overflow:hidden;}
+  .youtube-preview-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .youtube-preview-note{padding:8px 10px;font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;}
   .cat-tag{
     position:absolute;top:8px;left:8px;z-index:2;
     display:inline-flex;align-items:center;gap:4px;
@@ -1242,7 +1279,8 @@
 
       <div class="form-field">
         <label>YouTube 视频链接 <span class="hint">(选填,粘贴视频链接自动嵌入)</span></label>
-        <input type="url" id="fYoutube" placeholder="https://www.youtube.com/watch?v=...">
+        <input type="url" id="fYoutube" placeholder="https://www.youtube.com/watch?v=..." oninput="updateYoutubePreview()">
+        <div class="youtube-preview" id="youtubePreview"></div>
       </div>
 
       <div class="toggle-row">
@@ -1578,6 +1616,8 @@ const ICONS = {
   phone:'<path d="M22 16.5v3a2 2 0 0 1-2.2 2 19 19 0 0 1-8.3-3A18.7 18.7 0 0 1 5.5 12 19 19 0 0 1 2.5 3.7 2 2 0 0 1 4.5 1.5h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L8.2 9.2a15 15 0 0 0 6.6 6.6l1.2-1.2a2 2 0 0 1 1.8-.6l3 .5a2 2 0 0 1 1.7 2z"></path>',
   map:'<path d="M12 21s7-5.5 7-12a7 7 0 0 0-14 0c0 6.5 7 12 7 12z"></path><circle cx="12" cy="9" r="2.5"></circle>',
   upload:'<path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path><path d="M5 20h14"></path>',
+  video:'<rect x="3" y="6" width="13" height="12" rx="2"></rect><path d="M16 10l5-3v10l-5-3z"></path>',
+  alert:'<path d="M12 3l10 18H2z"></path><path d="M12 9v5M12 17h.01"></path>',
   trash:'<path d="M4 7h16"></path><path d="M10 11v6M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path>',
   share:'<path d="M4 12v7h16v-7"></path><path d="M12 15V3"></path><path d="M7 8l5-5 5 5"></path>',
   lock:'<rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path>',
@@ -1722,7 +1762,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.14';
+const APP_VERSION = '4.20';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -2158,6 +2198,90 @@ async function fetchMerchantProfile(){
 function escAttr(s){ return (s == null ? '' : String(s)).replace(/"/g,'&quot;'); }
 function escHtml(s){
   return (s == null ? '' : String(s)).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function youtubeThumbUrl(id, quality='maxresdefault'){
+  return `https://img.youtube.com/vi/${encodeURIComponent(id)}/${quality}.jpg`;
+}
+function youtubeThumbImgHtml(id, alt=''){
+  return `<img src="${youtubeThumbUrl(id)}" onerror="this.onerror=null;this.src='${youtubeThumbUrl(id, 'hqdefault')}';" alt="${escHtml(alt)}">`;
+}
+function mediaWatermarkText(author){
+  return `乐生活 · ${author || '乐生活用户'}`;
+}
+function mediaWatermarkHtml(author){
+  return `<span class="media-watermark">${escHtml(mediaWatermarkText(author))}</span>`;
+}
+function currentPostImageSrc(p){
+  if(!p) return '';
+  if(Array.isArray(p.images) && p.images.length > 0){
+    const idx = Math.max(0, Math.min(currentImageIndex || 0, p.images.length - 1));
+    return p.images[idx];
+  }
+  return p.image || '';
+}
+function downloadCurrentPostImage(e){
+  if(e) e.stopPropagation();
+  const p = getPost();
+  const src = currentPostImageSrc(p);
+  if(!src){ showToast('当前帖子没有可下载图片'); return; }
+  downloadWatermarkedImage(src, p.author || '乐生活用户');
+}
+function downloadWatermarkedImage(src, author){
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const text = mediaWatermarkText(author);
+      const fontSize = Math.max(22, Math.round(w * 0.035));
+      ctx.font = `800 ${fontSize}px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif`;
+      const padX = Math.round(fontSize * 0.8);
+      const padY = Math.round(fontSize * 0.45);
+      const metrics = ctx.measureText(text);
+      const boxW = Math.ceil(metrics.width + padX * 2);
+      const boxH = Math.ceil(fontSize + padY * 2);
+      const x = Math.max(18, w - boxW - Math.round(w * 0.035));
+      const y = Math.max(18, h - boxH - Math.round(w * 0.035));
+      ctx.fillStyle = 'rgba(255,255,255,.78)';
+      roundRect(ctx, x, y, boxW, boxH, Math.round(boxH / 2));
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(42,39,33,.78)';
+      ctx.fillText(text, x + padX, y + padY + fontSize * 0.78);
+      canvas.toBlob(blob => {
+        if(!blob){ showToast('图片生成失败，请稍后重试'); return; }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `乐生活-${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+        showToast('已下载带水印图片');
+      }, 'image/jpeg', 0.92);
+    } catch(err){
+      console.warn('生成水印图片失败:', err.message);
+      showToast('该图片来源暂不支持浏览器加水印下载');
+    }
+  };
+  img.onerror = () => showToast('图片读取失败，无法生成水印');
+  img.src = src;
+}
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 function merchantNoteCardHtml(p, isOwnerPage){
   const img = p.image || (Array.isArray(p.images) && p.images[0]) || '';
@@ -3347,7 +3471,7 @@ function renderFeed(){
   }
   el.innerHTML = list.map(p=>{
     const media = p.youtube
-      ? `<img src="https://img.youtube.com/vi/${p.youtube}/hqdefault.jpg" alt=""><div class="play-badge">${playIcon()}</div>`
+      ? `${youtubeThumbImgHtml(p.youtube, p.title)}<div class="play-badge">${playIcon()}</div>`
       : p.image ? `<img src="${p.image}" alt="">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);">${uiIcon('edit',40)}</div>`;
     const stub = p.event ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
     return `
@@ -3355,6 +3479,7 @@ function renderFeed(){
       <div class="card-media">
         ${media}
         ${cardCategoryTag(p.category)}
+        ${mediaWatermarkHtml(p.author)}
         ${stub}
       </div>
       <div class="card-body">
@@ -3567,6 +3692,7 @@ function renderWeekFeed(){
           <div class="card-media">
             ${p.image ? `<img src="${p.image}" alt="">` : '<div style="width:100%;height:100%;background:var(--bg-alt);"></div>'}
             ${cardCategoryTag(p.category)}
+            ${mediaWatermarkHtml(p.author)}
           </div>
           <div class="card-body">
             <div class="card-title">${p.title}</div>
@@ -4072,10 +4198,17 @@ let adminPosts = [];
 let adminComments = [];
 let adminBanned = [];
 
-function adminHasAccess(){
+function adminHasAccess(silent=false){
   if(session && session.user && isDealAdmin) return true;
-  showToast('当前账号没有管理员权限');
+  if(!silent) showToast('当前账号没有管理员权限');
   return false;
+}
+function renderAdminStatus(title, detail=''){
+  const stats = document.getElementById('adminStats');
+  if(stats) stats.innerHTML = adminStatsHtml();
+  const body = document.getElementById('adminBody');
+  if(!body) return;
+  body.innerHTML = `<div class="admin-empty">${escHtml(title)}${detail ? `<br>${escHtml(detail)}` : ''}</div>`;
 }
 function adminTimeText(v){
   if(!v) return '';
@@ -4088,7 +4221,10 @@ function switchAdminTab(tab){
   renderAdminPanel();
 }
 async function loadAdminCenter(force){
-  if(!adminHasAccess()) return;
+  if(!adminHasAccess(true)){
+    renderAdminStatus('当前账号没有管理员权限。', '请先把当前 user_id 加入 deal_admins 表。');
+    return;
+  }
   const body = document.getElementById('adminBody');
   if(body) body.innerHTML = '<div class="admin-empty">正在读取管理数据...</div>';
   try {
@@ -4129,7 +4265,7 @@ function renderAdminPanel(){
   if(stats) stats.innerHTML = adminStatsHtml();
   const body = document.getElementById('adminBody');
   if(!body) return;
-  if(!adminHasAccess()){
+  if(!adminHasAccess(true)){
     body.innerHTML = '<div class="admin-empty">当前账号没有管理员权限。请先把当前 user_id 加入 deal_admins 表。</div>';
     return;
   }
@@ -4885,7 +5021,7 @@ function renderPostModal(){
   if(!p) return;
   let media = '';
   if(p.youtube){
-    media = `<div class="yt-wrap"><iframe src="https://www.youtube.com/embed/${p.youtube}" title="YouTube video" allowfullscreen></iframe></div>`;
+    media = `<div class="yt-wrap"><iframe src="https://www.youtube.com/embed/${p.youtube}?rel=0" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
   } else if(p.images && p.images.length > 0){
     media = `
       <div class="image-carousel" id="carousel">
@@ -4901,6 +5037,8 @@ function renderPostModal(){
   } else if(p.image){
     media = `<img src="${p.image}" alt="">`;
   }
+  const canDownloadImage = !p.youtube && (p.image || (Array.isArray(p.images) && p.images.length > 0));
+  const mediaTools = canDownloadImage ? `<button class="media-download-btn" onclick="downloadCurrentPostImage(event)">下载带水印图片</button>` : '';
 
   const eventBlock = p.event ? `
     <div class="event-box">
@@ -4930,7 +5068,7 @@ function renderPostModal(){
       ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" onclick="showToast('链接已复制')">↗</button>`}
     </div>
     <div class="xhs-scroll">
-      ${media ? `<div class="modal-media">${media}</div>` : ''}
+      ${media ? `<div class="modal-media">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
       ${p.images && p.images.length > 1 ? `<div class="carousel-dots" id="carouselDots">${p.images.map((_,i) => `<span class="dot ${i===0?'on':''}"></span>`).join('')}</div>` : ''}
       <div class="modal-body">
         <h2 class="modal-title display">${p.title}</h2>
@@ -5642,6 +5780,7 @@ function closeCompose(){
   document.getElementById('fTitle').value='';
   document.getElementById('fContent').value='';
   document.getElementById('fYoutube').value='';
+  updateYoutubePreview();
   document.getElementById('fCapacity').value='';
   document.getElementById('fDeadline').value='';
   document.getElementById('eventSwitch').classList.remove('on');
@@ -5958,6 +6097,7 @@ async function doYouTubeUpload(){
     /* 第三步：填入链接，标记完成 */
     v.uploadedId = videoId;
     document.getElementById('fYoutube').value = `https://youtu.be/${videoId}`;
+    updateYoutubePreview();
     if(txt) txt.textContent = '✓ 上传完成！';
     renderImageGrid();
     showToast('🎉 视频已上传到你的YouTube频道！');
@@ -5972,7 +6112,7 @@ async function doYouTubeUpload(){
   }
 }
 
-/* 自动截取视频第一帧作为封面（用户没手动传封面时使用） */
+/* 自动截取视频第1秒附近作为封面（用户没手动传封面时使用） */
 function captureVideoPoster(vObj){
   try {
     const video = document.createElement('video');
@@ -5982,8 +6122,9 @@ function captureVideoPoster(vObj){
     video.src = vObj.url;
     const cleanup = () => { video.src = ''; };
     video.onloadeddata = () => {
-      // 跳到0.1秒，避开纯黑首帧
-      video.currentTime = Math.min(0.1, (video.duration || 1) / 10);
+      // 跳到第1秒附近，避开纯黑首帧；过短视频则退到安全位置。
+      const duration = video.duration || 1;
+      video.currentTime = Math.min(1, Math.max(0.1, duration - 0.05));
     };
     video.onseeked = () => {
       try {
@@ -6366,10 +6507,54 @@ function toggleEvent(){
   document.getElementById('eventSwitch').classList.toggle('on', eventOn);
   document.getElementById('eventFields').classList.toggle('open', eventOn);
 }
+function cleanYoutubeId(value){
+  const m = String(value || '').match(/[A-Za-z0-9_-]{11}/);
+  return m ? m[0] : null;
+}
 function extractYoutubeId(url){
   if(!url) return null;
-  const m = url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{6,})/);
-  return m ? m[1] : null;
+  const raw = String(url).trim();
+  if(/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.replace(/^www\./, '').replace(/^m\./, '');
+    if(host === 'youtu.be') return cleanYoutubeId(parsed.pathname.split('/').filter(Boolean)[0]);
+    if(host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')){
+      const watchId = parsed.searchParams.get('v');
+      if(watchId) return cleanYoutubeId(watchId);
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if(['shorts','embed','live','v'].includes(parts[0])) return cleanYoutubeId(parts[1]);
+    }
+  } catch(e){
+    const m = raw.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?[^#]*v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : null;
+  }
+  return null;
+}
+function updateYoutubePreview(){
+  const input = document.getElementById('fYoutube');
+  const box = document.getElementById('youtubePreview');
+  if(!input || !box) return;
+  const raw = input.value.trim();
+  if(!raw){
+    box.classList.remove('open');
+    box.innerHTML = '';
+    return;
+  }
+  const id = extractYoutubeId(raw);
+  box.classList.add('open');
+  if(!id){
+    box.innerHTML = `<div class="youtube-preview-note">${uiIcon('alert',14)} 没有识别到有效的 YouTube 链接，请检查后再发布。</div>`;
+    return;
+  }
+  box.innerHTML = `
+    <div class="youtube-preview-thumb">
+      ${youtubeThumbImgHtml(id, 'YouTube封面')}
+      <div class="play-badge">${playIcon()}</div>
+      <span class="media-watermark">乐生活 · 视频封面</span>
+    </div>
+    <div class="youtube-preview-note">${uiIcon('video',14)} 已识别视频，发布后会用 YouTube 封面作为帖子封面。</div>
+  `;
 }
 /* ====== Supabase 写入操作 ====== */
 function supabaseHeaders(){
@@ -6463,6 +6648,7 @@ function editPost(id){
   document.getElementById('fTitle').value = p.title || '';
   document.getElementById('fContent').value = p.content || '';
   document.getElementById('fYoutube').value = p.youtube ? ('https://youtu.be/' + p.youtube) : '';
+  updateYoutubePreview();
   document.getElementById('fLocation').value = p.location || '';
   document.getElementById('titleCount').textContent = (p.title || '').length;
   document.getElementById('contentCount').textContent = (p.content || '').length;
@@ -6529,6 +6715,11 @@ async function submitPost(){
   if(content.length > 1000){ showToast('内容不能超过1000个字'); return; }
 
   const ytId = extractYoutubeId(ytUrl);
+  if(ytUrl && !ytId){
+    showToast('YouTube链接无法识别，请粘贴正确的视频链接');
+    updateYoutubePreview();
+    return;
+  }
   let event = null;
   if(eventOn){
     const cap = parseInt(document.getElementById('fCapacity').value) || 10;
@@ -6963,14 +7154,22 @@ window.switchTab = function(tab){
     initProfilePage();
   } else if(tab === 'admin'){
     console.log('🛠 管理后台已切换');
-    if(isDealAdmin || (session && session.user)){
-      checkDealAdmin().then(ok => {
-        updateDealReviewButton();
-        if(ok) loadAdminCenter(true);
-        else renderAdminPanel();
-      });
-    } else {
+    if(!(session && session.user)){
       renderAdminPanel();
+    } else {
+      renderAdminStatus('正在检查管理员权限…');
+      checkDealAdmin()
+        .then(ok => {
+          updateDealReviewButton();
+          if(ok) loadAdminCenter(true);
+          else renderAdminPanel();
+        })
+        .catch(e => {
+          console.warn('管理员权限检查失败:', e.message);
+          isDealAdmin = false;
+          updateDealReviewButton();
+          renderAdminStatus('管理后台暂时无法打开。', friendlyDealReviewError(e.message));
+        });
     }
   }
 };
@@ -7030,7 +7229,7 @@ setInterval(() => {
 
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
-console.log('✓ 页面初始化完成 【版本 4.14 - 手机顶部适配修复】');
+console.log('✓ 页面初始化完成 【版本 4.20 - 水印、管理页与 YouTube 修复】');
 </script>
 </body>
 </html>
