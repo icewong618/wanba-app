@@ -126,7 +126,7 @@
   /* category chips - die-cut tag style */
   .chip-row{
     display:flex;gap:10px;overflow-x:auto;
-    max-width:var(--container-w);margin:10px auto 0;padding:0 20px 2px;
+    max-width:var(--container-w);margin:8px auto 0;padding:0 20px;
     scrollbar-width:none;
   }
   .chip-row::-webkit-scrollbar{display:none;}
@@ -772,12 +772,19 @@
   .nav-label{font-size:11px;letter-spacing:.5px;}
 
   /* ---- pages ---- */
-  .page{display:none;animation:fadeIn .3s ease;}
+  .page{
+    display:none;animation:fadeIn .3s ease;
+    max-width:var(--container-w);margin:0 auto;padding-bottom:100px;
+  }
   .page.active{display:block;}
+  #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
+  #page-home{padding-top:4px;}
+  #page-home .feed{margin-top:0;}
+  #page-deals,#page-profile{padding-left:0;padding-right:0;}
   .page-header{
     display:flex;align-items:center;gap:8px;
-    font-size:18px;font-weight:800;padding:16px 20px 12px;
-    margin-bottom:12px;border-bottom:1px solid var(--line);color:var(--ink);
+    font-size:18px;font-weight:800;padding:10px 0 9px;
+    margin-bottom:8px;border-bottom:1px solid var(--line);color:var(--ink);
   }
   .profile-header{
     background:var(--card);border-bottom:1px solid var(--line);
@@ -1695,7 +1702,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.11';
+const APP_VERSION = '4.12';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -6903,7 +6910,7 @@ window.switchTab = function(tab){
   // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
   const topWrap = document.querySelector('header.top .top-wrap');
   if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
-  // 4.11：绿色quick-bar只在首页显示，避免省钱/消息/本周页顶部留白过大
+  // 4.12：绿色quick-bar只在首页显示，避免省钱/消息/本周页顶部留白过大
   const quickBar = document.querySelector('header.top .quick-bar');
   if(quickBar) quickBar.style.display = (tab === 'home') ? '' : 'none';
   
@@ -6997,7 +7004,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 4.11 - 顶部间距二次修复】');
+console.log('✓ 页面初始化完成 【版本 4.12 - 顶部内容贴合修复】');
 </script>
 </body>
 </html>
