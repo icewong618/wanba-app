@@ -58,7 +58,7 @@
     backdrop-filter:blur(8px);
     border-bottom:1px solid var(--line);
     padding:0;
-    margin-bottom:8px;
+    margin-bottom:0;
   }
   .quick-bar{
     background:var(--sage-dark);
@@ -126,7 +126,7 @@
   /* category chips - die-cut tag style */
   .chip-row{
     display:flex;gap:10px;overflow-x:auto;
-    max-width:var(--container-w);margin:12px auto 0;padding:0 20px 10px;
+    max-width:var(--container-w);margin:10px auto 0;padding:0 20px 2px;
     scrollbar-width:none;
   }
   .chip-row::-webkit-scrollbar{display:none;}
@@ -146,7 +146,7 @@
   .chip .dot-emoji{font-size:14px;}
 
   /* ---------- deals page (省钱) ---------- */
-  .deals-hero{padding:10px 16px 8px;background:var(--bg);border-bottom:1px solid var(--line);}
+  .deals-hero{padding:6px 16px 8px;background:var(--bg);border-bottom:1px solid var(--line);}
   .deals-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
   .deals-title{font-size:18px;font-weight:900;color:var(--ink);line-height:1.2;}
   .deals-sub{font-size:12px;color:var(--ink-faint);margin-top:3px;}
@@ -264,6 +264,36 @@
   .deal-actions{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px;}
   .deal-actions button{flex:1;padding:8px;border-radius:8px;background:var(--bg-alt);color:var(--ink-soft);font-size:12px;font-weight:600;}
   .deal-actions button.liked{background:var(--berry-light);color:var(--berry-dark);}
+  /* ---------- admin center ---------- */
+  .admin-shell{background:var(--card);min-height:72vh;padding:16px 16px 92px;}
+  .admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;}
+  .admin-title{font-size:20px;font-weight:900;color:var(--ink);}
+  .admin-sub{font-size:12px;color:var(--ink-faint);line-height:1.55;margin-top:3px;}
+  .admin-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none;}
+  .admin-tabs::-webkit-scrollbar{display:none;}
+  .admin-tab{flex-shrink:0;border:1px solid var(--line);border-radius:999px;background:var(--bg-alt);color:var(--ink-soft);padding:8px 13px;font-size:12px;font-weight:900;}
+  .admin-tab.active{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .admin-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:4px 0 14px;}
+  .admin-stat{border:1px solid var(--line);background:var(--bg-alt);border-radius:12px;padding:10px;}
+  .admin-stat b{display:block;font-size:18px;color:var(--ink);line-height:1.1;}
+  .admin-stat span{display:block;font-size:10.5px;color:var(--ink-faint);margin-top:4px;font-weight:800;}
+  .admin-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;}
+  .admin-search{flex:1;border:1px solid var(--line);border-radius:999px;padding:10px 13px;font-size:13px;background:var(--card);font-family:inherit;}
+  .admin-list{display:flex;flex-direction:column;gap:10px;}
+  .admin-row{border:1px solid var(--line);border-radius:13px;background:var(--card);padding:12px;box-shadow:var(--shadow);}
+  .admin-row-top{display:flex;align-items:flex-start;gap:10px;}
+  .admin-row-main{flex:1;min-width:0;}
+  .admin-row-title{font-size:14px;font-weight:900;color:var(--ink);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .admin-row-meta{font-size:11px;color:var(--ink-faint);line-height:1.55;margin-top:4px;word-break:break-all;}
+  .admin-row-text{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .admin-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .admin-actions button{border-radius:999px;padding:7px 11px;border:1px solid var(--line);background:var(--bg-alt);color:var(--ink-soft);font-size:11.5px;font-weight:900;}
+  .admin-actions button.primary{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .admin-actions button.danger{background:#fff;border-color:rgba(217,83,79,.4);color:#b44742;}
+  .admin-badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;background:var(--sage-light);color:var(--sage-dark);font-size:10px;font-weight:900;}
+  .admin-badge.warn{background:var(--berry-light);color:var(--berry-dark);}
+  .admin-empty{border:1px dashed var(--line-strong);border-radius:14px;padding:28px 18px;text-align:center;color:var(--ink-faint);font-size:13px;line-height:1.65;background:var(--bg-alt);}
+  @media(max-width:520px){.admin-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.admin-head{align-items:stretch;flex-direction:column;}}
   @media(min-width:720px){.food-price-grid{grid-template-columns:repeat(4, minmax(0,1fr));}.deals-result-meta{grid-template-columns:repeat(4, minmax(0,1fr));}}
 
   /* ---------- 商家专属底部导航（含中间凸起"发布"按钮）---------- */
@@ -1265,6 +1295,7 @@
       <button onclick="openDealRankings()">实时热榜</button>
       <button id="dealReviewBtn" style="display:none;" onclick="openDealReviewQueue()">优惠审核</button>
       <button id="merchantReviewBtn" style="display:none;" onclick="openMerchantApplicationReviewQueue()">商家审核</button>
+      <button id="siteAdminBtn" style="display:none;" onclick="switchTab('admin')">管理后台</button>
     </div>
     <div id="dealsSearchPanel" class="deals-search-panel" style="display:none;"></div>
   </div>
@@ -1325,9 +1356,33 @@
       <div style="display:flex;gap:8px;">
         <button id="authLoginBtn" onclick="openAuth()" style="padding:7px 16px;border-radius:999px;border:none;background:var(--sage);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">登录 / 注册</button>
         <button id="authRegBtn" style="display:none;"></button>
+        <button id="profileAdminBtn" onclick="switchTab('admin')" style="display:none;padding:7px 14px;border-radius:999px;border:1px solid var(--sage);background:#fff;color:var(--sage-dark);font-size:12px;font-weight:800;cursor:pointer;">管理后台</button>
         <button id="authOutBtn" onclick="switchAccount()" style="display:none;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink-faint);font-size:12px;font-weight:600;cursor:pointer;">切换账号</button>
+</div>
+<div class="page" id="page-admin" style="display:none;">
+  <div class="admin-shell">
+    <div class="admin-head">
+      <div>
+        <div class="admin-title">管理后台</div>
+        <div class="admin-sub">查看注册用户、近期发帖和评论回复。删除和封禁操作只对管理员开放。</div>
       </div>
+      <button class="merchant-apply-top-btn" style="display:inline-flex;" onclick="switchTab('deals')">${uiIcon('bag',13)}审核优惠</button>
     </div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-admin-tab="users" onclick="switchAdminTab('users')">注册用户</button>
+      <button class="admin-tab" data-admin-tab="posts" onclick="switchAdminTab('posts')">近期发帖</button>
+      <button class="admin-tab" data-admin-tab="comments" onclick="switchAdminTab('comments')">评论回复</button>
+      <button class="admin-tab" data-admin-tab="banned" onclick="switchAdminTab('banned')">封禁记录</button>
+    </div>
+    <div class="admin-stats" id="adminStats"></div>
+    <div class="admin-toolbar">
+      <input class="admin-search" id="adminSearchInput" placeholder="搜索用户、帖子、评论..." oninput="renderAdminPanel()">
+      <button class="deals-search-btn" onclick="loadAdminCenter(true)">刷新</button>
+    </div>
+    <div id="adminBody"></div>
+  </div>
+</div>
+</div>
     <div id="profileViewMode">
       <!-- Profile Header：头像在左，名字/ID/IP在右侧齐平（小红书风格） -->
       <div style="display:flex;align-items:center;gap:16px;padding:10px 4px 18px;margin-bottom:4px;">
@@ -1640,7 +1695,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.02';
+const APP_VERSION = '4.11';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -3692,6 +3747,10 @@ function updateDealReviewButton(){
   if(btn) btn.style.display = isDealAdmin ? '' : 'none';
   const merchantBtn = document.getElementById('merchantReviewBtn');
   if(merchantBtn) merchantBtn.style.display = isDealAdmin ? '' : 'none';
+  const adminBtn = document.getElementById('siteAdminBtn');
+  if(adminBtn) adminBtn.style.display = isDealAdmin ? '' : 'none';
+  const profileAdminBtn = document.getElementById('profileAdminBtn');
+  if(profileAdminBtn) profileAdminBtn.style.display = isDealAdmin ? '' : 'none';
 }
 function friendlyDealReviewError(message){
   const raw = String(message || '');
@@ -3977,6 +4036,221 @@ async function openDealReviewQueue(){
     console.warn('读取优惠审核池失败:', e.message);
     renderDealPanelShell('优惠审核', '请确认 3.70 管理审核 SQL 已执行。', `<div class="deals-empty-panel">${friendlyDealReviewError(e.message)}</div>`);
   }
+}
+
+/* ================= 管理后台：用户 / 帖子 / 评论 ================= */
+let adminTab = 'users';
+let adminUsers = [];
+let adminPosts = [];
+let adminComments = [];
+let adminBanned = [];
+
+function adminHasAccess(){
+  if(session && session.user && isDealAdmin) return true;
+  showToast('当前账号没有管理员权限');
+  return false;
+}
+function adminTimeText(v){
+  if(!v) return '';
+  try { return new Date(v).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }); }
+  catch(e){ return String(v); }
+}
+function switchAdminTab(tab){
+  adminTab = tab;
+  document.querySelectorAll('.admin-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.adminTab === tab));
+  renderAdminPanel();
+}
+async function loadAdminCenter(force){
+  if(!adminHasAccess()) return;
+  const body = document.getElementById('adminBody');
+  if(body) body.innerHTML = '<div class="admin-empty">正在读取管理数据...</div>';
+  try {
+    const [uRes, pRes, cRes, bRes] = await Promise.all([
+      authedFetch(`${SUPABASE_URL}/rest/v1/profiles?select=user_id,name,avatar,updated_at&order=updated_at.desc&limit=120`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/posts?select=id,user_id,author,title,content,category,created_at,time,likes&order=created_at.desc&limit=80`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=id,post_id,user_id,name,text,created_at,parent_id,reply_to_name&order=created_at.desc&limit=120`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses?select=user_id,status,reason,created_at,created_by&order=created_at.desc&limit=120`, { method:'GET' })
+    ]);
+    if(!uRes.ok) throw new Error(await uRes.text());
+    if(!pRes.ok) throw new Error(await pRes.text());
+    if(!cRes.ok) throw new Error(await cRes.text());
+    adminUsers = await uRes.json();
+    adminPosts = await pRes.json();
+    adminComments = await cRes.json();
+    adminBanned = bRes.ok ? await bRes.json() : [];
+    renderAdminPanel();
+  } catch(e){
+    console.warn('管理后台读取失败:', e.message);
+    if(body) body.innerHTML = `<div class="admin-empty">管理数据暂时无法读取。<br>${escHtml(friendlyDealReviewError(e.message))}</div>`;
+  }
+}
+function adminFiltered(list, fields){
+  const kw = (document.getElementById('adminSearchInput')?.value || '').trim().toLowerCase();
+  if(!kw) return list;
+  return list.filter(row => fields.some(f => String(row[f] || '').toLowerCase().includes(kw)));
+}
+function adminStatsHtml(){
+  return `
+    <div class="admin-stat"><b>${adminUsers.length}</b><span>注册资料</span></div>
+    <div class="admin-stat"><b>${adminPosts.length}</b><span>近期帖子</span></div>
+    <div class="admin-stat"><b>${adminComments.length}</b><span>近期评论</span></div>
+    <div class="admin-stat"><b>${adminBanned.length}</b><span>封禁记录</span></div>
+  `;
+}
+function renderAdminPanel(){
+  const stats = document.getElementById('adminStats');
+  if(stats) stats.innerHTML = adminStatsHtml();
+  const body = document.getElementById('adminBody');
+  if(!body) return;
+  if(!adminHasAccess()){
+    body.innerHTML = '<div class="admin-empty">当前账号没有管理员权限。请先把当前 user_id 加入 deal_admins 表。</div>';
+    return;
+  }
+  if(adminTab === 'users') return renderAdminUsers(body);
+  if(adminTab === 'posts') return renderAdminPosts(body);
+  if(adminTab === 'comments') return renderAdminComments(body);
+  renderAdminBanned(body);
+}
+function renderAdminUsers(body){
+  const counts = {};
+  adminPosts.forEach(p => { if(p.user_id) counts[p.user_id] = (counts[p.user_id] || 0) + 1; });
+  const banned = new Set(adminBanned.filter(x => x.status === 'banned').map(x => x.user_id));
+  const rows = adminFiltered(adminUsers, ['name','user_id']);
+  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(u => `
+    <div class="admin-row">
+      <div class="admin-row-top">
+        ${avatarCircleSizedHtml(u.name || '用户', u.user_id, 42)}
+        <div class="admin-row-main">
+          <div class="admin-row-title">${escHtml(u.name || '未命名用户')} ${banned.has(u.user_id) ? '<span class="admin-badge warn">已封禁</span>' : ''}</div>
+          <div class="admin-row-meta">ID: ${uidToNumericId(String(u.user_id))}<br>user_id: ${escHtml(u.user_id || '')}<br>更新：${adminTimeText(u.updated_at) || '未知'} · 发帖 ${counts[u.user_id] || 0}</div>
+        </div>
+      </div>
+      <div class="admin-actions">
+        <button class="primary" onclick="openUserPublicPage('${String(u.user_id || '').replace(/'/g,'')}','${String(u.name || '').replace(/'/g,'')}')">查看主页</button>
+        <button onclick="adminShowUserPosts('${String(u.user_id || '').replace(/'/g,'')}')">看TA帖子</button>
+        <button class="danger" onclick="adminBanUser('${String(u.user_id || '').replace(/'/g,'')}','${String(u.name || '').replace(/'/g,'')}')">封禁用户</button>
+      </div>
+    </div>
+  `).join('')}</div>` : '<div class="admin-empty">没有找到用户资料。只有写入 profiles 表的账号会显示在这里。</div>';
+}
+function renderAdminPosts(body){
+  const rows = adminFiltered(adminPosts, ['title','author','content','user_id']);
+  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(p => `
+    <div class="admin-row">
+      <div class="admin-row-top">
+        ${avatarCircleSizedHtml(p.author || '用户', p.user_id, 38)}
+        <div class="admin-row-main">
+          <div class="admin-row-title">${escHtml(p.title || '无标题')}</div>
+          <div class="admin-row-meta">${escHtml(p.author || '用户')} · ${escHtml(normalizeCategory(p.category))} · ${adminTimeText(p.created_at) || escHtml(p.time || '')}<br>post_id: ${escHtml(p.id)}</div>
+          <div class="admin-row-text">${escHtml(p.content || '')}</div>
+        </div>
+      </div>
+      <div class="admin-actions">
+        <button class="primary" onclick="openPost(${JSON.stringify(p.id)})">查看帖子</button>
+        <button onclick="adminShowUserPosts('${String(p.user_id || '').replace(/'/g,'')}')">看作者</button>
+        <button class="danger" onclick="adminDeletePost(${JSON.stringify(p.id)})">删除帖子</button>
+      </div>
+    </div>
+  `).join('')}</div>` : '<div class="admin-empty">没有找到近期帖子。</div>';
+}
+function renderAdminComments(body){
+  const postTitle = id => (adminPosts.find(p => String(p.id) === String(id)) || {}).title || '';
+  const rows = adminFiltered(adminComments, ['name','text','user_id','post_id']);
+  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(c => `
+    <div class="admin-row">
+      <div class="admin-row-top">
+        ${avatarCircleSizedHtml(c.name || '用户', c.user_id, 38)}
+        <div class="admin-row-main">
+          <div class="admin-row-title">${escHtml(c.name || '用户')} ${c.parent_id ? '<span class="admin-badge">回复</span>' : '<span class="admin-badge">评论</span>'}</div>
+          <div class="admin-row-meta">${adminTimeText(c.created_at)} · post_id: ${escHtml(c.post_id || '')}<br>${escHtml(postTitle(c.post_id))}</div>
+          <div class="admin-row-text">${c.reply_to_name ? `回复 @${escHtml(c.reply_to_name)}：` : ''}${escHtml(c.text || '')}</div>
+        </div>
+      </div>
+      <div class="admin-actions">
+        <button class="primary" onclick="openPost(${JSON.stringify(c.post_id)})">查看帖子</button>
+        <button class="danger" onclick="adminDeleteComment(${JSON.stringify(c.id)})">删除评论</button>
+      </div>
+    </div>
+  `).join('')}</div>` : '<div class="admin-empty">没有找到近期评论。</div>';
+}
+function renderAdminBanned(body){
+  const rows = adminFiltered(adminBanned, ['user_id','status','reason']);
+  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(r => `
+    <div class="admin-row">
+      <div class="admin-row-title">${escHtml(r.status || 'status')} <span class="admin-badge warn">用户状态</span></div>
+      <div class="admin-row-meta">user_id: ${escHtml(r.user_id || '')}<br>时间：${adminTimeText(r.created_at)}<br>原因：${escHtml(r.reason || '未填写')}</div>
+      <div class="admin-actions">
+        <button class="danger" onclick="adminUnbanUser('${String(r.user_id || '').replace(/'/g,'')}')">解除封禁</button>
+      </div>
+    </div>
+  `).join('')}</div>` : '<div class="admin-empty">暂无封禁记录。</div>';
+}
+function adminShowUserPosts(userId){
+  adminTab = 'posts';
+  document.getElementById('adminSearchInput').value = userId || '';
+  document.querySelectorAll('.admin-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.adminTab === 'posts'));
+  renderAdminPanel();
+}
+async function adminDeletePost(id){
+  if(!adminHasAccess()) return;
+  if(!confirm('确认删除这篇帖子？删除后不可恢复。')) return;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/posts?id=eq.${id}`, { method:'DELETE' });
+    if(!res.ok) throw new Error(await res.text());
+    posts = posts.filter(p => String(p.id) !== String(id));
+    adminPosts = adminPosts.filter(p => String(p.id) !== String(id));
+    savePosts();
+    renderFeed();
+    renderAdminPanel();
+    showToast('帖子已删除');
+  } catch(e){ showToast('删除失败：' + friendlyDealReviewError(e.message)); }
+}
+async function adminDeleteComment(id){
+  if(!adminHasAccess()) return;
+  if(!confirm('确认删除这条评论/回复？')) return;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?id=eq.${id}`, { method:'DELETE' });
+    if(!res.ok) throw new Error(await res.text());
+    adminComments = adminComments.filter(c => String(c.id) !== String(id));
+    posts.forEach(p => { if(Array.isArray(p.comments)) p.comments = p.comments.filter(c => String(c.id) !== String(id)); });
+    savePosts();
+    if(activePostId) renderPostModal();
+    renderAdminPanel();
+    showToast('评论已删除');
+  } catch(e){ showToast('删除失败：' + friendlyDealReviewError(e.message)); }
+}
+async function adminBanUser(userId, name){
+  if(!adminHasAccess()) return;
+  const reason = prompt(`封禁 ${name || '该用户'} 的原因（可留空）`, '违规内容');
+  if(reason === null) return;
+  try {
+    const payload = { status:'banned', reason: reason || '', created_by: session.user.id, updated_at: new Date().toISOString() };
+    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses?user_id=eq.${userId}`, {
+      method:'PATCH',
+      body: JSON.stringify(payload)
+    });
+    let rows = res.ok ? await res.json() : [];
+    if(!rows.length){
+      res = await authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses`, {
+        method:'POST',
+        body: JSON.stringify(Object.assign({ user_id: userId }, payload))
+      });
+    }
+    if(!res.ok) throw new Error(await res.text());
+    await loadAdminCenter(true);
+    showToast('已记录封禁');
+  } catch(e){ showToast('封禁失败：' + friendlyDealReviewError(e.message)); }
+}
+async function adminUnbanUser(userId){
+  if(!adminHasAccess()) return;
+  if(!confirm('确认解除该用户封禁？')) return;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses?user_id=eq.${userId}`, { method:'DELETE' });
+    if(!res.ok) throw new Error(await res.text());
+    adminBanned = adminBanned.filter(r => r.user_id !== userId);
+    renderAdminPanel();
+    showToast('已解除封禁');
+  } catch(e){ showToast('操作失败：' + friendlyDealReviewError(e.message)); }
 }
 function dealReportToDealPayload(r){
   const current = r.current_price === null || r.current_price === undefined || r.current_price === '' ? null : Number(r.current_price);
@@ -6629,9 +6903,9 @@ window.switchTab = function(tab){
   // 2.93：顶部brand区（logo/slogan/搜索/发布/分类chip）仅主页显示，其余页只留绿色quick-bar
   const topWrap = document.querySelector('header.top .top-wrap');
   if(topWrap) topWrap.style.display = (tab === 'home') ? '' : 'none';
-  // 2.94修复：绿色quick-bar（遛娃/免费活动/本月活动/本周末活动）在首页/本周/消息都显示，只在"我的"页隐藏
+  // 4.11：绿色quick-bar只在首页显示，避免省钱/消息/本周页顶部留白过大
   const quickBar = document.querySelector('header.top .quick-bar');
-  if(quickBar) quickBar.style.display = (tab === 'profile') ? 'none' : '';
+  if(quickBar) quickBar.style.display = (tab === 'home') ? '' : 'none';
   
   // 根据标签页处理逻辑（首页/导航栏不区分商家与普通用户，两者完全一致）
   if(tab === 'home'){
@@ -6650,6 +6924,17 @@ window.switchTab = function(tab){
     console.log('👤 个人资料页面已切换，初始化页面...');
     updateProfileDisplay();
     initProfilePage();
+  } else if(tab === 'admin'){
+    console.log('🛠 管理后台已切换');
+    if(isDealAdmin || (session && session.user)){
+      checkDealAdmin().then(ok => {
+        updateDealReviewButton();
+        if(ok) loadAdminCenter(true);
+        else renderAdminPanel();
+      });
+    } else {
+      renderAdminPanel();
+    }
   }
 };
 
@@ -6712,7 +6997,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 4.02 - 个人页商家入口与顶部留白修复】');
+console.log('✓ 页面初始化完成 【版本 4.11 - 顶部间距二次修复】');
 </script>
 </body>
 </html>
