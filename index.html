@@ -58,7 +58,7 @@
     backdrop-filter:blur(8px);
     border-bottom:1px solid var(--line);
     padding:0;
-    margin-bottom:28px;
+    margin-bottom:8px;
   }
   .quick-bar{
     background:var(--sage-dark);
@@ -126,7 +126,7 @@
   /* category chips - die-cut tag style */
   .chip-row{
     display:flex;gap:10px;overflow-x:auto;
-    max-width:var(--container-w);margin:16px auto 0;padding:0 20px 16px;
+    max-width:var(--container-w);margin:12px auto 0;padding:0 20px 10px;
     scrollbar-width:none;
   }
   .chip-row::-webkit-scrollbar{display:none;}
@@ -198,6 +198,14 @@
   .merchant-apply-actions{display:flex;gap:8px;margin-top:12px;}
   .merchant-apply-actions button{flex:1;border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:800;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);}
   .merchant-apply-actions .primary{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .merchant-apply-top-btn{
+    flex-shrink:0;display:none;align-items:center;gap:5px;
+    padding:7px 11px;border-radius:999px;border:1px solid var(--line);
+    background:var(--card);color:var(--sage-dark);
+    font-size:12px;font-weight:800;white-space:nowrap;
+  }
+  .merchant-apply-top-btn.pending{color:var(--ink-faint);background:var(--bg-alt);}
+  .merchant-apply-top-btn.rejected{color:var(--berry-dark);border-color:rgba(194,65,107,.25);background:var(--berry-light);}
   .merchant-real-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
   .merchant-real-card{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden;cursor:pointer;}
   .merchant-real-card .thumb{height:108px;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--ink-faint);overflow:hidden;}
@@ -1329,7 +1337,10 @@
           <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="onAvatarFileSelected(event)">
         </div>
         <div style="flex:1;min-width:0;text-align:left;">
-          <div style="font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;" id="userNameDisplay">未登录用户</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+            <div style="font-size:19px;font-weight:700;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="userNameDisplay">未登录用户</div>
+            <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="openMerchantApplySheet()">${uiIcon('store',13)}成为商家</button>
+          </div>
           <div style="font-size:12px;color:var(--ink-faint);margin-bottom:2px;" id="userIdDisplay">ID：登录后生成</div>
           <div style="font-size:12px;color:var(--ink-faint);" id="userLocationDisplay">IP属地：登录后显示</div>
         </div>
@@ -1629,7 +1640,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '4.01';
+const APP_VERSION = '4.02';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 
 function clearOldVersionCache(){
@@ -2510,49 +2521,32 @@ function merchantApplicationFriendlyError(message){
 }
 function renderMerchantApplyBlock(){
   const el = document.getElementById('merchantApplyBlock');
+  const topBtn = document.getElementById('merchantApplyTopBtn');
   if(!el) return;
-  if(currentMerchant && currentMerchant.verified){ el.innerHTML = ''; return; }
+  el.innerHTML = '';
+  if(topBtn){
+    topBtn.style.display = 'none';
+    topBtn.className = 'merchant-apply-top-btn';
+    topBtn.innerHTML = `${uiIcon('store',13)}成为商家`;
+    topBtn.title = '申请成为认证商家';
+  }
+  if(currentMerchant && currentMerchant.verified){ return; }
   if(!(session && session.user)){
-    el.innerHTML = `
-      <div class="merchant-apply-card">
-        <div class="merchant-apply-head">
-          <div>
-            <div class="merchant-apply-title">${uiIcon('store',15)} 商家认证</div>
-            <div class="merchant-apply-sub">登录后可以提交店铺认证，审核通过后开启商家主页、优惠提交和 AI 发布。</div>
-          </div>
-          <span class="merchant-apply-status">游客</span>
-        </div>
-        <div class="merchant-apply-actions"><button class="primary" onclick="openAuth()">登录 / 注册</button></div>
-      </div>
-    `;
     return;
   }
   const app = currentMerchantApplication;
   const status = app && app.status ? app.status : '';
-  const statusText = merchantApplicationStatusLabel(status);
-  const rejectedNote = status === 'rejected' && app.review_note ? `<div class="merchant-apply-sub" style="margin-top:8px;color:#b44742;">原因：${escHtml(app.review_note)}</div>` : '';
-  const title = status === 'pending' ? '认证申请已提交' : status === 'rejected' ? '重新提交商家认证' : '申请成为认证商家';
-  const sub = status === 'pending'
-    ? '乐生活管理员会核对店铺信息，通过后这里会自动切换为商家主页。'
-    : status === 'rejected'
-      ? '你可以根据审核意见修改资料后重新提交。'
-      : '认证后可使用商家主页、AI 发一篇、商家优惠提交等功能。';
-  const btnText = status === 'pending' ? '查看申请' : status === 'rejected' ? '重新申请' : '开始申请';
-  el.innerHTML = `
-    <div class="merchant-apply-card">
-      <div class="merchant-apply-head">
-        <div>
-          <div class="merchant-apply-title">${uiIcon('store',15)} ${title}</div>
-          <div class="merchant-apply-sub">${sub}</div>
-          ${rejectedNote}
-        </div>
-        <span class="merchant-apply-status ${status || ''}">${statusText}</span>
-      </div>
-      <div class="merchant-apply-actions">
-        <button class="primary" onclick="openMerchantApplySheet()">${btnText}</button>
-      </div>
-    </div>
-  `;
+  if(topBtn){
+    const label = status === 'pending' ? '审核中' : status === 'rejected' ? '重新申请' : '成为商家';
+    topBtn.style.display = 'inline-flex';
+    topBtn.className = `merchant-apply-top-btn ${status || ''}`;
+    topBtn.innerHTML = `${uiIcon('store',13)}${label}`;
+    topBtn.title = status === 'pending'
+      ? '商家认证申请审核中'
+      : status === 'rejected'
+        ? '商家认证未通过，可重新申请'
+        : '申请成为认证商家';
+  }
 }
 async function loadMerchantApplicationStatus(refreshProfile){
   if(!(session && session.user)){
@@ -6718,7 +6712,7 @@ homePage.classList.add('active');
 homePage.style.display = 'block';
 const firstNavBtn = document.querySelector('[data-tab="home"]');
 if(firstNavBtn) firstNavBtn.classList.add('active');
-console.log('✓ 页面初始化完成 【版本 4.01 - 验收修复版】');
+console.log('✓ 页面初始化完成 【版本 4.02 - 个人页商家入口与顶部留白修复】');
 </script>
 </body>
 </html>
