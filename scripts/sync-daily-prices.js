@@ -139,7 +139,7 @@ async function fetchJsonFeed(product) {
   const response = await fetch(product.source_url, {
     headers: {
       'accept': 'application/json,text/plain,*/*',
-      'user-agent': 'leshenghuo-price-cache/4.52'
+      'user-agent': 'leshenghuo-price-cache/4.53'
     }
   });
   if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
@@ -393,7 +393,7 @@ async function fetchPublicProductPage(product) {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'accept-language': 'en-US,en;q=0.9',
         'cache-control': 'no-cache',
-        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.52; +https://escoopcity.com)'
+        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.53; +https://escoopcity.com)'
       }
     });
   } catch (_) {
@@ -459,8 +459,19 @@ async function resolvePrice(product) {
   if (product.source_type === 'json_feed' || product.source_type === 'affiliate_feed' || product.source_type === 'manual_json') {
     return fetchJsonFeed(product);
   }
-  if (product.source_type === 'public_page' || product.source_type === 'experimental_scraper') {
+  if ([
+    'public_page',
+    'experimental_scraper',
+    'github_scraper',
+    'playwright_config',
+    'target_scraper_config',
+    'costco_product_tracker',
+    'walmart_omkar_api'
+  ].includes(product.source_type)) {
     return fetchPublicProductPage(product);
+  }
+  if (product.source_type && !['manual', 'manual_verified', 'community_report'].includes(product.source_type)) {
+    throw new Error(`Unsupported source_type ${product.source_type}`);
   }
   return {
     current_price: numberOrNull(product.manual_current_price),
