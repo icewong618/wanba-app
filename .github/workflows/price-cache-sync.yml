@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: 代码/4.51
+        working-directory: 代码/4.52
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
