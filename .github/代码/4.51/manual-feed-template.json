@@ -1,0 +1,18 @@
+[
+  {
+    "category": "food",
+    "product_name": "Long Grain Rice 20 lb",
+    "product_name_cn": "长粒米 20 lb",
+    "original_price": null,
+    "current_price": 12.98,
+    "unit": "20 lb",
+    "location": "网购 / 门店自取",
+    "source_url": "https://example.com/product-or-weekly-ad",
+    "image_url": null,
+    "is_hot": false,
+    "is_food_low_price": true,
+    "stock_status": "unknown",
+    "price_note": "价格以来源链接最终显示为准",
+    "ai_summary_cn": "适合家庭囤货，建议按每磅价格比较。"
+  }
+]
