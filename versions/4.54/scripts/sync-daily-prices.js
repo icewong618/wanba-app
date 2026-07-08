@@ -16,6 +16,60 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false }
 });
 
+const RETAILER_ADAPTERS = {
+  walmart: {
+    selectors: ['[itemprop="price"]', '[data-testid="price-wrap"]', '[data-testid="price"]', '[data-automation-id="product-price"]', 'span[itemprop="price"]'],
+    productUrlPattern: /\/ip\//i,
+    searchResultSelector: '[data-item-id], [data-testid="item-stack"], [role="group"]',
+    priceRange: [0.1, 5000],
+    suspiciousIfSearchUrl: true
+  },
+  target: {
+    selectors: ['[data-test="product-price"]', '[data-test="product-price-value"]', '[data-test="product-price-block"]', '[itemprop="price"]'],
+    productUrlPattern: /\/p\//i,
+    searchResultSelector: '[data-test="@web/site-top-of-funnel/ProductCardWrapper"], [data-test="product-card"]',
+    priceRange: [0.1, 5000],
+    suspiciousIfSearchUrl: true
+  },
+  bestbuy: {
+    selectors: ['.priceView-customer-price span', '[data-testid="customer-price"]', '[itemprop="price"]'],
+    productUrlPattern: /\/site\/.+\/\d+\.p/i,
+    searchResultSelector: '.sku-item, [data-testid="product-card"]',
+    priceRange: [5, 10000],
+    suspiciousIfSearchUrl: true
+  },
+  macys: {
+    selectors: ['[data-testid="price"]', '.price', '[itemprop="price"]'],
+    productUrlPattern: /\/shop\/product\//i,
+    searchResultSelector: '[data-testid="product-card"], .productThumbnail',
+    priceRange: [1, 10000],
+    suspiciousIfSearchUrl: true
+  },
+  aldi: {
+    selectors: ['[itemprop="price"]', '[data-testid*="price"]', '.price'],
+    productUrlPattern: /weekly-specials|products/i,
+    searchResultSelector: '[class*="product"], article',
+    priceRange: [0.1, 500],
+    suspiciousIfSearchUrl: false
+  },
+  costco: {
+    selectors: ['[automation-id="productPriceOutput"]', '[data-testid="product-price"]', '.price', '[itemprop="price"]'],
+    productUrlPattern: /\.product\./i,
+    searchResultSelector: '[automation-id*="product"], [class*="product"]',
+    priceRange: [0.1, 50000],
+    suspiciousIfSearchUrl: true,
+    experimental: true
+  },
+  samsclub: {
+    selectors: ['[data-testid="price-characteristic"]', '[data-testid="price"]', '.Price-characteristic', '[itemprop="price"]'],
+    productUrlPattern: /\/p\/|prod/i,
+    searchResultSelector: '[data-testid*="product"], [class*="product"]',
+    priceRange: [0.1, 50000],
+    suspiciousIfSearchUrl: true,
+    experimental: true
+  }
+};
+
 function numberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
   const cleaned = String(value).replace(/[^0-9.]/g, '');
@@ -85,7 +139,7 @@ async function fetchJsonFeed(product) {
   const response = await fetch(product.source_url, {
     headers: {
       'accept': 'application/json,text/plain,*/*',
-      'user-agent': 'leshenghuo-price-cache/4.51'
+      'user-agent': 'leshenghuo-price-cache/4.54'
     }
   });
   if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
@@ -165,49 +219,6 @@ function detectBlockedPage(html) {
     text.includes('blocked');
 }
 
-const PRICE_SELECTORS_BY_RETAILER = {
-  walmart: [
-    '[itemprop="price"]',
-    '[data-testid="price-wrap"]',
-    '[data-testid="price"]',
-    '[data-automation-id="product-price"]',
-    'span[itemprop="price"]'
-  ],
-  target: [
-    '[data-test="product-price"]',
-    '[data-test="product-price-value"]',
-    '[data-test="product-price-block"]',
-    '[itemprop="price"]'
-  ],
-  bestbuy: [
-    '.priceView-customer-price span',
-    '[data-testid="customer-price"]',
-    '[itemprop="price"]'
-  ],
-  macys: [
-    '[data-testid="price"]',
-    '.price',
-    '[itemprop="price"]'
-  ],
-  aldi: [
-    '[itemprop="price"]',
-    '[data-testid*="price"]',
-    '.price'
-  ],
-  costco: [
-    '[automation-id="productPriceOutput"]',
-    '[data-testid="product-price"]',
-    '.price',
-    '[itemprop="price"]'
-  ],
-  samsclub: [
-    '[data-testid="price-characteristic"]',
-    '[data-testid="price"]',
-    '.Price-characteristic',
-    '[itemprop="price"]'
-  ]
-};
-
 function extractPriceFromText(text) {
   const candidates = String(text || '').match(/\$\s?\d{1,5}(?:,\d{3})*(?:\.\d{2})?/g) || [];
   for (const candidate of candidates) {
@@ -215,6 +226,61 @@ function extractPriceFromText(text) {
     if (price !== null) return price;
   }
   return null;
+}
+
+function getAdapter(product) {
+  return Object.assign({}, RETAILER_ADAPTERS[product.retailer_key] || {}, product.source_config || {});
+}
+
+function costcoProductId(product) {
+  const fromKey = String(product.product_key || '').match(/\d{5,}/)?.[0];
+  if (fromKey) return fromKey;
+  const fromUrl = String(product.source_url || '').match(/(?:product\.|\/)(\d{5,})(?:\.html|\?|$)/i)?.[1];
+  return fromUrl || null;
+}
+
+function sourceUrlCandidates(product) {
+  const urls = [product.source_url].filter(Boolean);
+  if (product.retailer_key === 'costco') {
+    const id = costcoProductId(product);
+    if (id) {
+      urls.push(`https://www.costco.com/.product.${id}.html`);
+      urls.push(`https://www.costco.com/CatalogSearch?keyword=${encodeURIComponent(id)}`);
+    }
+    const clean = String(product.source_url || '').split('?')[0];
+    if (clean && clean !== product.source_url) urls.push(clean);
+  }
+  return [...new Set(urls)];
+}
+
+function isLikelyProductUrl(product, adapter) {
+  if (!adapter.productUrlPattern) return true;
+  return adapter.productUrlPattern.test(product.source_url || '');
+}
+
+function productKeywords(product) {
+  const raw = `${product.product_name || ''} ${product.product_name_cn || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 3 && !['with','and','the','sale','large'].includes(w));
+  return [...new Set(raw)].slice(0, 8);
+}
+
+function matchScore(text, keywords) {
+  const lower = String(text || '').toLowerCase();
+  return keywords.reduce((sum, kw) => sum + (lower.includes(kw) ? 1 : 0), 0);
+}
+
+function reviewFlags(product, price, finalUrl, adapter, extractionSource) {
+  const flags = [];
+  const range = adapter.priceRange || [0.01, 100000];
+  if (price < range[0] || price > range[1]) flags.push('price_out_of_range');
+  if (adapter.suspiciousIfSearchUrl && !isLikelyProductUrl(product, adapter)) flags.push('search_url_needs_exact_product');
+  if (adapter.experimental) flags.push('experimental_retailer');
+  if (extractionSource === 'body_text') flags.push('weak_body_text_match');
+  if (finalUrl && adapter.productUrlPattern && !adapter.productUrlPattern.test(finalUrl)) flags.push('final_url_not_product_page');
+  return flags;
 }
 
 async function loadChromium() {
@@ -226,10 +292,11 @@ async function loadChromium() {
 
 async function fetchWithBrowser(product) {
   if (!ENABLE_BROWSER_SCRAPER) throw new Error('Browser scraper disabled');
+  const adapter = getAdapter(product);
   const browserType = await loadChromium();
   const browser = await browserType.launch({
     headless: true,
-    args: ['--disable-blink-features=AutomationControlled']
+    args: ['--disable-blink-features=AutomationControlled', '--disable-http2']
   });
   const context = await browser.newContext({
     locale: 'en-US',
@@ -239,7 +306,18 @@ async function fetchWithBrowser(product) {
   });
   const page = await context.newPage();
   try {
-    await page.goto(product.source_url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    let navigationError = null;
+    let navigatedUrl = null;
+    for (const candidate of sourceUrlCandidates(product)) {
+      try {
+        await page.goto(candidate, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        navigatedUrl = candidate;
+        break;
+      } catch (error) {
+        navigationError = error;
+      }
+    }
+    if (!navigatedUrl) throw navigationError || new Error('Navigation failed');
     await page.waitForTimeout(3500);
     const title = await page.title().catch(() => '');
     const bodyText = await page.locator('body').innerText({ timeout: 8000 }).catch(() => '');
@@ -248,30 +326,73 @@ async function fetchWithBrowser(product) {
     }
 
     const selectors = [
-      ...((product.source_config && product.source_config.price_selector) ? [product.source_config.price_selector] : []),
-      ...(PRICE_SELECTORS_BY_RETAILER[product.retailer_key] || []),
+      ...((adapter.price_selector) ? [adapter.price_selector] : []),
+      ...(adapter.selectors || []),
       '[itemprop="price"]'
     ];
 
     let price = null;
     let selectorUsed = null;
+    let extractionSource = null;
+    const keywords = productKeywords(product);
+
+    if (!isLikelyProductUrl(product, adapter) && adapter.searchResultSelector) {
+      const cards = await page.locator(adapter.searchResultSelector).all().catch(() => []);
+      let bestCard = null;
+      let bestScore = 0;
+      for (const card of cards.slice(0, 12)) {
+        const cardText = await card.innerText({ timeout: 1500 }).catch(() => '');
+        const score = matchScore(cardText, keywords);
+        if (score > bestScore) {
+          bestScore = score;
+          bestCard = card;
+        }
+      }
+      if (bestCard && bestScore > 0) {
+        for (const selector of selectors) {
+          const elements = await bestCard.locator(selector).all().catch(() => []);
+          for (const el of elements.slice(0, 5)) {
+            const text = await el.innerText({ timeout: 1500 }).catch(() => '');
+            price = extractPriceFromText(text);
+            if (price !== null) {
+              selectorUsed = selector;
+              extractionSource = `search_card_score_${bestScore}`;
+              break;
+            }
+          }
+          if (price !== null) break;
+        }
+        if (price === null) {
+          const cardText = await bestCard.innerText({ timeout: 1500 }).catch(() => '');
+          price = extractPriceFromText(cardText);
+          if (price !== null) extractionSource = `search_card_text_score_${bestScore}`;
+        }
+      }
+    }
+
     for (const selector of selectors) {
+      if (price !== null) break;
       const elements = await page.locator(selector).all().catch(() => []);
       for (const el of elements.slice(0, 8)) {
         const text = await el.innerText({ timeout: 1500 }).catch(() => '');
         price = extractPriceFromText(text);
         if (price !== null) {
           selectorUsed = selector;
+          extractionSource = 'page_selector';
           break;
         }
       }
       if (price !== null) break;
     }
-    if (price === null) price = extractPriceFromText(bodyText);
+    if (price === null) {
+      price = extractPriceFromText(bodyText);
+      if (price !== null) extractionSource = 'body_text';
+    }
     if (price === null) throw new Error('No price found with browser');
 
     const finalUrl = page.url();
     const stockText = bodyText.toLowerCase();
+    const flags = reviewFlags(product, price, finalUrl, adapter, extractionSource);
     return {
       current_price: price,
       original_price: null,
@@ -280,6 +401,9 @@ async function fetchWithBrowser(product) {
       raw_payload: {
         source: 'playwright_browser',
         selector_used: selectorUsed,
+        extraction_source: extractionSource,
+        needs_review: flags.length > 0,
+        review_flags: flags,
         final_url: finalUrl,
         title,
         extracted_at: new Date().toISOString()
@@ -301,7 +425,7 @@ async function fetchPublicProductPage(product) {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'accept-language': 'en-US,en;q=0.9',
         'cache-control': 'no-cache',
-        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.51; +https://escoopcity.com)'
+        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.54; +https://escoopcity.com)'
       }
     });
   } catch (_) {
@@ -321,16 +445,21 @@ async function fetchPublicProductPage(product) {
   const regexPrice = config.price_regex ? numberOrNull((html.match(new RegExp(config.price_regex, 'i')) || [])[1]) : null;
   const currentPrice = jsonLdPrice?.price ?? metaPrice ?? regexPrice;
   if (currentPrice === null) return fetchWithBrowser(product);
+  const adapter = getAdapter(product);
+  const finalUrl = response.url || product.source_url;
+  const flags = reviewFlags(product, currentPrice, finalUrl, adapter, jsonLdPrice ? 'json_ld' : (metaPrice ? 'meta' : 'regex'));
 
   return {
     current_price: currentPrice,
     original_price: null,
     stock_status: /out of stock|sold out|unavailable/i.test(stripHtml(html)) ? 'out_of_stock' : 'unknown',
-    source_url: response.url || product.source_url,
+    source_url: finalUrl,
     raw_payload: {
       source: 'public_page_fetch',
-      final_url: response.url || product.source_url,
+      final_url: finalUrl,
       json_ld: jsonLdPrice?.raw || null,
+      needs_review: flags.length > 0,
+      review_flags: flags,
       extracted_at: new Date().toISOString()
     }
   };
@@ -362,8 +491,19 @@ async function resolvePrice(product) {
   if (product.source_type === 'json_feed' || product.source_type === 'affiliate_feed' || product.source_type === 'manual_json') {
     return fetchJsonFeed(product);
   }
-  if (product.source_type === 'public_page' || product.source_type === 'experimental_scraper') {
+  if ([
+    'public_page',
+    'experimental_scraper',
+    'github_scraper',
+    'playwright_config',
+    'target_scraper_config',
+    'costco_product_tracker',
+    'walmart_omkar_api'
+  ].includes(product.source_type)) {
     return fetchPublicProductPage(product);
+  }
+  if (product.source_type && !['manual', 'manual_verified', 'community_report'].includes(product.source_type)) {
+    throw new Error(`Unsupported source_type ${product.source_type}`);
   }
   return {
     current_price: numberOrNull(product.manual_current_price),
@@ -400,7 +540,9 @@ async function upsertDailyCache(product, resolved) {
     stock_status: resolved.stock_status || 'unknown',
     is_food_low_price: product.is_food_low_price === true,
     is_hot: product.is_hot === true,
-    price_note: '每日缓存价格。用户访问页面时只读取乐生活数据库，不实时抓取外部网站。',
+    price_note: resolved.raw_payload && resolved.raw_payload.needs_review
+      ? '每日缓存价格。自动抓取结果需要复核，请以官网最终显示为准。'
+      : '每日缓存价格。用户访问页面时只读取乐生活数据库，不实时抓取外部网站。',
     ai_summary_cn: product.ai_summary_cn,
     raw_payload: resolved.raw_payload || {},
     refreshed_at: now.toISOString(),

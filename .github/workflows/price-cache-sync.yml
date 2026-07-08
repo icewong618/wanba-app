@@ -9,6 +9,9 @@ jobs:
   sync-daily-prices:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: versions/4.54
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
