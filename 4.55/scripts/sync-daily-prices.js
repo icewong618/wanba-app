@@ -22,21 +22,24 @@ const RETAILER_ADAPTERS = {
     productUrlPattern: /\/ip\//i,
     searchResultSelector: '[data-item-id], [data-testid="item-stack"], [role="group"]',
     priceRange: [0.1, 5000],
-    suspiciousIfSearchUrl: true
+    suspiciousIfSearchUrl: true,
+    dealLandingPattern: /\/shop\/deals\/flash-deals/i
   },
   target: {
     selectors: ['[data-test="product-price"]', '[data-test="product-price-value"]', '[data-test="product-price-block"]', '[itemprop="price"]'],
     productUrlPattern: /\/p\//i,
     searchResultSelector: '[data-test="@web/site-top-of-funnel/ProductCardWrapper"], [data-test="product-card"]',
     priceRange: [0.1, 5000],
-    suspiciousIfSearchUrl: true
+    suspiciousIfSearchUrl: true,
+    dealLandingPattern: /\/weekly-ad/i
   },
   bestbuy: {
     selectors: ['.priceView-customer-price span', '[data-testid="customer-price"]', '[itemprop="price"]'],
     productUrlPattern: /\/site\/.+\/\d+\.p/i,
     searchResultSelector: '.sku-item, [data-testid="product-card"]',
     priceRange: [5, 10000],
-    suspiciousIfSearchUrl: true
+    suspiciousIfSearchUrl: true,
+    dealLandingPattern: /deal-of-the-day/i
   },
   macys: {
     selectors: ['[data-testid="price"]', '.price', '[itemprop="price"]'],
@@ -50,7 +53,8 @@ const RETAILER_ADAPTERS = {
     productUrlPattern: /weekly-specials|products/i,
     searchResultSelector: '[class*="product"], article',
     priceRange: [0.1, 500],
-    suspiciousIfSearchUrl: false
+    suspiciousIfSearchUrl: false,
+    dealLandingPattern: /weekly-specials|weekly-ads/i
   },
   costco: {
     selectors: ['[automation-id="productPriceOutput"]', '[data-testid="product-price"]', '.price', '[itemprop="price"]'],
@@ -139,7 +143,7 @@ async function fetchJsonFeed(product) {
   const response = await fetch(product.source_url, {
     headers: {
       'accept': 'application/json,text/plain,*/*',
-      'user-agent': 'leshenghuo-price-cache/4.54'
+      'user-agent': 'leshenghuo-price-cache/4.55'
     }
   });
   if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
@@ -254,8 +258,87 @@ function sourceUrlCandidates(product) {
 }
 
 function isLikelyProductUrl(product, adapter) {
+  if (product.source_type === 'fixed_product_page') return true;
   if (!adapter.productUrlPattern) return true;
   return adapter.productUrlPattern.test(product.source_url || '');
+}
+
+function sourceCadence(product) {
+  if (product.source_type === 'weekly_ad_page') return 'weekly';
+  if (product.source_type === 'daily_deals_page') return 'daily';
+  if (product.source_type === 'fixed_product_page') return 'daily';
+  return product.refresh_frequency_hours >= 168 ? 'weekly' : 'daily';
+}
+
+function landingPageTitle(product) {
+  const cadence = sourceCadence(product);
+  if (product.source_type === 'weekly_ad_page') return `${product.retailer_name} 官方每周优惠`;
+  if (product.source_type === 'daily_deals_page') return `${product.retailer_name} 官方限时优惠`;
+  return cadence === 'weekly' ? `${product.retailer_name} 官方周优惠` : `${product.retailer_name} 官方优惠`;
+}
+
+function landingPageNote(product) {
+  if (product.source_type === 'weekly_ad_page') {
+    return '官方周优惠入口。只有抓到具体商品名和价格时才显示价格；否则请进入官网核对当周广告。';
+  }
+  if (product.source_type === 'daily_deals_page') {
+    return '官方限时优惠入口。用于发现今日值得看的折扣，不把分类页价格伪装成单品价格。';
+  }
+  return '官方来源入口。价格和库存以官网最终显示为准。';
+}
+
+async function fetchDealLandingPage(product) {
+  if (!product.source_url) throw new Error('Missing source_url');
+  const adapter = getAdapter(product);
+  let finalUrl = product.source_url;
+  let title = landingPageTitle(product);
+  let blocked = false;
+
+  try {
+    const response = await fetch(product.source_url, {
+      redirect: 'follow',
+      headers: {
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'accept-language': 'en-US,en;q=0.9',
+        'cache-control': 'no-cache',
+        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.55; +https://escoopcity.com)'
+      }
+    });
+    if (response.ok) {
+      finalUrl = response.url || product.source_url;
+      const html = await response.text();
+      blocked = detectBlockedPage(html);
+      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      if (titleMatch) title = stripHtml(titleMatch[1]).slice(0, 120) || title;
+    } else {
+      blocked = true;
+    }
+  } catch (_) {
+    blocked = true;
+  }
+
+  return {
+    current_price: null,
+    original_price: null,
+    stock_status: blocked ? 'unknown' : 'in_stock',
+    source_url: finalUrl,
+    price_note: landingPageNote(product),
+    raw_payload: {
+      source: 'official_deal_landing',
+      landing_type: product.source_type,
+      cadence: sourceCadence(product),
+      title,
+      blocked,
+      final_url: finalUrl,
+      needs_review: true,
+      review_flags: [
+        product.source_type === 'weekly_ad_page' ? 'weekly_ad_landing_page' : 'daily_deals_landing_page',
+        'no_specific_product_price'
+      ],
+      deal_landing_pattern_matched: adapter.dealLandingPattern ? adapter.dealLandingPattern.test(finalUrl) : null,
+      extracted_at: new Date().toISOString()
+    }
+  };
 }
 
 function productKeywords(product) {
@@ -425,7 +508,7 @@ async function fetchPublicProductPage(product) {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'accept-language': 'en-US,en;q=0.9',
         'cache-control': 'no-cache',
-        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.54; +https://escoopcity.com)'
+        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.55; +https://escoopcity.com)'
       }
     });
   } catch (_) {
@@ -485,6 +568,9 @@ async function fetchBestBuy(product) {
 }
 
 async function resolvePrice(product) {
+  if (product.source_type === 'weekly_ad_page' || product.source_type === 'daily_deals_page') {
+    return fetchDealLandingPage(product);
+  }
   if (product.source_type === 'bestbuy_api' || product.source_type === 'official_api') {
     if (product.retailer_key === 'bestbuy') return fetchBestBuy(product);
   }
@@ -498,7 +584,8 @@ async function resolvePrice(product) {
     'playwright_config',
     'target_scraper_config',
     'costco_product_tracker',
-    'walmart_omkar_api'
+    'walmart_omkar_api',
+    'fixed_product_page'
   ].includes(product.source_type)) {
     return fetchPublicProductPage(product);
   }
@@ -519,7 +606,9 @@ async function upsertDailyCache(product, resolved) {
   const math = priceMath(originalPrice, currentPrice);
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
-  const expires = new Date(now.getTime() + 30 * 60 * 60 * 1000);
+  const refreshHours = Number(product.refresh_frequency_hours || 24);
+  const expires = new Date(now.getTime() + Math.max(30, refreshHours + 6) * 60 * 60 * 1000);
+  const isLandingPage = ['weekly_ad_page', 'daily_deals_page'].includes(product.source_type);
 
   const payload = {
     product_id: product.id,
@@ -540,9 +629,11 @@ async function upsertDailyCache(product, resolved) {
     stock_status: resolved.stock_status || 'unknown',
     is_food_low_price: product.is_food_low_price === true,
     is_hot: product.is_hot === true,
-    price_note: resolved.raw_payload && resolved.raw_payload.needs_review
-      ? '每日缓存价格。自动抓取结果需要复核，请以官网最终显示为准。'
-      : '每日缓存价格。用户访问页面时只读取乐生活数据库，不实时抓取外部网站。',
+    price_note: resolved.price_note || (isLandingPage
+      ? landingPageNote(product)
+      : (resolved.raw_payload && resolved.raw_payload.needs_review
+        ? '每日缓存价格。自动抓取结果需要复核，请以官网最终显示为准。'
+        : '每日缓存价格。用户访问页面时只读取乐生活数据库，不实时抓取外部网站。')),
     ai_summary_cn: product.ai_summary_cn,
     raw_payload: resolved.raw_payload || {},
     refreshed_at: now.toISOString(),
@@ -564,6 +655,15 @@ async function upsertDailyCache(product, resolved) {
       updated_at: now.toISOString()
     })
     .eq('id', product.id);
+}
+
+function shouldRefreshProduct(product) {
+  const hours = Number(product.refresh_frequency_hours || 24);
+  if (!product.last_success_at) return true;
+  const last = new Date(product.last_success_at).getTime();
+  if (!Number.isFinite(last)) return true;
+  const ageHours = (Date.now() - last) / (60 * 60 * 1000);
+  return ageHours >= Math.max(1, hours - 0.25);
 }
 
 async function markProductError(product, message) {
@@ -590,6 +690,10 @@ async function main() {
     for (const product of products) {
       checked += 1;
       try {
+        if (!shouldRefreshProduct(product)) {
+          skipped += 1;
+          continue;
+        }
         const resolved = await resolvePrice(product);
         if (resolved.current_price === null && !product.ai_summary_cn) {
           skipped += 1;
