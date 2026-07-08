@@ -1,9 +1,11 @@
 const { createClient } = require('@supabase/supabase-js');
+let chromium;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BESTBUY_API_KEY = process.env.BESTBUY_API_KEY || '';
 const TRIGGER_TYPE = process.env.TRIGGER_TYPE || 'scheduled';
+const ENABLE_BROWSER_SCRAPER = process.env.ENABLE_BROWSER_SCRAPER !== 'false';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -19,6 +21,12 @@ function numberOrNull(value) {
   const cleaned = String(value).replace(/[^0-9.]/g, '');
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
+}
+
+function realisticPriceOrNull(value) {
+  const price = numberOrNull(value);
+  if (price === null || price <= 0 || price > 100000) return null;
+  return price;
 }
 
 function readPath(obj, path) {
@@ -77,7 +85,7 @@ async function fetchJsonFeed(product) {
   const response = await fetch(product.source_url, {
     headers: {
       'accept': 'application/json,text/plain,*/*',
-      'user-agent': 'leshenghuo-price-cache/4.50'
+      'user-agent': 'leshenghuo-price-cache/4.51'
     }
   });
   if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
@@ -157,20 +165,151 @@ function detectBlockedPage(html) {
     text.includes('blocked');
 }
 
+const PRICE_SELECTORS_BY_RETAILER = {
+  walmart: [
+    '[itemprop="price"]',
+    '[data-testid="price-wrap"]',
+    '[data-testid="price"]',
+    '[data-automation-id="product-price"]',
+    'span[itemprop="price"]'
+  ],
+  target: [
+    '[data-test="product-price"]',
+    '[data-test="product-price-value"]',
+    '[data-test="product-price-block"]',
+    '[itemprop="price"]'
+  ],
+  bestbuy: [
+    '.priceView-customer-price span',
+    '[data-testid="customer-price"]',
+    '[itemprop="price"]'
+  ],
+  macys: [
+    '[data-testid="price"]',
+    '.price',
+    '[itemprop="price"]'
+  ],
+  aldi: [
+    '[itemprop="price"]',
+    '[data-testid*="price"]',
+    '.price'
+  ],
+  costco: [
+    '[automation-id="productPriceOutput"]',
+    '[data-testid="product-price"]',
+    '.price',
+    '[itemprop="price"]'
+  ],
+  samsclub: [
+    '[data-testid="price-characteristic"]',
+    '[data-testid="price"]',
+    '.Price-characteristic',
+    '[itemprop="price"]'
+  ]
+};
+
+function extractPriceFromText(text) {
+  const candidates = String(text || '').match(/\$\s?\d{1,5}(?:,\d{3})*(?:\.\d{2})?/g) || [];
+  for (const candidate of candidates) {
+    const price = realisticPriceOrNull(candidate);
+    if (price !== null) return price;
+  }
+  return null;
+}
+
+async function loadChromium() {
+  if (!chromium) {
+    ({ chromium } = require('playwright'));
+  }
+  return chromium;
+}
+
+async function fetchWithBrowser(product) {
+  if (!ENABLE_BROWSER_SCRAPER) throw new Error('Browser scraper disabled');
+  const browserType = await loadChromium();
+  const browser = await browserType.launch({
+    headless: true,
+    args: ['--disable-blink-features=AutomationControlled']
+  });
+  const context = await browser.newContext({
+    locale: 'en-US',
+    timezoneId: 'America/Los_Angeles',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    viewport: { width: 1365, height: 900 }
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(product.source_url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(3500);
+    const title = await page.title().catch(() => '');
+    const bodyText = await page.locator('body').innerText({ timeout: 8000 }).catch(() => '');
+    if (detectBlockedPage(`${title} ${bodyText}`)) {
+      throw new Error('Browser page blocked or captcha required');
+    }
+
+    const selectors = [
+      ...((product.source_config && product.source_config.price_selector) ? [product.source_config.price_selector] : []),
+      ...(PRICE_SELECTORS_BY_RETAILER[product.retailer_key] || []),
+      '[itemprop="price"]'
+    ];
+
+    let price = null;
+    let selectorUsed = null;
+    for (const selector of selectors) {
+      const elements = await page.locator(selector).all().catch(() => []);
+      for (const el of elements.slice(0, 8)) {
+        const text = await el.innerText({ timeout: 1500 }).catch(() => '');
+        price = extractPriceFromText(text);
+        if (price !== null) {
+          selectorUsed = selector;
+          break;
+        }
+      }
+      if (price !== null) break;
+    }
+    if (price === null) price = extractPriceFromText(bodyText);
+    if (price === null) throw new Error('No price found with browser');
+
+    const finalUrl = page.url();
+    const stockText = bodyText.toLowerCase();
+    return {
+      current_price: price,
+      original_price: null,
+      stock_status: stockText.includes('out of stock') || stockText.includes('sold out') ? 'out_of_stock' : 'unknown',
+      source_url: finalUrl || product.source_url,
+      raw_payload: {
+        source: 'playwright_browser',
+        selector_used: selectorUsed,
+        final_url: finalUrl,
+        title,
+        extracted_at: new Date().toISOString()
+      }
+    };
+  } finally {
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
+  }
+}
+
 async function fetchPublicProductPage(product) {
   if (!product.source_url) throw new Error('Missing source_url');
-  const response = await fetch(product.source_url, {
-    redirect: 'follow',
-    headers: {
-      'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'accept-language': 'en-US,en;q=0.9',
-      'cache-control': 'no-cache',
-      'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.50; +https://escoopcity.com)'
-    }
-  });
-  if (!response.ok) throw new Error(`Public page HTTP ${response.status}`);
+  let response;
+  try {
+    response = await fetch(product.source_url, {
+      redirect: 'follow',
+      headers: {
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'accept-language': 'en-US,en;q=0.9',
+        'cache-control': 'no-cache',
+        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.51; +https://escoopcity.com)'
+      }
+    });
+  } catch (_) {
+    return fetchWithBrowser(product);
+  }
+  if (!response.ok) return fetchWithBrowser(product);
   const html = await response.text();
-  if (detectBlockedPage(html)) throw new Error('Public page blocked or captcha required');
+  if (detectBlockedPage(html)) return fetchWithBrowser(product);
 
   const jsonLdPrice = firstPriceFromJsonLd(html);
   const metaPrice = numberOrNull(extractMetaContent(html, [
@@ -181,7 +320,7 @@ async function fetchPublicProductPage(product) {
   const config = product.source_config || {};
   const regexPrice = config.price_regex ? numberOrNull((html.match(new RegExp(config.price_regex, 'i')) || [])[1]) : null;
   const currentPrice = jsonLdPrice?.price ?? metaPrice ?? regexPrice;
-  if (currentPrice === null) throw new Error('No price found in public page');
+  if (currentPrice === null) return fetchWithBrowser(product);
 
   return {
     current_price: currentPrice,
@@ -189,7 +328,7 @@ async function fetchPublicProductPage(product) {
     stock_status: /out of stock|sold out|unavailable/i.test(stripHtml(html)) ? 'out_of_stock' : 'unknown',
     source_url: response.url || product.source_url,
     raw_payload: {
-      source: 'public_page',
+      source: 'public_page_fetch',
       final_url: response.url || product.source_url,
       json_ld: jsonLdPrice?.raw || null,
       extracted_at: new Date().toISOString()
