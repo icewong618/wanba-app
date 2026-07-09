@@ -143,7 +143,7 @@ async function fetchJsonFeed(product) {
   const response = await fetch(product.source_url, {
     headers: {
       'accept': 'application/json,text/plain,*/*',
-      'user-agent': 'leshenghuo-price-cache/4.58'
+      'user-agent': 'leshenghuo-price-cache/4.59'
     }
   });
   if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
@@ -301,7 +301,7 @@ async function fetchDealLandingPage(product) {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'accept-language': 'en-US,en;q=0.9',
         'cache-control': 'no-cache',
-        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.58; +https://escoopcity.com)'
+        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.59; +https://escoopcity.com)'
       }
     });
     if (response.ok) {
@@ -508,7 +508,7 @@ async function fetchPublicProductPage(product) {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'accept-language': 'en-US,en;q=0.9',
         'cache-control': 'no-cache',
-        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.58; +https://escoopcity.com)'
+        'user-agent': 'Mozilla/5.0 (compatible; LeshenghuoPriceBot/4.59; +https://escoopcity.com)'
       }
     });
   } catch (_) {

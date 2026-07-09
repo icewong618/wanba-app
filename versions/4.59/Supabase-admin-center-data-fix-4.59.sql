@@ -52,7 +52,6 @@ begin
             content,
             category,
             created_at,
-            time,
             likes
           from public.posts
           order by created_at desc nulls last
@@ -117,6 +116,6 @@ insert into public.deal_price_refresh_runs (
   0,
   0,
   0,
-  '4.58 admin center snapshot RPC enabled. Admin page can read auth.users, posts, comments and ban records through one secure function.',
+  '4.59 admin center snapshot RPC enabled. Admin page can read auth.users, posts, comments and ban records through one secure function.',
   now()
 );
