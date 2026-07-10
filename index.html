@@ -1316,18 +1316,29 @@
     .merchant-real-list,
     .user-content-grid{ grid-template-columns:repeat(5, minmax(0, 1fr)); }
   }
-  html.embedded-app-entry #page-home .feed{
+  html.embedded-app-entry #page-home .feed,
+  html.app-webview-entry #page-home .feed{
     margin-top:calc(var(--home-fixed-top, 138px) - 75px) !important;
   }
-  html.embedded-app-entry .deals-meta-row{
+  html.embedded-app-entry .deals-meta-row,
+  html.app-webview-entry .deals-meta-row{
     margin-top:calc(var(--deals-fixed-top, 205px) - 75px) !important;
   }
 </style>
 <script>
   try {
     const p = new URLSearchParams(window.location.search || '');
-    if(p.get('embedded_app') === '1' || p.get('app_v') || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1'){
+    const ua = navigator.userAgent || '';
+    const appLike = p.get('embedded_app') === '1'
+      || p.get('app_v')
+      || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1'
+      || window.parent !== window
+      || navigator.standalone === true
+      || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || /\bwv\b|WebView|; wv\)/i.test(ua);
+    if(appLike){
       document.documentElement.classList.add('embedded-app-entry');
+      document.documentElement.classList.add('app-webview-entry');
     }
   } catch(e){}
 </script>
@@ -2105,7 +2116,14 @@ function syncVisibleAppVersion(){
 function isEmbeddedAppEntry(){
   try {
     const params = new URLSearchParams(window.location.search || '');
-    return params.get('embedded_app') === '1' || !!params.get('app_v') || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1';
+    const ua = navigator.userAgent || '';
+    return params.get('embedded_app') === '1'
+      || !!params.get('app_v')
+      || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1'
+      || window.parent !== window
+      || navigator.standalone === true
+      || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || /\bwv\b|WebView|; wv\)/i.test(ua);
   } catch(e){
     return false;
   }
@@ -8810,17 +8828,17 @@ function ensureAdminPageAtRoot(){
 function updateFixedTopLayout(){
   requestAnimationFrame(() => {
     const root = document.documentElement;
-    const isEmbeddedApp = (() => {
-      try {
-        return new URLSearchParams(window.location.search).get('embedded_app') === '1'
-          || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1';
-      } catch(e){
-        return false;
-      }
-    })();
+    const isEmbeddedApp = isEmbeddedAppEntry();
+    root.classList.toggle('app-webview-entry', !!isEmbeddedApp);
+    root.classList.toggle('embedded-app-entry', !!isEmbeddedApp);
     const fixedGap = 3;
     const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap}px` : '138px');
+    const homeTop = topHeader ? Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap : 138;
+    root.style.setProperty('--home-fixed-top', `${homeTop}px`);
+    const homeFeed = document.querySelector('#page-home .feed');
+    if(homeFeed){
+      homeFeed.style.marginTop = isEmbeddedApp ? `${Math.max(24, homeTop - 75)}px` : '';
+    }
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
     root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
@@ -8833,7 +8851,11 @@ function updateFixedTopLayout(){
     root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
 
     const dealsHero = document.querySelector('#page-deals.active .deals-hero');
-    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + fixedGap}px` : '205px');
+    const dealsTop = dealsHero ? Math.ceil(dealsHero.getBoundingClientRect().height) + fixedGap : 205;
+    root.style.setProperty('--deals-fixed-top', `${dealsTop}px`);
+    document.querySelectorAll('.deals-meta-row').forEach(row => {
+      row.style.marginTop = isEmbeddedApp ? `${Math.max(42, dealsTop - 75)}px` : '';
+    });
   });
 }
 window.addEventListener('resize', updateFixedTopLayout);
