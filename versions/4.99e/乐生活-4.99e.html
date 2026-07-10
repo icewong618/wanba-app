@@ -68,7 +68,7 @@
 
   /* ---------- header ---------- */
   header.top{
-    position:sticky;top:0;z-index:40;
+    position:sticky;top:0;z-index:90;
     background:rgba(246,244,236,0.92);
     backdrop-filter:blur(8px);
     border-bottom:1px solid var(--line);
@@ -178,7 +178,11 @@
   .chip .dot-emoji{font-size:14px;}
 
   /* ---------- deals page (省钱) ---------- */
-  .deals-hero{padding:6px 16px 8px;background:var(--bg);border-bottom:1px solid var(--line);}
+  .deals-hero{
+    position:sticky;top:env(safe-area-inset-top);z-index:70;
+    padding:6px 16px 8px;background:rgba(246,244,236,0.96);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  }
   .deals-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
   .deals-title{font-size:18px;font-weight:900;color:var(--ink);line-height:1.2;}
   .deals-sub{font-size:12px;color:var(--ink-faint);margin-top:3px;}
@@ -671,13 +675,6 @@
   .modal-media .yt-wrap{position:relative;width:100%;padding-top:56.25%;background:#000;overflow:hidden;}
   .modal-media .yt-wrap.vertical{width:min(100%,430px);margin:0 auto;padding-top:min(177.78%,76vh);}
   .modal-media .yt-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
-  .yt-sound-btn{
-    position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;
-    display:inline-flex;align-items:center;gap:6px;padding:9px 14px;
-    border-radius:999px;background:rgba(255,255,255,.92);color:var(--ink);
-    border:1px solid rgba(255,255,255,.7);box-shadow:0 6px 18px rgba(0,0,0,.2);
-    font-size:12.5px;font-weight:900;backdrop-filter:blur(10px);
-  }
   .modal-media .tiktok-wrap{position:relative;width:100%;min-height:620px;background:#000;}
   .modal-media .tiktok-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;}
   @media(max-width:640px){.modal-media .tiktok-wrap{min-height:590px;}}
@@ -908,6 +905,15 @@
     display:flex;align-items:center;gap:8px;
     font-size:18px;font-weight:800;padding:10px 0 9px;
     margin-bottom:8px;border-bottom:1px solid var(--line);color:var(--ink);
+  }
+  #page-week .page-header,
+  #page-message .page-header{
+    position:sticky;top:env(safe-area-inset-top);z-index:65;
+    background:rgba(255,255,255,0.96);backdrop-filter:blur(8px);
+  }
+  #page-message .msg-cat-row{
+    position:sticky;top:calc(46px + env(safe-area-inset-top));z-index:64;
+    background:#fff;
   }
   .profile-header{
     background:var(--card);border-bottom:1px solid var(--line);
@@ -1163,6 +1169,7 @@
     visibility:hidden;
     pointer-events:none;
   }
+  .embedded-app-entry .launch-screen{display:none!important;}
   .launch-inner{
     width:min(82vw,320px);
     text-align:center;
@@ -1279,6 +1286,14 @@
     .user-content-grid{ grid-template-columns:repeat(5, minmax(0, 1fr)); }
   }
 </style>
+<script>
+  try {
+    const p = new URLSearchParams(window.location.search || '');
+    if(p.get('embedded_app') === '1' || p.get('app_v') || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1'){
+      document.documentElement.classList.add('embedded-app-entry');
+    }
+  } catch(e){}
+</script>
 </head>
 <body>
 
@@ -1609,7 +1624,7 @@
 <div class="page" id="page-message" style="display:none;">
   <div class="page-header"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg></span>消息</div>
   <div id="msgHome" style="background:#fff;min-height:60vh;padding-bottom:80px;">
-    <div style="display:flex;justify-content:space-around;padding:20px 10px;border-bottom:8px solid var(--bg-alt);">
+    <div class="msg-cat-row" style="display:flex;justify-content:space-around;padding:20px 10px;border-bottom:8px solid var(--bg-alt);">
       <button onclick="openMsgCat('cmt')" style="border:none;background:none;cursor:pointer;text-align:center;position:relative;">
         <span class="ui-soft-icon sky" style="margin:0 auto 6px;"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg></span></span>
         <span style="font-size:12px;color:var(--ink);">评论和@</span>
@@ -2440,6 +2455,19 @@ function calcAge(birth){
 function profileKey(){
   return (session && session.user) ? `userProfile_${session.user.id}` : 'userProfile_guest';
 }
+function normalizeProfile(raw){
+  const base = defaultProfile();
+  const p = raw && typeof raw === 'object' ? raw : {};
+  const merged = Object.assign({}, base, p);
+  merged.id = (session && session.user) ? uidToNumericId(session.user.id) : (merged.id || '');
+  merged.tags = Array.isArray(merged.tags) ? merged.tags.filter(Boolean).slice(0, 3) : [];
+  merged.bio = merged.bio || base.bio;
+  merged.gender = merged.gender || base.gender;
+  merged.birth = merged.birth || '';
+  merged.age = calcAge(merged.birth) ?? merged.age ?? null;
+  merged.cover = merged.cover || '';
+  return merged;
+}
 function defaultProfile(){
   const nick = (session && session.user)
     ? ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0])
@@ -2461,7 +2489,7 @@ function loadUserProfile(){
   localStorage.removeItem('userProfile');
   const saved = localStorage.getItem(profileKey());
   if(saved){
-    try { currentUser = JSON.parse(saved); } catch(e){ currentUser = defaultProfile(); }
+    try { currentUser = normalizeProfile(JSON.parse(saved)); } catch(e){ currentUser = defaultProfile(); }
   } else {
     currentUser = defaultProfile();
   }
@@ -2475,6 +2503,7 @@ function loadUserProfile(){
 // 保存用户信息到当前账号的档案
 function saveUserProfileToStorage(){
   if(!(session && session.user)) return;
+  currentUser = normalizeProfile(currentUser);
   localStorage.setItem(profileKey(), JSON.stringify(currentUser));
 }
 /* 由账号UUID确定性生成8位纯数字专属ID（同一账号任何设备都相同） */
@@ -2669,35 +2698,68 @@ function confirmAvatarCrop(){
 async function syncProfileToDb(){
   if(!(session && session.user)) return;
   try {
-    const payload = { name: currentUser.name, avatar: currentUser.avatar || null, updated_at: new Date().toISOString() };
-    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload)
-    });
-    let rows = res.ok ? await res.json() : [];
-    if(!rows.length){
-      res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles`, {
-        method: 'POST',
-        body: JSON.stringify(Object.assign({ user_id: session.user.id }, payload))
+    currentUser = normalizeProfile(currentUser);
+    const updatedAt = new Date().toISOString();
+    const fullPayload = {
+      name: currentUser.name,
+      avatar: currentUser.avatar || null,
+      bio: currentUser.bio || null,
+      tags: currentUser.tags || [],
+      gender: currentUser.gender || null,
+      birth: currentUser.birth || null,
+      cover: currentUser.cover || null,
+      updated_at: updatedAt
+    };
+    const fallbackPayload = { name: currentUser.name, avatar: currentUser.avatar || null, updated_at: updatedAt };
+    const writeProfile = async payload => {
+      let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
       });
+      let rows = res.ok ? await res.json() : [];
+      if(res.ok && !rows.length){
+        res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+          method: 'POST',
+          body: JSON.stringify(Object.assign({ user_id: session.user.id }, payload))
+        });
+      }
+      return res;
+    };
+    let res = await writeProfile(fullPayload);
+    if(!res.ok){
+      const text = await res.text();
+      console.warn('完整资料同步失败，回退头像昵称同步:', text);
+      res = await writeProfile(fallbackPayload);
     }
-    if(res.ok){ showToast('✓ 头像已更新'); }
-    else { const t = await res.text(); console.warn('头像同步失败:', t); showToast('头像上传失败，请重试'); }
+    if(res.ok){ showToast('✓ 资料已同步'); }
+    else { const t = await res.text(); console.warn('资料同步失败:', t); showToast('资料同步失败，请重试'); }
   } catch(e){
-    console.warn('头像同步异常:', e.message);
-    showToast('头像上传失败，请检查网络');
+    console.warn('资料同步异常:', e.message);
+    showToast('资料同步失败，请检查网络');
   }
 }
 /* 登录时从 profiles 表拉取头像/昵称，覆盖本地档案（跨设备同步） */
 async function fetchProfileFromDb(){
   if(!(session && session.user)) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar`);
+    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar,bio,tags,gender,birth,cover`);
+    if(!res.ok){
+      res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar`);
+    }
     if(!res.ok) return;
     const rows = await res.json();
     if(rows && rows[0]){
-      if(rows[0].avatar) currentUser.avatar = rows[0].avatar;
-      if(rows[0].name) currentUser.name = rows[0].name;
+      const row = rows[0];
+      const local = normalizeProfile(currentUser);
+      currentUser = normalizeProfile(Object.assign({}, local, {
+        name: row.name || local.name,
+        avatar: row.avatar || local.avatar,
+        bio: row.bio || local.bio,
+        tags: Array.isArray(row.tags) && row.tags.length ? row.tags : local.tags,
+        gender: row.gender || local.gender,
+        birth: row.birth || local.birth,
+        cover: row.cover || local.cover
+      }));
       saveUserProfileToStorage();
       updateProfileDisplay();
     }
@@ -6045,7 +6107,6 @@ function renderPostModal(){
     const safeYtId = String(p.youtube || '').replace(/[^A-Za-z0-9_-]/g, '');
     media = `<div class="yt-wrap ${ytVertical ? 'vertical' : ''}">
       <iframe id="ytFrame-${safeYtId}" src="${youtubeEmbedUrl(safeYtId)}" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-      <button class="yt-sound-btn" id="ytSound-${safeYtId}" onclick="event.stopPropagation();unmuteYoutubeFrame('${safeYtId}')">▶ 点击播放声音</button>
     </div>`;
   } else if(tikTokInfo){
     const src = tikTokInfo.id ? `https://www.tiktok.com/embed/v2/${tikTokInfo.id}` : tikTokInfo.url;
