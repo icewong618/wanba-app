@@ -1272,16 +1272,41 @@
   .empty{text-align:center;padding:60px 20px;color:var(--ink-faint);}
   .empty .display{font-size:20px;color:var(--ink-soft);display:block;margin-bottom:6px;}
 
-  /* 发布窗口：恢复整体滚动（详情页专用的flex布局不适用于表单） */
+  /* 发布窗口：全屏发布页，适配 App 刘海屏和底部手势条 */
+  #composeOverlay{
+    padding:0;
+    background:#fff;
+    align-items:stretch;
+    justify-content:center;
+    overflow:hidden;
+  }
   #composeOverlay .modal{
-    display:block;
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-    max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 28px);
+    width:100%;
+    max-width:var(--container-w);
+    height:100dvh;
+    max-height:none;
+    border-radius:0;
+    box-shadow:none;
+    animation:none;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  #composeOverlay .modal-close{
+    top:calc(12px + env(safe-area-inset-top));
+    right:14px;
+    width:40px;
+    height:40px;
+    background:rgba(246,244,236,.95);
+    box-shadow:none;
+    z-index:8;
   }
   #composeOverlay .modal-body{
-    padding-top:calc(22px + env(safe-area-inset-top));
-    padding-bottom:calc(34px + env(safe-area-inset-bottom));
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-top:calc(66px + env(safe-area-inset-top));
+    padding-bottom:calc(42px + env(safe-area-inset-bottom));
   }
   @media(max-width:640px){
     .top-wrap{padding-top:12px;}
