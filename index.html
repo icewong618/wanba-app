@@ -181,7 +181,7 @@
   .deals-hero{
     position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:70;
     width:100%;max-width:var(--container-w);
-    padding:6px 16px 8px;background:rgba(246,244,236,0.96);
+    padding:calc(6px + env(safe-area-inset-top)) 16px 8px;background:rgba(246,244,236,0.96);
     backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
   }
   .deals-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
@@ -958,16 +958,16 @@
     -webkit-backdrop-filter:blur(12px);box-shadow:0 8px 18px rgba(0,0,0,.12);
   }
   .profile-cover-menu-btn{
-    left:14px;top:14px;width:38px;height:38px;border-radius:999px;
+    left:14px;top:calc(14px + env(safe-area-inset-top));width:38px;height:38px;border-radius:999px;
     display:flex;align-items:center;justify-content:center;
   }
   .profile-cover-menu-btn .ui-icon{width:19px;height:19px;}
   .profile-cover-edit{
-    right:14px;top:14px;border-radius:999px;padding:8px 12px;
+    right:14px;top:calc(14px + env(safe-area-inset-top));border-radius:999px;padding:8px 12px;
     font-size:12px;font-weight:800;
   }
   .profile-menu{
-    position:absolute;left:14px;top:58px;z-index:6;width:178px;
+    position:absolute;left:14px;top:calc(58px + env(safe-area-inset-top));z-index:6;width:178px;
     background:rgba(255,255,252,.98);border:1px solid var(--line);
     border-radius:14px;box-shadow:var(--shadow-lift);padding:6px;display:none;
   }
@@ -2159,6 +2159,13 @@ function hideLaunchScreen(){
   el.classList.add('done');
   setTimeout(() => { el.remove(); }, 520);
 }
+function notifyAppReady(){
+  try {
+    if(isEmbeddedAppEntry() && window.parent && window.parent !== window){
+      window.parent.postMessage({ type:'leshenghuo_app_ready', version: APP_VERSION }, '*');
+    }
+  } catch(e){}
+}
 
 let currentUser = {
   name: '未登录用户',
@@ -2283,6 +2290,7 @@ function onProfileCoverSelected(event){
     currentUser.cover = reader.result;
     saveUserProfileToStorage();
     updateProfileDisplay();
+    syncProfileToDb();
     showToast('背景已更新');
     event.target.value = '';
   };
@@ -2834,7 +2842,7 @@ function youtubeEmbedUrl(id, opts){
   const params = new URLSearchParams({
     rel: '0',
     autoplay: '1',
-    mute: '0',
+    mute: '1',
     playsinline: '1',
     enablejsapi: '1'
   });
@@ -8593,7 +8601,7 @@ function updateFixedTopLayout(){
   requestAnimationFrame(() => {
     const root = document.documentElement;
     const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height)}px` : '0px');
+    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 12}px` : '0px');
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
     root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
@@ -8697,7 +8705,6 @@ async function bootApp(){
   const maxSplashMs = 4600;
   syncVisibleAppVersion();
   const embeddedAppEntry = isEmbeddedAppEntry();
-  if(embeddedAppEntry) hideLaunchScreen();
 
   try {
     const updating = await checkRemoteAppVersion();
@@ -8721,15 +8728,19 @@ async function bootApp(){
       firstRefresh,
       new Promise(resolve => setTimeout(resolve, maxSplashMs))
     ]);
+    renderFeed();
+    updateFixedTopLayout();
 
     setLaunchStatus('内容很快就到…');
+    notifyAppReady();
   } catch(e){
     console.warn('启动流程出现异常，继续进入页面:', e.message);
     renderChips();
     renderQuicklinks();
     renderFeed();
+    updateFixedTopLayout();
+    notifyAppReady();
   } finally {
-    if(embeddedAppEntry) return;
     const elapsed = Date.now() - startedAt;
     if(elapsed < minSplashMs){
       await new Promise(resolve => setTimeout(resolve, minSplashMs - elapsed));
