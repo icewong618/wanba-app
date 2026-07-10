@@ -3033,7 +3033,7 @@ function youtubeEmbedUrl(id, opts){
     mute: '0',
     playsinline: '1',
     enablejsapi: '1',
-    vq: 'hd1080'
+    vq: 'highres'
   });
   try { params.set('origin', window.location.origin); } catch(e){}
   if(opts.start) params.set('start', String(opts.start));
@@ -3045,6 +3045,9 @@ function unmuteYoutubeFrame(id){
   try {
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'unMute', args:[] }), '*');
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setVolume', args:[100] }), '*');
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setPlaybackQuality', args:['highres'] }), '*');
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setPlaybackQuality', args:['hd2160'] }), '*');
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setPlaybackQuality', args:['hd1440'] }), '*');
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setPlaybackQuality', args:['hd1080'] }), '*');
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setPlaybackQuality', args:['hd720'] }), '*');
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'playVideo', args:[] }), '*');
@@ -8801,8 +8804,17 @@ function ensureAdminPageAtRoot(){
 function updateFixedTopLayout(){
   requestAnimationFrame(() => {
     const root = document.documentElement;
+    const isEmbeddedApp = (() => {
+      try {
+        return new URLSearchParams(window.location.search).get('embedded_app') === '1'
+          || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1';
+      } catch(e){
+        return false;
+      }
+    })();
+    const fixedGap = isEmbeddedApp ? -8 : 3;
     const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 3}px` : '138px');
+    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap}px` : (isEmbeddedApp ? '126px' : '138px'));
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
     root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
@@ -8815,7 +8827,7 @@ function updateFixedTopLayout(){
     root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
 
     const dealsHero = document.querySelector('#page-deals.active .deals-hero');
-    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 3}px` : '205px');
+    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + fixedGap}px` : (isEmbeddedApp ? '193px' : '205px'));
   });
 }
 window.addEventListener('resize', updateFixedTopLayout);
