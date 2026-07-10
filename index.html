@@ -204,7 +204,7 @@
   .deals-search-panel-title{font-size:13px;font-weight:900;color:var(--ink);}
   .deals-search-panel-title span{display:block;font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:3px;line-height:1.5;}
   .deals-search-panel-close{width:26px;height:26px;border-radius:50%;background:var(--bg-alt);color:var(--ink-faint);font-size:16px;font-weight:900;line-height:1;}
-  .deals-meta-row{margin-top:var(--deals-fixed-top, 220px);}
+  .deals-meta-row{margin-top:var(--deals-fixed-top, 290px);}
   .deals-result-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;font-size:11px;color:var(--ink-faint);}
   .deals-result-toolbar b{color:var(--sage-dark);}
   .deals-result-list{display:flex;flex-direction:column;gap:9px;}
@@ -267,7 +267,7 @@
   .deal-form-actions button{flex:1;border-radius:999px;padding:10px;font-size:13px;font-weight:900;background:var(--bg-alt);color:var(--ink-soft);}
   .deal-form-actions .primary{background:var(--sage);color:#fff;}
   .deal-source-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;background:var(--sage-light);color:var(--sage-dark);font-size:10.5px;font-weight:800;padding:3px 7px;margin-left:6px;}
-  .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:var(--deals-fixed-top, 220px) 16px 4px;}
+  .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:var(--deals-fixed-top, 290px) 16px 4px;}
   .deals-section-header{font-size:15px;font-weight:800;color:var(--ink);margin:12px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .deals-section-header span{font-size:11.5px;font-weight:600;color:var(--ink-faint);}
   .deals-hot-scroll{display:flex;gap:12px;overflow-x:auto;padding:0 16px 8px;scrollbar-width:none;}
@@ -910,7 +910,7 @@
   .page.active{display:block;}
   #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
   .page:not(#page-profile){padding-top:calc(12px + env(safe-area-inset-top));}
-  #page-home{padding-top:var(--home-fixed-top, calc(12px + env(safe-area-inset-top)));}
+  #page-home{padding-top:var(--home-fixed-top, calc(190px + env(safe-area-inset-top)));}
   #page-home .feed{margin-top:0;}
   #page-deals,#page-profile{padding-left:0;padding-right:0;}
   #page-profile{padding-top:0;background:#fff;}
@@ -2843,7 +2843,7 @@ function youtubeEmbedUrl(id, opts){
   const params = new URLSearchParams({
     rel: '0',
     autoplay: '1',
-    mute: '1',
+    mute: '0',
     playsinline: '1',
     enablejsapi: '1'
   });
@@ -6141,7 +6141,7 @@ function renderPostModal(){
     const ytVertical = getPostYoutubeVertical(p);
     const safeYtId = String(p.youtube || '').replace(/[^A-Za-z0-9_-]/g, '');
     media = `<div class="yt-wrap ${ytVertical ? 'vertical' : ''}">
-      <iframe id="ytFrame-${safeYtId}" src="${youtubeEmbedUrl(safeYtId)}" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      <iframe id="ytFrame-${safeYtId}" src="${youtubeEmbedUrl(safeYtId)}" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen onload="setTimeout(()=>unmuteYoutubeFrame('${safeYtId}'),350);setTimeout(()=>unmuteYoutubeFrame('${safeYtId}'),1200);"></iframe>
     </div>`;
   } else if(tikTokInfo){
     const src = tikTokInfo.id ? `https://www.tiktok.com/embed/v2/${tikTokInfo.id}` : tikTokInfo.url;
@@ -8546,6 +8546,8 @@ async function loadPostsFromSupabase(){
         image: p.image,
         images: p.images,
         youtube: p.youtube || '',
+        youtube_vertical: !!p.youtube_vertical,
+        tiktok_url: p.tiktok_url || null,
         likes: p.likes || 0,
         liked: false,
         collected: false,
@@ -8602,7 +8604,7 @@ function updateFixedTopLayout(){
   requestAnimationFrame(() => {
     const root = document.documentElement;
     const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 28}px` : '0px');
+    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 58}px` : '190px');
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
     root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
@@ -8615,7 +8617,7 @@ function updateFixedTopLayout(){
     root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
 
     const dealsHero = document.querySelector('#page-deals.active .deals-hero');
-    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 26}px` : '220px');
+    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 58}px` : '290px');
   });
 }
 window.addEventListener('resize', updateFixedTopLayout);
