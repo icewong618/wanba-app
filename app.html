@@ -74,12 +74,19 @@
     const target = indexUrl(version);
     try {
       setStatus('正在进入乐生活…');
+      try { sessionStorage.setItem('leshenghuo_embedded_app_entry', '1'); } catch(e){}
       const res = await withTimeout(fetch(target.href, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       }), 2600);
       if(!res.ok) throw new Error('index http ' + res.status);
-      const html = await res.text();
+      let html = await res.text();
+      html = html.replace(/<html([^>]*)>/i, (match, attrs) => {
+        if(/\bclass=/.test(attrs)){
+          return `<html${attrs.replace(/class=(["'])(.*?)\1/i, 'class=$1$2 embedded-app-entry$1')}>`;
+        }
+        return `<html${attrs} class="embedded-app-entry">`;
+      });
       document.open();
       document.write(html);
       document.close();

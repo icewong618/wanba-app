@@ -68,7 +68,7 @@
 
   /* ---------- header ---------- */
   header.top{
-    position:sticky;top:0;z-index:90;
+    position:fixed;top:0;left:0;right:0;z-index:90;
     background:rgba(246,244,236,0.92);
     backdrop-filter:blur(8px);
     border-bottom:1px solid var(--line);
@@ -179,7 +179,8 @@
 
   /* ---------- deals page (省钱) ---------- */
   .deals-hero{
-    position:sticky;top:env(safe-area-inset-top);z-index:70;
+    position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:70;
+    width:100%;max-width:var(--container-w);
     padding:6px 16px 8px;background:rgba(246,244,236,0.96);
     backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
   }
@@ -203,6 +204,7 @@
   .deals-search-panel-title{font-size:13px;font-weight:900;color:var(--ink);}
   .deals-search-panel-title span{display:block;font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:3px;line-height:1.5;}
   .deals-search-panel-close{width:26px;height:26px;border-radius:50%;background:var(--bg-alt);color:var(--ink-faint);font-size:16px;font-weight:900;line-height:1;}
+  .deals-meta-row{margin-top:var(--deals-fixed-top, 190px);}
   .deals-result-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;font-size:11px;color:var(--ink-faint);}
   .deals-result-toolbar b{color:var(--sage-dark);}
   .deals-result-list{display:flex;flex-direction:column;gap:9px;}
@@ -672,12 +674,22 @@
   .xhs-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}
   .modal-media{position:relative;width:100%;background:#fff;}
   .modal-media img{width:100%;display:block;aspect-ratio:3/4;object-fit:contain;touch-action:pan-y;}
+  .modal-media.video{background:#000;}
   .modal-media .yt-wrap{position:relative;width:100%;padding-top:56.25%;background:#000;overflow:hidden;}
-  .modal-media .yt-wrap.vertical{width:min(100%,430px);margin:0 auto;padding-top:min(177.78%,76vh);}
+  .modal-media .yt-wrap.vertical{
+    width:min(100%,520px);height:min(78vh,860px);min-height:520px;
+    margin:0 auto;padding-top:0;background:#000;
+  }
   .modal-media .yt-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
   .modal-media .tiktok-wrap{position:relative;width:100%;min-height:620px;background:#000;}
   .modal-media .tiktok-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;}
-  @media(max-width:640px){.modal-media .tiktok-wrap{min-height:590px;}}
+  @media(max-width:640px){
+    .modal-media .yt-wrap.vertical{
+      width:100vw;height:calc(100dvh - 150px);min-height:560px;max-height:820px;
+      margin-left:50%;transform:translateX(-50%);
+    }
+    .modal-media .tiktok-wrap{min-height:calc(100dvh - 150px);}
+  }
   .image-carousel{position:relative;width:100%;background:#fff;aspect-ratio:3/4;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;}
   .carousel-track{display:flex;height:100%;transition:transform .3s ease;will-change:transform;}
   .carousel-slide{flex:0 0 100%;height:100%;display:flex;align-items:center;justify-content:center;}
@@ -897,7 +909,7 @@
   .page.active{display:block;}
   #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
   .page:not(#page-profile){padding-top:calc(12px + env(safe-area-inset-top));}
-  #page-home{padding-top:calc(12px + env(safe-area-inset-top));}
+  #page-home{padding-top:var(--home-fixed-top, calc(12px + env(safe-area-inset-top)));}
   #page-home .feed{margin-top:0;}
   #page-deals,#page-profile{padding-left:0;padding-right:0;}
   #page-profile{padding-top:0;background:#fff;}
@@ -908,13 +920,17 @@
   }
   #page-week .page-header,
   #page-message .page-header{
-    position:sticky;top:env(safe-area-inset-top);z-index:65;
-    background:rgba(255,255,255,0.96);backdrop-filter:blur(8px);
+    position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:65;
+    width:100%;max-width:var(--container-w);
+    padding:calc(10px + env(safe-area-inset-top)) 20px 9px;
+    margin:0;background:rgba(255,255,255,0.96);backdrop-filter:blur(8px);
   }
+  #page-week .feed{margin-top:var(--week-fixed-top, 60px);}
   #page-message .msg-cat-row{
-    position:sticky;top:calc(46px + env(safe-area-inset-top));z-index:64;
-    background:#fff;
+    position:fixed;top:var(--message-header-height, 54px);left:50%;transform:translateX(-50%);
+    z-index:64;width:100%;max-width:var(--container-w);background:#fff;
   }
+  #page-message #msgHome{padding-top:var(--message-fixed-top, 142px);}
   .profile-header{
     background:var(--card);border-bottom:1px solid var(--line);
     padding-bottom:0;position:relative;
@@ -2091,7 +2107,11 @@ function versionManifestUrl(){
 async function replaceDocumentWithFreshIndex(version){
   const target = new URL('index.html', window.location.href);
   target.searchParams.set('app_v', version || APP_VERSION);
+  if(isEmbeddedAppEntry()) target.searchParams.set('embedded_app', '1');
   target.searchParams.set('refresh_t', String(Date.now()));
+  if(isEmbeddedAppEntry()){
+    try { sessionStorage.setItem('leshenghuo_embedded_app_entry', '1'); } catch(e){}
+  }
   const res = await fetch(target.href, {
     cache: 'no-store',
     headers: { 'Cache-Control': 'no-cache' }
@@ -2796,7 +2816,13 @@ function youtubeVerticalMarker(){
 }
 function isYoutubeVerticalSource(url){
   const raw = String(url || '').toLowerCase();
-  return raw.includes('/shorts/') || raw.includes('youtube.com/shorts');
+  if(raw.includes('/shorts/') || raw.includes('youtube.com/shorts')) return true;
+  try {
+    const parsed = new URL(String(url || '').trim());
+    return ['vertical','portrait','shorts'].some(key => ['1','true','yes'].includes((parsed.searchParams.get(key) || '').toLowerCase()));
+  } catch(e){
+    return /[?&](vertical|portrait|shorts)=(1|true|yes)\b/i.test(raw);
+  }
 }
 function getPostYoutubeVertical(p){
   if(!p) return false;
@@ -6156,7 +6182,7 @@ function renderPostModal(){
       ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" onclick="showToast('链接已复制')">↗</button>`}
     </div>
     <div class="xhs-scroll">
-      ${media ? `<div class="modal-media">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
+      ${media ? `<div class="modal-media ${p.youtube || tikTokInfo ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
       ${p.images && p.images.length > 1 ? `<div class="carousel-dots" id="carouselDots">${p.images.map((_,i) => `<span class="dot ${i===0?'on':''}"></span>`).join('')}</div>` : ''}
       <div class="modal-body">
         <h2 class="modal-title display">${p.title}</h2>
@@ -8563,6 +8589,29 @@ function ensureAdminPageAtRoot(){
   }
 }
 
+function updateFixedTopLayout(){
+  requestAnimationFrame(() => {
+    const root = document.documentElement;
+    const topHeader = document.querySelector('header.top:not(.is-hidden)');
+    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height)}px` : '0px');
+
+    const weekHeader = document.querySelector('#page-week.active .page-header');
+    root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
+
+    const msgHeader = document.querySelector('#page-message.active .page-header');
+    const msgCats = document.querySelector('#page-message.active .msg-cat-row');
+    const msgHeaderH = msgHeader ? Math.ceil(msgHeader.getBoundingClientRect().height) : 0;
+    const msgCatsH = msgCats ? Math.ceil(msgCats.getBoundingClientRect().height) : 0;
+    root.style.setProperty('--message-header-height', `${msgHeaderH}px`);
+    root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
+
+    const dealsHero = document.querySelector('#page-deals.active .deals-hero');
+    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 10}px` : '190px');
+  });
+}
+window.addEventListener('resize', updateFixedTopLayout);
+window.addEventListener('orientationchange', () => setTimeout(updateFixedTopLayout, 250));
+
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
   ensureAdminPageAtRoot();
@@ -8596,9 +8645,10 @@ window.switchTab = function(tab){
   if(tab === 'home'){
     const feed = document.getElementById('feed');
     const home = document.getElementById('page-home');
-    if(home){ home.style.marginTop = '0'; home.style.paddingTop = '0'; }
+    if(home){ home.style.marginTop = '0'; home.style.paddingTop = ''; }
     if(feed){ feed.style.marginTop = '0'; feed.style.paddingTop = '0'; }
   }
+  updateFixedTopLayout();
   
   // 根据标签页处理逻辑（首页/导航栏不区分商家与普通用户，两者完全一致）
   if(tab === 'home'){
@@ -8637,6 +8687,7 @@ window.switchTab = function(tab){
         });
     }
   }
+  setTimeout(updateFixedTopLayout, 80);
 };
 
 /* init */
