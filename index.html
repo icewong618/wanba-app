@@ -8812,9 +8812,9 @@ function updateFixedTopLayout(){
         return false;
       }
     })();
-    const fixedGap = isEmbeddedApp ? -8 : 3;
+    const fixedGap = isEmbeddedApp ? -82 : 3;
     const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap}px` : (isEmbeddedApp ? '126px' : '138px'));
+    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.max(48, Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap)}px` : (isEmbeddedApp ? '52px' : '138px'));
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
     root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
@@ -8827,7 +8827,7 @@ function updateFixedTopLayout(){
     root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
 
     const dealsHero = document.querySelector('#page-deals.active .deals-hero');
-    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + fixedGap}px` : (isEmbeddedApp ? '193px' : '205px'));
+    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.max(76, Math.ceil(dealsHero.getBoundingClientRect().height) + fixedGap)}px` : (isEmbeddedApp ? '119px' : '205px'));
   });
 }
 window.addEventListener('resize', updateFixedTopLayout);
