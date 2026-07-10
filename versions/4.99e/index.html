@@ -668,8 +668,16 @@
   .xhs-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}
   .modal-media{position:relative;width:100%;background:#fff;}
   .modal-media img{width:100%;display:block;aspect-ratio:3/4;object-fit:contain;touch-action:pan-y;}
-  .modal-media .yt-wrap{position:relative;width:100%;padding-top:56.25%;}
+  .modal-media .yt-wrap{position:relative;width:100%;padding-top:56.25%;background:#000;overflow:hidden;}
+  .modal-media .yt-wrap.vertical{width:min(100%,430px);margin:0 auto;padding-top:min(177.78%,76vh);}
   .modal-media .yt-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+  .yt-sound-btn{
+    position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;
+    display:inline-flex;align-items:center;gap:6px;padding:9px 14px;
+    border-radius:999px;background:rgba(255,255,255,.92);color:var(--ink);
+    border:1px solid rgba(255,255,255,.7);box-shadow:0 6px 18px rgba(0,0,0,.2);
+    font-size:12.5px;font-weight:900;backdrop-filter:blur(10px);
+  }
   .modal-media .tiktok-wrap{position:relative;width:100%;min-height:620px;background:#000;}
   .modal-media .tiktok-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;}
   @media(max-width:640px){.modal-media .tiktok-wrap{min-height:590px;}}
@@ -2022,7 +2030,7 @@ function syncVisibleAppVersion(){
 function isEmbeddedAppEntry(){
   try {
     const params = new URLSearchParams(window.location.search || '');
-    return params.get('embedded_app') === '1' || !!params.get('app_v');
+    return params.get('embedded_app') === '1' || !!params.get('app_v') || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1';
   } catch(e){
     return false;
   }
@@ -2720,6 +2728,42 @@ function youtubeThumbUrl(id, quality='hqdefault'){
 }
 function youtubeThumbImgHtml(id, alt=''){
   return `<img src="${youtubeThumbUrl(id)}" onerror="this.onerror=null;this.src='${youtubeThumbUrl(id, 'default')}';" alt="${escHtml(alt)}">`;
+}
+function youtubeVerticalMarker(){
+  return '[[yt_vertical]]';
+}
+function isYoutubeVerticalSource(url){
+  const raw = String(url || '').toLowerCase();
+  return raw.includes('/shorts/') || raw.includes('youtube.com/shorts');
+}
+function getPostYoutubeVertical(p){
+  if(!p) return false;
+  if(p.youtube_vertical) return true;
+  return String(p.content || '').includes(youtubeVerticalMarker());
+}
+function youtubeEmbedUrl(id, opts){
+  opts = opts || {};
+  const params = new URLSearchParams({
+    rel: '0',
+    autoplay: '1',
+    mute: '0',
+    playsinline: '1',
+    enablejsapi: '1'
+  });
+  try { params.set('origin', window.location.origin); } catch(e){}
+  if(opts.start) params.set('start', String(opts.start));
+  return `https://www.youtube.com/embed/${encodeURIComponent(id)}?${params.toString()}`;
+}
+function unmuteYoutubeFrame(id){
+  const frame = document.getElementById(`ytFrame-${id}`);
+  if(!frame || !frame.contentWindow) return;
+  try {
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'unMute', args:[] }), '*');
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setVolume', args:[100] }), '*');
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'playVideo', args:[] }), '*');
+  } catch(e){}
+  const btn = document.getElementById(`ytSound-${id}`);
+  if(btn) btn.style.display = 'none';
 }
 function mediaWatermarkText(author){
   return `乐生活 · ${author || '乐生活用户'}`;
@@ -5997,7 +6041,12 @@ function renderPostModal(){
   const tikTokInfo = getPostTikTokInfo(p);
   const visibleContent = cleanPostContent(p.content);
   if(p.youtube){
-    media = `<div class="yt-wrap"><iframe src="https://www.youtube.com/embed/${p.youtube}?rel=0&autoplay=1&mute=1&playsinline=1" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
+    const ytVertical = getPostYoutubeVertical(p);
+    const safeYtId = String(p.youtube || '').replace(/[^A-Za-z0-9_-]/g, '');
+    media = `<div class="yt-wrap ${ytVertical ? 'vertical' : ''}">
+      <iframe id="ytFrame-${safeYtId}" src="${youtubeEmbedUrl(safeYtId)}" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      <button class="yt-sound-btn" id="ytSound-${safeYtId}" onclick="event.stopPropagation();unmuteYoutubeFrame('${safeYtId}')">▶ 点击播放声音</button>
+    </div>`;
   } else if(tikTokInfo){
     const src = tikTokInfo.id ? `https://www.tiktok.com/embed/v2/${tikTokInfo.id}` : tikTokInfo.url;
     media = `<div class="tiktok-wrap"><iframe src="${aiEsc(src)}" title="TikTok video" allow="autoplay; encrypted-media; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
@@ -6640,7 +6689,8 @@ function updateMerchantAiVideoPreview(){
     return;
   }
   if(info.provider === 'youtube'){
-    box.innerHTML = `<div class="youtube-preview-thumb">${youtubeThumbImgHtml(info.id, 'YouTube封面')}<div class="play-badge">${playIcon()}</div></div><div class="youtube-preview-note">${uiIcon('video',14)} 已识别 YouTube 视频。</div>`;
+    const shortHint = isYoutubeVerticalSource(info.url) ? ' · 已按竖屏视频展示' : '';
+    box.innerHTML = `<div class="youtube-preview-thumb">${youtubeThumbImgHtml(info.id, 'YouTube封面')}<div class="play-badge">${playIcon()}</div></div><div class="youtube-preview-note">${uiIcon('video',14)} 已识别 YouTube 视频${shortHint}。</div>`;
   } else {
     box.innerHTML = `<div class="youtube-preview-thumb" style="display:flex;align-items:center;justify-content:center;background:#111;color:#fff;"><div style="text-align:center;font-weight:900;"><div style="font-size:30px;margin-bottom:8px;">♪</div><div>TikTok 视频</div></div></div><div class="youtube-preview-note">${uiIcon('video',14)} 已识别 TikTok 视频。</div>`;
   }
@@ -6982,7 +7032,8 @@ async function publishMerchantAiPost(){
   }
   const ytId = videoInfo && videoInfo.provider === 'youtube' ? videoInfo.id : null;
   const tikTokInfo = videoInfo && videoInfo.provider === 'tiktok' ? videoInfo : null;
-  const content = p.body + '\n\n' + p.tags.join(' ') + (tikTokInfo ? `\n\n${tiktokMarker(tikTokInfo.url)}` : '');
+  const ytVertical = videoInfo && videoInfo.provider === 'youtube' && isYoutubeVerticalSource(videoInfo.url);
+  const content = p.body + '\n\n' + p.tags.join(' ') + (tikTokInfo ? `\n\n${tiktokMarker(tikTokInfo.url)}` : '') + (ytVertical ? `\n\n${youtubeVerticalMarker()}` : '');
   const title = p.title.slice(0,20);
   const image = ytId ? null : (merchantAiState.images[0] || 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
   const images = merchantAiState.images.length ? merchantAiState.images : null;
@@ -6993,7 +7044,7 @@ async function publishMerchantAiPost(){
     id: nextPostId++, category:cat, title, excerpt: content.slice(0,40) + (content.length > 40 ? '…' : ''),
     user_id: session.user.id, content, image, images, tags: postTags,
     location: (currentMerchant && currentMerchant.address) || null,
-    youtube:ytId, tiktok_url: tikTokInfo ? tikTokInfo.url : null, author:authorName, time:'刚刚', likes:0, liked:false, event:null, comments:[]
+    youtube:ytId, youtube_vertical: ytVertical, tiktok_url: tikTokInfo ? tikTokInfo.url : null, author:authorName, time:'刚刚', likes:0, liked:false, event:null, comments:[]
   };
   posts.unshift(localPost);
   merchantAiState.publishedPostId = localPost.id;
@@ -7846,7 +7897,10 @@ function getPostTikTokInfo(p){
   return match ? extractTikTokInfo(match[1]) : null;
 }
 function cleanPostContent(content){
-  return String(content || '').replace(/\n?\s*\[\[tiktok:[^\]]+\]\]\s*/g, '').trim();
+  return String(content || '')
+    .replace(/\n?\s*\[\[tiktok:[^\]]+\]\]\s*/g, '')
+    .replace(/\n?\s*\[\[yt_vertical\]\]\s*/g, '')
+    .trim();
 }
 function updateYoutubePreview(){
   const input = document.getElementById('fYoutube');
@@ -7881,7 +7935,7 @@ function updateYoutubePreview(){
       ${youtubeThumbImgHtml(info.id, 'YouTube封面')}
       <div class="play-badge">${playIcon()}</div>
     </div>
-    <div class="youtube-preview-note">${uiIcon('video',14)} 已识别视频，发布后会用 YouTube 封面作为帖子封面。</div>
+    <div class="youtube-preview-note">${uiIcon('video',14)} 已识别视频，发布后会用 YouTube 封面作为帖子封面${isYoutubeVerticalSource(info.url) ? '，并按竖屏展示' : ''}。</div>
   `;
 }
 /* ====== Supabase 写入操作 ====== */
@@ -8063,7 +8117,10 @@ async function submitPost(){
   const pendingTag = document.getElementById('fCustomTag');
   if(pendingTag && pendingTag.value.trim()) addCustomTag(pendingTag.value);
   const tagsArr = [...customTags];
-  const contentToSave = tiktokInfo ? `${content}\n\n${tiktokMarker(tiktokInfo.url)}` : content;
+  const ytVertical = videoInfo && videoInfo.provider === 'youtube' && isYoutubeVerticalSource(videoInfo.url);
+  const contentToSave = content
+    + (tiktokInfo ? `\n\n${tiktokMarker(tiktokInfo.url)}` : '')
+    + (ytVertical ? `\n\n${youtubeVerticalMarker()}` : '');
   const excerpt = content.slice(0,40)+(content.length>40?'…':'');
   const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[coverImageIndex] : 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
   const images = uploadedImages.length > 0 ? uploadedImages : null;
@@ -8079,7 +8136,7 @@ async function submitPost(){
     const p = posts.find(x => x.id === editingPostId);
     if(p){
       p.title = title; p.content = contentToSave; p.excerpt = excerpt;
-      p.category = cat; p.youtube = ytId; p.event = event; p.tags = tagsArr;
+      p.category = cat; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
       p.tiktok_url = tiktokInfo ? tiktokInfo.url : null;
       p.location = location || null;
       if(uploadedImages.length > 0){ p.image = image; p.images = images; }
@@ -8107,7 +8164,7 @@ async function submitPost(){
     id: nextPostId++, category:cat, title, excerpt,
     user_id: session.user.id,
     content: contentToSave, image, images, tags: tagsArr, location: location || null,
-    youtube: ytId, author: authorName, time:'刚刚', likes:0, liked:false,
+    youtube: ytId, youtube_vertical: ytVertical, author: authorName, time:'刚刚', likes:0, liked:false,
     tiktok_url: tiktokInfo ? tiktokInfo.url : null, event, comments:[]
   };
   posts.unshift(localPost);
