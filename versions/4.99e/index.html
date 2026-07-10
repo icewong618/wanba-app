@@ -204,7 +204,7 @@
   .deals-search-panel-title{font-size:13px;font-weight:900;color:var(--ink);}
   .deals-search-panel-title span{display:block;font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:3px;line-height:1.5;}
   .deals-search-panel-close{width:26px;height:26px;border-radius:50%;background:var(--bg-alt);color:var(--ink-faint);font-size:16px;font-weight:900;line-height:1;}
-  .deals-meta-row{margin-top:var(--deals-fixed-top, 235px);}
+  .deals-meta-row{margin-top:var(--deals-fixed-top, 215px);}
   .deals-result-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;font-size:11px;color:var(--ink-faint);}
   .deals-result-toolbar b{color:var(--sage-dark);}
   .deals-result-list{display:flex;flex-direction:column;gap:9px;}
@@ -267,7 +267,7 @@
   .deal-form-actions button{flex:1;border-radius:999px;padding:10px;font-size:13px;font-weight:900;background:var(--bg-alt);color:var(--ink-soft);}
   .deal-form-actions .primary{background:var(--sage);color:#fff;}
   .deal-source-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;background:var(--sage-light);color:var(--sage-dark);font-size:10.5px;font-weight:800;padding:3px 7px;margin-left:6px;}
-  .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:var(--deals-fixed-top, 235px) 16px 4px;}
+  .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:var(--deals-fixed-top, 215px) 16px 4px;}
   .deals-section-header{font-size:15px;font-weight:800;color:var(--ink);margin:12px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .deals-section-header span{font-size:11.5px;font-weight:600;color:var(--ink-faint);}
   .deals-hot-scroll{display:flex;gap:12px;overflow-x:auto;padding:0 16px 8px;scrollbar-width:none;}
@@ -911,7 +911,7 @@
   #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
   .page:not(#page-profile){padding-top:calc(12px + env(safe-area-inset-top));}
   #page-home{padding-top:calc(12px + env(safe-area-inset-top));}
-  #page-home .feed{margin-top:var(--home-fixed-top, 170px);}
+  #page-home .feed{margin-top:var(--home-fixed-top, 150px);}
   #page-deals,#page-profile{padding-left:0;padding-right:0;}
   #page-profile{padding-top:0;background:#fff;}
   .page-header{
@@ -976,6 +976,10 @@
   .profile-menu button{
     width:100%;display:flex;align-items:center;gap:8px;text-align:left;
     padding:10px 11px;border-radius:10px;color:var(--ink);font-size:13px;font-weight:800;
+  }
+  .profile-menu .merchant-apply-top-btn{
+    margin:0;border:0;background:transparent;box-shadow:none;color:var(--ink);
+    justify-content:flex-start;max-width:none;
   }
   .profile-menu button:hover{background:var(--bg-alt);}
   .profile-cover-info{position:relative;z-index:2;display:flex;gap:13px;align-items:flex-end;}
@@ -1070,6 +1074,15 @@
   }
   .avatar-crop-actions .cancel{background:#fff;color:var(--ink-soft);}
   .avatar-crop-actions .save{background:var(--sage-dark);color:#fff;border-color:var(--sage-dark);}
+  .cover-crop-sheet{max-width:640px;}
+  .cover-crop-frame{
+    width:min(560px,84vw);height:auto;aspect-ratio:2.35/1;border-radius:16px;
+  }
+  .cover-crop-guide{
+    position:absolute;inset:0;border:2px solid rgba(255,255,255,.9);
+    box-shadow:0 0 0 999px rgba(0,0,0,.16) inset;border-radius:16px;
+    pointer-events:none;
+  }
   .profile-basic-info{flex:1;padding-top:8px;}
   .profile-username{font-size:18px;font-weight:700;line-height:1.3;}
   .profile-id{font-size:12px;color:var(--ink-faint);}
@@ -1677,6 +1690,7 @@
             <button class="profile-cover-menu-btn" onclick="toggleProfileMenu(event)" aria-label="菜单"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg></span></button>
             <div class="profile-menu" id="profileMenu">
               <button id="authLoginBtn" onclick="event.stopPropagation();openProfileLogin()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
+              <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="closeProfileMenu();openMerchantApplySheet()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M4 10h16"></path><path d="M5 10l1-5h12l1 5"></path><path d="M6 10v10h12V10"></path><path d="M9 20v-6h6v6"></path></svg></span>成为商家</button>
               <button id="profileAdminBtn" onclick="closeProfileMenu();switchTab('admin')" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6V20a2 2 0 0 1-4 0v-.08a1.8 1.8 0 0 0-1-.6 1.8 1.8 0 0 0-1.98.36l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-.6-1H4a2 2 0 0 1 0-4h.08a1.8 1.8 0 0 0 .6-1 1.8 1.8 0 0 0-.36-1.98l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05A1.8 1.8 0 0 0 9 4.6a1.8 1.8 0 0 0 1-.6V4a2 2 0 0 1 4 0v.08a1.8 1.8 0 0 0 1 .6 1.8 1.8 0 0 0 1.98-.36l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05A1.8 1.8 0 0 0 19.4 9c.2.34.4.66.6 1H20a2 2 0 0 1 0 4h-.08a1.8 1.8 0 0 0-.52 1z"></path></svg></span>管理后台</button>
               <button id="authOutBtn" onclick="closeProfileMenu();switchAccount()" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M14 5h5v14h-5"></path></svg></span>切换账号</button>
             </div>
@@ -1692,7 +1706,6 @@
               <div class="profile-cover-main">
                 <div class="profile-cover-name-row">
                   <div class="profile-cover-name" id="userNameDisplay">未登录用户</div>
-                  <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="openMerchantApplySheet()"><span class="ui-icon" style="width:13px;height:13px;"><svg viewBox="0 0 24 24"><path d="M4 10h16"></path><path d="M5 10l1-5h12l1 5"></path><path d="M6 10v10h12V10"></path><path d="M9 20v-6h6v6"></path></svg></span>成为商家</button>
                 </div>
                 <div class="profile-cover-id" id="userIdDisplay">ID：登录后生成</div>
                 <div class="profile-cover-location" id="userLocationDisplay">IP属地：登录后显示</div>
@@ -1827,6 +1840,29 @@
       <div class="avatar-crop-actions">
         <button class="cancel" onclick="closeAvatarCropper()">取消</button>
         <button class="save" onclick="confirmAvatarCrop()">使用头像</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="coverCropOverlay">
+  <div class="avatar-crop-sheet cover-crop-sheet">
+    <div class="avatar-crop-head">
+      <span>调整背景图</span>
+      <button onclick="closeCoverCropper()" style="border:none;background:none;font-size:20px;line-height:1;cursor:pointer;color:var(--ink-soft);">×</button>
+    </div>
+    <div class="avatar-crop-body">
+      <div class="avatar-crop-frame cover-crop-frame" id="coverCropFrame">
+        <img id="coverCropImage" alt="">
+        <div class="cover-crop-guide"></div>
+      </div>
+      <div class="avatar-crop-tools">
+        <span>缩放</span>
+        <input type="range" id="coverZoomRange" min="1" max="3" step="0.01" value="1" oninput="setCoverCropZoom(this.value)">
+      </div>
+      <div class="avatar-crop-actions">
+        <button class="cancel" onclick="closeCoverCropper()">取消</button>
+        <button class="save" onclick="confirmCoverCrop()">使用背景</button>
       </div>
     </div>
   </div>
@@ -2281,20 +2317,20 @@ function openProfileCoverPicker(){
 }
 function onProfileCoverSelected(event){
   const file = event.target.files && event.target.files[0];
+  event.target.value = '';
   if(!file) return;
-  if(!file.type.startsWith('image/')){
+  if(!file.type || !file.type.startsWith('image/')){
     showToast('请选择图片文件');
     return;
   }
   const reader = new FileReader();
-  reader.onload = () => {
-    currentUser.cover = reader.result;
-    saveUserProfileToStorage();
-    updateProfileDisplay();
-    syncProfileToDb();
-    showToast('背景已更新');
-    event.target.value = '';
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => openCoverCropper(img, e.target.result);
+    img.onerror = () => showToast('图片读取失败，请换一张试试');
+    img.src = e.target.result;
   };
+  reader.onerror = () => showToast('图片读取失败，请换一张试试');
   reader.readAsDataURL(file);
 }
 
@@ -2722,6 +2758,156 @@ function confirmAvatarCrop(){
   if(session && session.user) refreshAvatarDisplays(session.user.id);
   closeAvatarCropper();
   syncProfileToDb();
+}
+
+let coverCropState = {
+  img: null,
+  dataUrl: '',
+  zoom: 1,
+  x: 0,
+  y: 0,
+  dragging: false,
+  startX: 0,
+  startY: 0,
+  originX: 0,
+  originY: 0
+};
+function openCoverCropper(img, dataUrl){
+  coverCropState.img = img;
+  coverCropState.dataUrl = dataUrl;
+  coverCropState.zoom = 1;
+  coverCropState.x = 0;
+  coverCropState.y = 0;
+  const overlay = document.getElementById('coverCropOverlay');
+  const cropImg = document.getElementById('coverCropImage');
+  const zoom = document.getElementById('coverZoomRange');
+  if(zoom) zoom.value = '1';
+  if(cropImg) cropImg.src = dataUrl;
+  overlay?.classList.add('open');
+  requestAnimationFrame(() => {
+    bindCoverCropDrag();
+    renderCoverCropper();
+  });
+}
+function closeCoverCropper(){
+  const overlay = document.getElementById('coverCropOverlay');
+  if(overlay) overlay.classList.remove('open');
+  coverCropState.dragging = false;
+}
+function coverCropMetrics(){
+  const frame = document.getElementById('coverCropFrame');
+  const img = coverCropState.img;
+  const width = frame ? frame.clientWidth : 560;
+  const height = frame ? frame.clientHeight : Math.round(width / 2.35);
+  if(!img || !img.width || !img.height || !width || !height) return null;
+  const baseScale = Math.max(width / img.width, height / img.height);
+  const scale = baseScale * coverCropState.zoom;
+  const dispW = img.width * scale;
+  const dispH = img.height * scale;
+  return { width, height, scale, dispW, dispH };
+}
+function clampCoverCrop(){
+  const m = coverCropMetrics();
+  if(!m) return;
+  const maxX = Math.max(0, (m.dispW - m.width) / 2);
+  const maxY = Math.max(0, (m.dispH - m.height) / 2);
+  coverCropState.x = Math.min(maxX, Math.max(-maxX, coverCropState.x));
+  coverCropState.y = Math.min(maxY, Math.max(-maxY, coverCropState.y));
+}
+function renderCoverCropper(){
+  const cropImg = document.getElementById('coverCropImage');
+  const m = coverCropMetrics();
+  if(!cropImg || !m) return;
+  clampCoverCrop();
+  cropImg.style.width = `${m.dispW}px`;
+  cropImg.style.height = `${m.dispH}px`;
+  cropImg.style.left = `calc(50% + ${coverCropState.x}px)`;
+  cropImg.style.top = `calc(50% + ${coverCropState.y}px)`;
+}
+function setCoverCropZoom(value){
+  const prev = coverCropState.zoom || 1;
+  coverCropState.zoom = Math.max(1, Math.min(3, parseFloat(value) || 1));
+  if(prev !== coverCropState.zoom){
+    coverCropState.x *= coverCropState.zoom / prev;
+    coverCropState.y *= coverCropState.zoom / prev;
+  }
+  renderCoverCropper();
+}
+function bindCoverCropDrag(){
+  const frame = document.getElementById('coverCropFrame');
+  if(!frame || frame.dataset.bound === '1') return;
+  frame.dataset.bound = '1';
+  frame.style.touchAction = 'none';
+  const startDragAt = (clientX, clientY) => {
+    if(!coverCropState.img) return;
+    coverCropState.dragging = true;
+    coverCropState.startX = clientX;
+    coverCropState.startY = clientY;
+    coverCropState.originX = coverCropState.x;
+    coverCropState.originY = coverCropState.y;
+    frame.classList.add('dragging');
+  };
+  const moveDragTo = (clientX, clientY) => {
+    if(!coverCropState.dragging) return;
+    coverCropState.x = coverCropState.originX + (clientX - coverCropState.startX);
+    coverCropState.y = coverCropState.originY + (clientY - coverCropState.startY);
+    renderCoverCropper();
+  };
+  const endDrag = e => {
+    coverCropState.dragging = false;
+    frame.classList.remove('dragging');
+    if(e && e.pointerId != null){ try { frame.releasePointerCapture(e.pointerId); } catch(err){} }
+  };
+  frame.addEventListener('pointerdown', e => {
+    startDragAt(e.clientX, e.clientY);
+    if(e.pointerId != null){ try { frame.setPointerCapture(e.pointerId); } catch(err){} }
+  });
+  frame.addEventListener('pointermove', e => moveDragTo(e.clientX, e.clientY));
+  frame.addEventListener('pointerup', endDrag);
+  frame.addEventListener('pointercancel', endDrag);
+  frame.addEventListener('touchstart', e => {
+    const t = e.touches && e.touches[0];
+    if(!t) return;
+    e.preventDefault();
+    startDragAt(t.clientX, t.clientY);
+  }, { passive:false });
+  frame.addEventListener('touchmove', e => {
+    const t = e.touches && e.touches[0];
+    if(!t) return;
+    e.preventDefault();
+    moveDragTo(t.clientX, t.clientY);
+  }, { passive:false });
+  frame.addEventListener('touchend', endDrag);
+  frame.addEventListener('touchcancel', endDrag);
+  window.addEventListener('resize', () => {
+    if(document.getElementById('coverCropOverlay')?.classList.contains('open')) renderCoverCropper();
+  });
+}
+function confirmCoverCrop(){
+  const img = coverCropState.img;
+  const m = coverCropMetrics();
+  if(!img || !m){ showToast('请先选择背景图片'); return; }
+  const outputW = 1200;
+  const outputH = 510;
+  const left = m.width / 2 + coverCropState.x - m.dispW / 2;
+  const top = m.height / 2 + coverCropState.y - m.dispH / 2;
+  const sx = (0 - left) / m.scale;
+  const sy = (0 - top) / m.scale;
+  const sw = m.width / m.scale;
+  const sh = m.height / m.scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = outputW;
+  canvas.height = outputH;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, outputW, outputH);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputW, outputH);
+  currentUser.cover = canvas.toDataURL('image/jpeg', 0.86);
+  saveUserProfileToStorage();
+  updateProfileDisplay();
+  closeCoverCropper();
+  syncProfileToDb();
+  showToast('背景已更新');
 }
 /* 同步头像/昵称到 profiles 表：先尝试更新已有行，没有行再插入（与关注表同一套路） */
 async function syncProfileToDb(){
@@ -8615,7 +8801,7 @@ function updateFixedTopLayout(){
   requestAnimationFrame(() => {
     const root = document.documentElement;
     const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 24}px` : '170px');
+    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 8}px` : '150px');
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
     root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
@@ -8628,7 +8814,7 @@ function updateFixedTopLayout(){
     root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
 
     const dealsHero = document.querySelector('#page-deals.active .deals-hero');
-    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 18}px` : '235px');
+    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 8}px` : '215px');
   });
 }
 window.addEventListener('resize', updateFixedTopLayout);
