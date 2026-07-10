@@ -60,6 +60,7 @@
   function indexUrl(version){
     const target = new URL('index.html', window.location.href);
     target.searchParams.set('app_v', version || FALLBACK_VERSION);
+    target.searchParams.set('embedded_app', '1');
     target.searchParams.set('refresh_t', String(Date.now()));
     return target;
   }

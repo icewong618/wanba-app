@@ -891,8 +891,8 @@
   }
   .page.active{display:block;}
   #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
-  .page:not(#page-profile){padding-top:env(safe-area-inset-top);}
-  #page-home{padding-top:0;}
+  .page:not(#page-profile){padding-top:calc(12px + env(safe-area-inset-top));}
+  #page-home{padding-top:calc(12px + env(safe-area-inset-top));}
   #page-home .feed{margin-top:0;}
   #page-deals,#page-profile{padding-left:0;padding-right:0;}
   #page-profile{padding-top:0;background:#fff;}
@@ -1636,7 +1636,7 @@
           <div class="profile-cover-bg" id="profileCoverBg">
             <button class="profile-cover-menu-btn" onclick="toggleProfileMenu(event)" aria-label="菜单"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg></span></button>
             <div class="profile-menu" id="profileMenu">
-              <button id="authLoginBtn" onclick="closeProfileMenu();openAuth()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
+              <button id="authLoginBtn" onclick="event.stopPropagation();openProfileLogin()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
               <button id="profileAdminBtn" onclick="closeProfileMenu();switchTab('admin')" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6V20a2 2 0 0 1-4 0v-.08a1.8 1.8 0 0 0-1-.6 1.8 1.8 0 0 0-1.98.36l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-.6-1H4a2 2 0 0 1 0-4h.08a1.8 1.8 0 0 0 .6-1 1.8 1.8 0 0 0-.36-1.98l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05A1.8 1.8 0 0 0 9 4.6a1.8 1.8 0 0 0 1-.6V4a2 2 0 0 1 4 0v.08a1.8 1.8 0 0 0 1 .6 1.8 1.8 0 0 0 1.98-.36l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05A1.8 1.8 0 0 0 19.4 9c.2.34.4.66.6 1H20a2 2 0 0 1 0 4h-.08a1.8 1.8 0 0 0-.52 1z"></path></svg></span>管理后台</button>
               <button id="authOutBtn" onclick="closeProfileMenu();switchAccount()" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M14 5h5v14h-5"></path></svg></span>切换账号</button>
             </div>
@@ -2019,6 +2019,15 @@ function syncVisibleAppVersion(){
   });
 }
 
+function isEmbeddedAppEntry(){
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    return params.get('embedded_app') === '1' || !!params.get('app_v');
+  } catch(e){
+    return false;
+  }
+}
+
 function clearOldVersionCache(){
   const last = localStorage.getItem(APP_CACHE_VERSION_KEY);
   if(last === APP_VERSION) return;
@@ -2180,6 +2189,10 @@ function openAuth(){
   document.getElementById('authMsg').textContent = '';
 }
 function closeAuth(){ document.getElementById('authModal').style.display = 'none'; }
+function openProfileLogin(){
+  closeProfileMenu();
+  setTimeout(() => openAuth(), 0);
+}
 function currentAccountLabel(){
   if(!(session && session.user)) return '未登录';
   return (session.user.user_metadata && session.user.user_metadata.name) || session.user.email || '当前账号';
@@ -8514,6 +8527,8 @@ async function bootApp(){
   const minSplashMs = 850;
   const maxSplashMs = 4600;
   syncVisibleAppVersion();
+  const embeddedAppEntry = isEmbeddedAppEntry();
+  if(embeddedAppEntry) hideLaunchScreen();
 
   try {
     const updating = await checkRemoteAppVersion();
@@ -8545,6 +8560,7 @@ async function bootApp(){
     renderQuicklinks();
     renderFeed();
   } finally {
+    if(embeddedAppEntry) return;
     const elapsed = Date.now() - startedAt;
     if(elapsed < minSplashMs){
       await new Promise(resolve => setTimeout(resolve, minSplashMs - elapsed));
