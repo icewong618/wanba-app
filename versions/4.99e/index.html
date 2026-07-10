@@ -204,7 +204,7 @@
   .deals-search-panel-title{font-size:13px;font-weight:900;color:var(--ink);}
   .deals-search-panel-title span{display:block;font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:3px;line-height:1.5;}
   .deals-search-panel-close{width:26px;height:26px;border-radius:50%;background:var(--bg-alt);color:var(--ink-faint);font-size:16px;font-weight:900;line-height:1;}
-  .deals-meta-row{margin-top:var(--deals-fixed-top, 290px);}
+  .deals-meta-row{margin-top:var(--deals-fixed-top, 235px);}
   .deals-result-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;font-size:11px;color:var(--ink-faint);}
   .deals-result-toolbar b{color:var(--sage-dark);}
   .deals-result-list{display:flex;flex-direction:column;gap:9px;}
@@ -267,7 +267,7 @@
   .deal-form-actions button{flex:1;border-radius:999px;padding:10px;font-size:13px;font-weight:900;background:var(--bg-alt);color:var(--ink-soft);}
   .deal-form-actions .primary{background:var(--sage);color:#fff;}
   .deal-source-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;background:var(--sage-light);color:var(--sage-dark);font-size:10.5px;font-weight:800;padding:3px 7px;margin-left:6px;}
-  .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:var(--deals-fixed-top, 290px) 16px 4px;}
+  .deals-meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-faint);margin:var(--deals-fixed-top, 235px) 16px 4px;}
   .deals-section-header{font-size:15px;font-weight:800;color:var(--ink);margin:12px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .deals-section-header span{font-size:11.5px;font-weight:600;color:var(--ink-faint);}
   .deals-hot-scroll{display:flex;gap:12px;overflow-x:auto;padding:0 16px 8px;scrollbar-width:none;}
@@ -910,8 +910,8 @@
   .page.active{display:block;}
   #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
   .page:not(#page-profile){padding-top:calc(12px + env(safe-area-inset-top));}
-  #page-home{padding-top:var(--home-fixed-top, calc(190px + env(safe-area-inset-top)));}
-  #page-home .feed{margin-top:0;}
+  #page-home{padding-top:calc(12px + env(safe-area-inset-top));}
+  #page-home .feed{margin-top:var(--home-fixed-top, 170px);}
   #page-deals,#page-profile{padding-left:0;padding-right:0;}
   #page-profile{padding-top:0;background:#fff;}
   .page-header{
@@ -2845,7 +2845,8 @@ function youtubeEmbedUrl(id, opts){
     autoplay: '1',
     mute: '0',
     playsinline: '1',
-    enablejsapi: '1'
+    enablejsapi: '1',
+    vq: 'hd1080'
   });
   try { params.set('origin', window.location.origin); } catch(e){}
   if(opts.start) params.set('start', String(opts.start));
@@ -2857,10 +2858,17 @@ function unmuteYoutubeFrame(id){
   try {
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'unMute', args:[] }), '*');
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setVolume', args:[100] }), '*');
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setPlaybackQuality', args:['hd1080'] }), '*');
+    frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'setPlaybackQuality', args:['hd720'] }), '*');
     frame.contentWindow.postMessage(JSON.stringify({ event:'command', func:'playVideo', args:[] }), '*');
   } catch(e){}
   const btn = document.getElementById(`ytSound-${id}`);
   if(btn) btn.style.display = 'none';
+}
+function primeYoutubeSound(id){
+  [250, 700, 1400, 2400].forEach(delay => {
+    setTimeout(() => unmuteYoutubeFrame(id), delay);
+  });
 }
 function mediaWatermarkText(author){
   return `乐生活 · ${author || '乐生活用户'}`;
@@ -6141,7 +6149,7 @@ function renderPostModal(){
     const ytVertical = getPostYoutubeVertical(p);
     const safeYtId = String(p.youtube || '').replace(/[^A-Za-z0-9_-]/g, '');
     media = `<div class="yt-wrap ${ytVertical ? 'vertical' : ''}">
-      <iframe id="ytFrame-${safeYtId}" src="${youtubeEmbedUrl(safeYtId)}" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen onload="setTimeout(()=>unmuteYoutubeFrame('${safeYtId}'),350);setTimeout(()=>unmuteYoutubeFrame('${safeYtId}'),1200);"></iframe>
+      <iframe id="ytFrame-${safeYtId}" src="${youtubeEmbedUrl(safeYtId)}" title="YouTube video" allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen onload="primeYoutubeSound('${safeYtId}')"></iframe>
     </div>`;
   } else if(tikTokInfo){
     const src = tikTokInfo.id ? `https://www.tiktok.com/embed/v2/${tikTokInfo.id}` : tikTokInfo.url;
@@ -6222,6 +6230,9 @@ function renderPostModal(){
     </div>
   `;
   setupCarouselTouch();
+  if(p.youtube){
+    primeYoutubeSound(String(p.youtube || '').replace(/[^A-Za-z0-9_-]/g, ''));
+  }
 }
 /* 关注状态查询（基于 follows 表） */
 function isFollowing(uid){
@@ -8604,7 +8615,7 @@ function updateFixedTopLayout(){
   requestAnimationFrame(() => {
     const root = document.documentElement;
     const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 58}px` : '190px');
+    root.style.setProperty('--home-fixed-top', topHeader ? `${Math.ceil(topHeader.getBoundingClientRect().height) + 24}px` : '170px');
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
     root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
@@ -8617,7 +8628,7 @@ function updateFixedTopLayout(){
     root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
 
     const dealsHero = document.querySelector('#page-deals.active .deals-hero');
-    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 58}px` : '290px');
+    root.style.setProperty('--deals-fixed-top', dealsHero ? `${Math.ceil(dealsHero.getBoundingClientRect().height) + 18}px` : '235px');
   });
 }
 window.addEventListener('resize', updateFixedTopLayout);
@@ -8657,7 +8668,7 @@ window.switchTab = function(tab){
     const feed = document.getElementById('feed');
     const home = document.getElementById('page-home');
     if(home){ home.style.marginTop = '0'; home.style.paddingTop = ''; }
-    if(feed){ feed.style.marginTop = '0'; feed.style.paddingTop = '0'; }
+    if(feed){ feed.style.paddingTop = '0'; }
   }
   updateFixedTopLayout();
   
