@@ -2056,6 +2056,21 @@ function versionManifestUrl(){
   return url.href;
 }
 
+async function replaceDocumentWithFreshIndex(version){
+  const target = new URL('index.html', window.location.href);
+  target.searchParams.set('app_v', version || APP_VERSION);
+  target.searchParams.set('refresh_t', String(Date.now()));
+  const res = await fetch(target.href, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' }
+  });
+  if(!res.ok) throw new Error('index http ' + res.status);
+  const html = await res.text();
+  document.open();
+  document.write(html);
+  document.close();
+}
+
 async function checkRemoteAppVersion(){
   if(window.location.protocol === 'file:') return false;
   try {
@@ -2078,10 +2093,7 @@ async function checkRemoteAppVersion(){
       return false;
     }
     sessionStorage.setItem(APP_RELOAD_VERSION_KEY, reloadKey);
-    const next = new URL(window.location.href);
-    next.searchParams.set('app_v', remoteVersion);
-    next.searchParams.set('refresh_t', String(Date.now()));
-    window.location.replace(next.href);
+    await replaceDocumentWithFreshIndex(remoteVersion);
     return true;
   } catch(e){
     console.warn('版本检查失败，继续使用当前页面:', e.message);
