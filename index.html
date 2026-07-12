@@ -2518,7 +2518,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.95';
+const APP_VERSION = '5.96';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5311,7 +5311,47 @@ function renderMemberCardTransactionTarget(membershipId, merchantUserId){
 window._userMembershipCards = window._userMembershipCards || { rows: [], merchants: {}, loaded:false, mode:'常用' };
 function setUserMembershipMode(mode){
   window._userMembershipCards.mode = mode || '常用';
+  if(mode === '附近' && !window._userMembershipCards.location && !window._userMembershipCards.locating){
+    requestUserMembershipNearbyLocation();
+  }
   renderUserMembershipCards();
+}
+function formatMembershipDistance(km){
+  if(!Number.isFinite(km)) return '';
+  return km < 1 ? `${Math.max(1, Math.round(km * 1000))} 米` : `${km.toFixed(km < 10 ? 1 : 0)} 公里`;
+}
+function isMembershipCoordinate(value){
+  return value !== null && value !== '' && value !== undefined && Number.isFinite(Number(value));
+}
+function membershipDistanceKm(fromLat, fromLng, toLat, toLng){
+  if(![fromLat, fromLng, toLat, toLng].every(isMembershipCoordinate)) return null;
+  const values = [fromLat, fromLng, toLat, toLng].map(Number);
+  const rad = value => value * Math.PI / 180;
+  const [aLat, aLng, bLat, bLng] = values;
+  const dLat = rad(bLat - aLat);
+  const dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+function requestUserMembershipNearbyLocation(){
+  const state = window._userMembershipCards;
+  if(!navigator.geolocation){
+    state.locationError = '当前设备不支持定位，请使用“常用”查看会员卡。';
+    renderUserMembershipCards();
+    return;
+  }
+  state.locating = true;
+  state.locationError = '';
+  renderUserMembershipCards();
+  navigator.geolocation.getCurrentPosition(position => {
+    state.location = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+    state.locating = false;
+    renderUserMembershipCards();
+  }, error => {
+    state.locating = false;
+    state.locationError = error && error.code === 1 ? '你没有授权定位，可在浏览器或 App 设置中允许位置权限后重试。' : '暂时无法取得当前位置，请稍后重试。';
+    renderUserMembershipCards();
+  }, { enableHighAccuracy:true, timeout:10000, maximumAge:300000 });
 }
 async function loadUserMembershipCards(force){
   if(!(session && session.user)){
@@ -5333,7 +5373,7 @@ async function loadUserMembershipCards(force){
     const ids = [...new Set(rows.map(r => r.merchant_user_id).filter(Boolean))];
     let merchants = {};
     if(ids.length){
-      const merchantRes = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${ids.map(encodeURIComponent).join(',')})&verified=eq.true&select=user_id,business_name,logo,address,category,phone,slug,cover_image,loyalty_target,loyalty_reward`, { method:'GET' });
+      const merchantRes = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${ids.map(encodeURIComponent).join(',')})&verified=eq.true&select=user_id,business_name,logo,address,category,phone,slug,cover_image,loyalty_target,loyalty_reward,latitude,longitude`, { method:'GET' });
       if(merchantRes.ok){
         const merchantRows = await merchantRes.json();
         merchantRows.forEach(m => { merchants[m.user_id] = m; setMerchantIdentityCache(m.user_id, m); });
@@ -5367,16 +5407,26 @@ function renderUserMembershipCards(){
   const mode = state.mode || '常用';
   let rows = (state.rows || []).slice();
   if(mode === '收藏') rows = rows.filter(r => isUserMembershipFavorite(r.id));
-  if(mode === '附近') rows = rows.slice().sort((a,b) => {
-    const ma = state.merchants[a.merchant_user_id] || {};
-    const mb = state.merchants[b.merchant_user_id] || {};
-    return String(ma.address || '').localeCompare(String(mb.address || ''), 'zh-Hans-CN');
-  });
+  if(mode === '附近' && state.location){
+    rows = rows.map(row => {
+      const merchant = state.merchants[row.merchant_user_id] || {};
+      return Object.assign({}, row, { _distanceKm: membershipDistanceKm(state.location.latitude, state.location.longitude, merchant.latitude, merchant.longitude) });
+    }).sort((a, b) => {
+      const da = Number.isFinite(a._distanceKm) ? a._distanceKm : Number.POSITIVE_INFINITY;
+      const db = Number.isFinite(b._distanceKm) ? b._distanceKm : Number.POSITIVE_INFINITY;
+      return da - db;
+    });
+  }
+  const nearbyNote = mode !== '附近' ? '' : state.locating
+    ? '<div class="ai-note" style="margin:0 0 12px;">正在获取当前位置…</div>'
+    : state.location
+      ? '<div class="ai-note" style="margin:0 0 12px;">已按距离排序。你的定位只在当前设备临时使用，不会上传或保存。</div>'
+      : `<div class="ai-note" style="margin:0 0 12px;">${escHtml(state.locationError || '开启定位后，可按距离查看附近可用会员卡。')} <button onclick="requestUserMembershipNearbyLocation()" style="margin-left:6px;border:none;background:none;color:var(--sage-dark);font:inherit;font-weight:900;text-decoration:underline;">${state.locationError ? '重新定位' : '开启定位'}</button></div>`;
   body.innerHTML = `
     <div class="member-card-tabs">
       ${['常用','收藏','附近'].map(tab => `<button class="${mode === tab ? 'on' : ''}" onclick="setUserMembershipMode('${tab}')">${tab}</button>`).join('')}
     </div>
-    ${mode === '附近' ? '<div class="ai-note" style="margin:0 0 12px;">附近会员卡已预留 GPS 排序位置。后续接入定位后，会优先显示离你最近、现在可使用的商家会员卡。</div>' : ''}
+    ${nearbyNote}
     ${rows.length ? `<div class="member-card-list">${rows.map(userMembershipCardHtml).join('')}</div>` : `<div class="deals-empty-panel">${mode === '收藏' ? '还没有收藏会员卡。' : mode === '附近' ? '附近暂时没有可用会员卡。' : '还没有加入任何商家会员。'}</div>`}
   `;
 }
@@ -5386,6 +5436,7 @@ function userMembershipCardHtml(row){
   const name = m.business_name || '乐生活商家';
   const logo = m.logo || '';
   const address = m.address || '地址待补充';
+  const distance = formatMembershipDistance(row._distanceKm);
   const fav = isUserMembershipFavorite(row.id);
   return `
     <div class="member-card">
@@ -5394,7 +5445,7 @@ function userMembershipCardHtml(row){
         <div class="member-card-logo">${logo ? `<img src="${escAttr(logo)}" alt="">` : escHtml(initials(name))}</div>
         <div style="min-width:0;flex:1;">
           <div class="member-card-name">${escHtml(name)}</div>
-          <div class="member-card-meta">${escHtml(address)}</div>
+          <div class="member-card-meta">${escHtml(address)}${distance ? ` · 距你 ${escHtml(distance)}` : (window._userMembershipCards.mode === '附近' ? ' · 未设定门店定位' : '')}</div>
         </div>
       </div>
       <div class="member-card-stats">
@@ -5842,6 +5893,11 @@ function openMerchantEditSheet(){
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">地址</label>
       <input type="text" id="mBizAddr" value="${escAttr(m.address)}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
     </div>
+    <div style="margin-bottom:12px;padding:11px;border:1px solid var(--line);border-radius:12px;background:var(--bg-alt);">
+      <div style="font-size:12px;font-weight:900;color:var(--ink);">门店定位</div>
+      <div id="mBizLocationStatus" style="font-size:11px;color:var(--ink-soft);line-height:1.45;margin:5px 0 8px;">${isMembershipCoordinate(m.latitude) && isMembershipCoordinate(m.longitude) ? `已设置门店坐标：${Number(m.latitude).toFixed(5)}, ${Number(m.longitude).toFixed(5)}` : '到店后使用当前定位，可让会员卡“附近”按真实距离排序。'}</div>
+      <button type="button" onclick="captureMerchantStoreLocation()" style="border:1px solid var(--sage);border-radius:999px;background:#fff;color:var(--sage-dark);font-size:11px;font-weight:900;padding:7px 10px;">使用当前定位作为门店位置</button>
+    </div>
     <div style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">电话</label>
       <input type="tel" id="mBizPhone" value="${escAttr(m.phone)}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
@@ -5880,6 +5936,21 @@ function openMerchantEditSheet(){
   document.getElementById('merchantEditSheet')?.classList.add('open');
 }
 function closeMerchantEditSheet(){ document.getElementById('merchantEditSheet')?.classList.remove('open'); }
+function captureMerchantStoreLocation(){
+  if(!navigator.geolocation){ showToast('当前设备不支持定位'); return; }
+  const status = document.getElementById('mBizLocationStatus');
+  if(status) status.textContent = '正在获取当前位置…';
+  navigator.geolocation.getCurrentPosition(position => {
+    currentMerchant = Object.assign({}, currentMerchant, {
+      latitude: Number(position.coords.latitude.toFixed(6)),
+      longitude: Number(position.coords.longitude.toFixed(6)),
+      location_updated_at: new Date().toISOString()
+    });
+    if(status) status.textContent = `已取得门店坐标：${currentMerchant.latitude.toFixed(5)}, ${currentMerchant.longitude.toFixed(5)}。点击保存后生效。`;
+  }, error => {
+    if(status) status.textContent = error && error.code === 1 ? '未获得定位权限，请在浏览器或 App 设置中允许位置权限。' : '定位失败，请在门店内稍后重试。';
+  }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+}
 /* Logo/封面图上传：读取→裁剪→暂存到 currentMerchant，点"保存"时才真正写库 */
 function onMerchantImageSelected(event, type){
   const file = event.target.files && event.target.files[0];
@@ -5919,6 +5990,9 @@ async function saveMerchantProfile(){
     loyalty_reward: document.getElementById('mBizLoyaltyReward').value.trim() || '免费一杯',
     logo: (currentMerchant && currentMerchant.logo) || null,
     cover_image: (currentMerchant && currentMerchant.cover_image) || null,
+    latitude: isMembershipCoordinate(currentMerchant && currentMerchant.latitude) ? Number(currentMerchant.latitude) : null,
+    longitude: isMembershipCoordinate(currentMerchant && currentMerchant.longitude) ? Number(currentMerchant.longitude) : null,
+    location_updated_at: (currentMerchant && currentMerchant.location_updated_at) || null,
     updated_at: new Date().toISOString()
   };
   try {
@@ -11532,7 +11606,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.95 - Membership Redemption Audit】');
+console.log('✓ 页面初始化完成 【版本 5.96 - Nearby Membership Cards】');
 </script>
 </body>
 </html>
