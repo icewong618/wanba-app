@@ -2518,7 +2518,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.96';
+const APP_VERSION = '5.97';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5891,7 +5891,11 @@ function openMerchantEditSheet(){
     </div>
     <div style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">地址</label>
-      <input type="text" id="mBizAddr" value="${escAttr(m.address)}" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="mBizAddr" value="${escAttr(m.address)}" placeholder="请输入完整门牌、街道、城市和州" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+        <button type="button" onclick="findMerchantAddressCandidates()" style="flex-shrink:0;border:1px solid var(--sage);border-radius:999px;background:#fff;color:var(--sage-dark);font-size:11px;font-weight:900;padding:9px 10px;">查找位置</button>
+      </div>
+      <div id="mBizGeocodeCandidates" style="display:grid;gap:7px;margin-top:8px;"></div>
     </div>
     <div style="margin-bottom:12px;padding:11px;border:1px solid var(--line);border-radius:12px;background:var(--bg-alt);">
       <div style="font-size:12px;font-weight:900;color:var(--ink);">门店定位</div>
@@ -5936,6 +5940,62 @@ function openMerchantEditSheet(){
   document.getElementById('merchantEditSheet')?.classList.add('open');
 }
 function closeMerchantEditSheet(){ document.getElementById('merchantEditSheet')?.classList.remove('open'); }
+window._merchantGeocodeCandidates = [];
+async function findMerchantAddressCandidates(){
+  if(!(session && session.access_token && currentMerchant && currentMerchant.user_id === session.user.id)){
+    showToast('只有已认证商家可以查找门店位置');
+    return;
+  }
+  const input = document.getElementById('mBizAddr');
+  const address = input && input.value.trim();
+  const resultBox = document.getElementById('mBizGeocodeCandidates');
+  const status = document.getElementById('mBizLocationStatus');
+  if(!address || address.length < 5){ showToast('请先输入完整门店地址'); return; }
+  if(resultBox) resultBox.innerHTML = '<div style="font-size:11px;color:var(--ink-soft);">正在查找候选位置…</div>';
+  if(status) status.textContent = '正在根据地址查找门店位置…';
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/functions/v1/merchant-geocode`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ address })
+    });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(data.error || `地址查询失败：${res.status}`);
+    const candidates = Array.isArray(data.results) ? data.results : [];
+    window._merchantGeocodeCandidates = candidates;
+    if(!candidates.length){
+      if(resultBox) resultBox.innerHTML = '<div style="font-size:11px;color:var(--ink-faint);">没有找到相符位置，请补充门牌号、城市或州。</div>';
+      if(status) status.textContent = '尚未找到门店位置。';
+      return;
+    }
+    if(resultBox) resultBox.innerHTML = candidates.map((item, index) => `
+      <button type="button" onclick="selectMerchantGeocodeCandidate(${index})" style="text-align:left;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink);font:inherit;">
+        <b style="display:block;font-size:12px;">${escHtml(item.formatted_address)}</b>
+        <span style="display:block;margin-top:3px;font-size:10.5px;color:var(--ink-faint);">选择此地址作为门店位置</span>
+      </button>
+    `).join('');
+    if(status) status.textContent = '请选择一个正确的门店地址，确认后再点击保存。';
+  } catch(e){
+    console.warn('商家地址定位失败:', e.message);
+    if(resultBox) resultBox.innerHTML = `<div style="font-size:11px;color:#b9413a;">${escHtml(e.message || '地址查询失败，请稍后再试。')}</div>`;
+    if(status) status.textContent = '地址定位暂时不可用。';
+  }
+}
+function selectMerchantGeocodeCandidate(index){
+  const item = (window._merchantGeocodeCandidates || [])[index];
+  if(!item || !isMembershipCoordinate(item.latitude) || !isMembershipCoordinate(item.longitude)) return;
+  currentMerchant = Object.assign({}, currentMerchant, {
+    latitude: Number(item.latitude),
+    longitude: Number(item.longitude),
+    location_updated_at: new Date().toISOString()
+  });
+  const input = document.getElementById('mBizAddr');
+  if(input) input.value = item.formatted_address || input.value;
+  const status = document.getElementById('mBizLocationStatus');
+  if(status) status.textContent = `已选择门店位置：${currentMerchant.latitude.toFixed(5)}, ${currentMerchant.longitude.toFixed(5)}。点击保存后生效。`;
+  const resultBox = document.getElementById('mBizGeocodeCandidates');
+  if(resultBox) resultBox.innerHTML = '<div style="font-size:11px;color:var(--sage-dark);font-weight:900;">已选择此门店位置。</div>';
+}
 function captureMerchantStoreLocation(){
   if(!navigator.geolocation){ showToast('当前设备不支持定位'); return; }
   const status = document.getElementById('mBizLocationStatus');
@@ -11606,7 +11666,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.96 - Nearby Membership Cards】');
+console.log('✓ 页面初始化完成 【版本 5.97 - Merchant Address Geocoding】');
 </script>
 </body>
 </html>
