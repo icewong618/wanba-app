@@ -878,6 +878,12 @@
     display:flex;align-items:center;justify-content:center;font-size:16px;
     box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:5;border:none;cursor:pointer;
   }
+  #userPublicOverlay{padding:0;background:#fff;align-items:stretch;overflow:hidden;z-index:460;}
+  #userPublicModal{position:relative;width:100%;max-width:var(--container-w);height:100vh;height:100dvh;max-height:none;border-radius:0;box-shadow:none;}
+  .user-public-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.98);}
+  .user-public-head button{width:38px;height:38px;border-radius:999px;background:var(--bg-alt);color:var(--ink);font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;}
+  .user-public-head h3{margin:0;font-size:15px;font-weight:900;}
+  #userPublicBody{flex:1;min-height:0;overflow-y:auto;padding-bottom:calc(18px + env(safe-area-inset-bottom));}
   #searchOverlay{
     padding:0;background:#fff;align-items:stretch;justify-content:center;overflow:hidden;
   }
@@ -1963,9 +1969,9 @@
 
 <!-- 公开用户主页：普通用户头像/搜索结果进入，展示真实公开笔记 -->
 <div class="overlay" id="userPublicOverlay" onclick="if(event.target.id==='userPublicOverlay')closeUserPublicPage()">
-  <div class="modal" id="userPublicModal" style="position:relative;">
-    <button class="modal-close" onclick="closeUserPublicPage()">✕</button>
-    <div id="userPublicBody" style="padding:0;overflow-y:auto;"></div>
+  <div class="modal" id="userPublicModal">
+    <div class="user-public-head"><button onclick="closeUserPublicPage()" aria-label="关闭">×</button><h3>用户主页</h3><span style="width:38px;height:38px;"></span></div>
+    <div id="userPublicBody"></div>
   </div>
 </div>
 
@@ -2150,6 +2156,11 @@
         <span class="ui-soft-icon berry" style="margin:0 auto 6px;"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M20.5 8.5c0 5-8.5 10.5-8.5 10.5S3.5 13.5 3.5 8.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 8.5 2.5z"></path></svg></span></span>
         <span style="font-size:12px;color:var(--ink);">赞和收藏</span>
         <span class="msg-dot" id="dotLf" style="top:2px;right:2px;"></span>
+      </button>
+      <button onclick="openMsgCat('member')" style="border:none;background:none;cursor:pointer;text-align:center;position:relative;">
+        <span class="ui-soft-icon berry" style="margin:0 auto 6px;"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h5"></path></svg></span></span>
+        <span style="font-size:12px;color:var(--ink);">会员权益</span>
+        <span class="msg-dot" id="dotMember" style="top:2px;right:2px;"></span>
       </button>
     </div>
     <div style="padding:14px 16px 6px;font-size:13px;font-weight:700;color:var(--ink-soft);position:relative;display:inline-block;">私信<span class="msg-dot" id="dotDm" style="top:12px;right:-12px;"></span></div>
@@ -2593,7 +2604,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.103';
+const APP_VERSION = '5.104';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4293,6 +4304,17 @@ async function confirmMerchantCouponRedeem(id){
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/redeem_merchant_coupon_claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ p_claim_id:Number(id) }) });
     if(!res.ok) throw new Error(await res.text());
+    const claim = await res.json();
+    if(claim && claim.user_id){
+      const snapshot = claim.coupon_snapshot || {};
+      await createMemberActivityNotification({
+        userId:claim.user_id,
+        couponClaimId:claim.id,
+        kind:'coupon',
+        title:'优惠券已核销',
+        body:`${currentMerchant && currentMerchant.business_name || '商家'} 已核销你的「${snapshot.title || '优惠券'}」。`
+      });
+    }
     showToast('✓ 优惠券已核销');
     closeMerchantCouponRedeem();
   } catch(e){ console.warn('优惠券核销失败:', e.message); showToast('核销失败：该券可能已使用或已失效'); }
@@ -5062,6 +5084,8 @@ function renderMerchantMemberManager(){
   const weekday = new Intl.DateTimeFormat('zh-CN', { weekday:'long' }).format(new Date());
   const todayTxCount = (txCache.rows || []).filter(tx => tx.created_at && new Date(tx.created_at).toLocaleDateString('zh-CN') === today).length;
   const latestMembers = members.slice().sort((a,b) => new Date(b.joined_at || 0) - new Date(a.joined_at || 0)).slice(0, 10);
+  const recentSpendMemberIds = [...new Set((txCache.rows || []).filter(tx => memberTransactionKind(tx) !== 'reward_reversal').map(tx => String(tx.membership_id)))].slice(0, 10);
+  const recentSpendMembers = recentSpendMemberIds.map(id => members.find(member => String(member.id) === id)).filter(Boolean);
   const merchantName = currentMerchant && currentMerchant.business_name || '我的店铺';
   const merchantLogo = currentMerchant && currentMerchant.logo;
   body.innerHTML = `
@@ -5088,6 +5112,8 @@ function renderMerchantMemberManager(){
     ${merchantTransactionPanelHtml(merchantUserId)}
     <div style="font-size:13px;font-weight:900;margin:16px 0 8px;">近期新加入会员</div>
     ${latestMembers.length ? `<div class="merchant-member-manage-list">${latestMembers.map(merchantMemberManageCardHtml).join('')}</div>` : '<div class="deals-empty-panel">还没有用户加入会员。</div>'}
+    <div style="font-size:13px;font-weight:900;margin:20px 0 8px;">最近消费会员</div>
+    ${recentSpendMembers.length ? `<div class="merchant-member-manage-list">${recentSpendMembers.map(merchantMemberManageCardHtml).join('')}</div>` : '<div class="deals-empty-panel">暂时还没有消费记录。</div>'}
   `;
 }
 function merchantMemberManageCardHtml(member){
@@ -5135,7 +5161,22 @@ async function updateMerchantMembershipRow(id, patch, audit){
       body: JSON.stringify(body)
     });
     if(!res.ok) throw new Error(await res.text());
-    if(audit) await logMerchantMemberTransaction(audit);
+    let transaction = null;
+    if(audit) transaction = await logMerchantMemberTransaction(audit);
+    if(audit && audit.membership && audit.membership.user_id){
+      const isPoints = audit.action === 'points';
+      const positive = Number(audit.delta || 0) >= 0;
+      const label = isPoints ? '积分' : '消费次数';
+      await createMemberActivityNotification({
+        userId:audit.membership.user_id,
+        membershipId:audit.membership.id,
+        transactionId:transaction && transaction.id,
+        kind:isPoints ? 'points' : 'stamp',
+        title:`${label}${positive ? '已累计' : '已调整'}`,
+        body:`${currentMerchant && currentMerchant.business_name || '商家'} ${positive ? '已为你' : '已将你的'}${label}${positive ? `增加 ${Math.abs(Number(audit.delta || 0))}` : `调整 ${Number(audit.delta || 0)}`}${isPoints ? ' 分' : ' 次'}。`
+      });
+    }
+    if(audit) window._merchantLastOperation = { membershipId:String(id), text:audit.toast || '会员操作已完成' };
     clearMemberCardTransactionCache(id);
     refreshUserMembershipCardCache(audit && audit.membership ? audit.membership : { id }, body);
     await loadMerchantMemberships(merchantUserId, true);
@@ -5184,6 +5225,7 @@ function renderMerchantMemberDetail(){
   const quickAction = window._merchantQuickAction || 'stamp';
   const operationContext = window._merchantMemberOperationContext || 'manual';
   const operationHint = operationContext === 'qr_checkin' ? '已通过扫码识别会员卡，请确认本次操作。' : operationContext === 'code_checkin' ? '已通过会员号找到用户，请确认本次操作。' : '选择本次到店操作后确认执行。';
+  const lastOperation = window._merchantLastOperation && String(window._merchantLastOperation.membershipId) === String(member.id) ? window._merchantLastOperation.text : '';
   const cardId = memberCardPublicId(member);
   const txRows = (cachedMerchantTransactions(currentMerchant && currentMerchant.user_id).rows || []).filter(tx => String(tx.membership_id) === String(member.id)).slice(0, 8);
   body.innerHTML = `
@@ -5204,6 +5246,7 @@ function renderMerchantMemberDetail(){
         <button class="${quickAction==='reward'?'on':''}" onclick="setMerchantQuickAction('reward')">兑换奖励</button>
       </div>
       <button class="merchant-reward-redeem-btn" style="margin:0;" onclick="confirmMerchantQuickAction()">${quickAction==='stamp' ? '确认本次消费 +1' : quickAction==='points' ? '确认本次积分 +1' : reward.ready ? `确认兑换「${escHtml(reward.reward)}」` : `还差 ${reward.remain} 次可兑换`}</button>
+      ${lastOperation ? `<div style="margin-top:10px;padding:9px 10px;border-radius:10px;background:var(--sage-light);color:var(--sage-dark);font-size:12px;font-weight:900;">✓ ${escHtml(lastOperation)}</div>` : ''}
     </div>
     <div class="merchant-form-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <button class="primary" onclick="adjustMerchantMemberValue(${JSON.stringify(member.id)},'stamp_count',1)">消费 +1</button>
@@ -5304,6 +5347,7 @@ function confirmMerchantRewardRedeem(){
   redeemMerchantRewardWithAudit(state.id, qty, state.info.reward);
 }
 async function redeemMerchantRewardWithAudit(membershipId, qty, reward){
+  const memberBefore = activeMerchantMemberById(membershipId);
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/redeem_merchant_reward`, {
       method:'POST',
@@ -5311,6 +5355,15 @@ async function redeemMerchantRewardWithAudit(membershipId, qty, reward){
       body: JSON.stringify({ p_membership_id: Number(membershipId), p_quantity: Number(qty) })
     });
     if(!res.ok) throw new Error(await res.text());
+    if(memberBefore && memberBefore.user_id){
+      await createMemberActivityNotification({
+        userId:memberBefore.user_id,
+        membershipId:memberBefore.id,
+        kind:'reward',
+        title:'会员奖励已兑换',
+        body:`${currentMerchant && currentMerchant.business_name || '商家'} 已为你兑换 ${qty} 次「${reward}」。`
+      });
+    }
     clearMemberCardTransactionCache(membershipId);
     await Promise.all([
       loadMerchantMemberships(window._activeMerchantMemberManagerId || currentMerchant.user_id, true),
@@ -5519,13 +5572,34 @@ async function logMerchantMemberTransaction(audit){
     };
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions`, {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+      headers:{ 'Content-Type':'application/json', 'Prefer':'return=representation' },
       body: JSON.stringify(payload)
     });
-    if(!res.ok) console.warn('会员核销流水未记录:', await res.text());
+    if(!res.ok){ console.warn('会员核销流水未记录:', await res.text()); return null; }
+    const rows = await res.json();
+    return rows && rows[0] || null;
   } catch(e){
     console.warn('会员核销流水记录失败:', e.message);
+    return null;
   }
+}
+async function createMemberActivityNotification(input){
+  if(!(session && session.user && currentMerchant && currentMerchant.user_id) || !input || !input.userId) return null;
+  try {
+    const payload = {
+      user_id:input.userId,
+      merchant_user_id:currentMerchant.user_id,
+      membership_id:input.membershipId || null,
+      transaction_id:input.transactionId || null,
+      coupon_claim_id:input.couponClaimId || null,
+      kind:input.kind || 'stamp',
+      title:input.title || '会员权益更新',
+      body:input.body || ''
+    };
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/member_activity_notifications`, { method:'POST', headers:{ 'Content-Type':'application/json', 'Prefer':'return=representation' }, body:JSON.stringify(payload) });
+    if(!res.ok) throw new Error(await res.text());
+    return (await res.json())[0] || null;
+  } catch(e){ console.warn('会员权益通知写入失败:', e.message); return null; }
 }
 window._merchantMemberTransactionCache = window._merchantMemberTransactionCache || {};
 window._memberCardTransactionCache = window._memberCardTransactionCache || {};
@@ -5976,12 +6050,12 @@ function showMemberCardPresenter(id){
         </div>
       </div>
       <div class="member-tx-panel" style="margin-top:14px;">
-        <div class="member-tx-head"><b>最近使用记录</b><span>这张会员卡</span></div>
-        <div id="memberCardTxRows-${row.id}" class="member-dash-sub">正在读取...</div>
-      </div>
-      <div class="member-tx-panel" style="margin-top:14px;">
         <div class="member-tx-head"><b>已领取优惠券</b><button onclick="openMerchantCouponWallet()" style="color:var(--sage-dark);font-weight:900;">全部优惠券</button></div>
         <div id="memberCardCouponRows-${row.id}" class="member-dash-sub">正在读取...</div>
+      </div>
+      <div class="member-tx-panel" style="margin-top:14px;">
+        <div class="member-tx-head"><b>最近使用记录</b><span>这张会员卡</span></div>
+        <div id="memberCardTxRows-${row.id}" class="member-dash-sub">正在读取...</div>
       </div>
       <div class="ai-note" style="margin-top:14px;">商家可扫描二维码或输入会员号核销。扫码成功后会自动填入会员号，再选择消费次数或积分累计。</div>
       <div class="merchant-form-actions">
@@ -10976,6 +11050,7 @@ function captureVideoPoster(vObj){
 
 /* ====== 消息中心 2.91：评论和@ / 新增粉丝 / 赞和收藏 + 私信 ====== */
 let dmRows = [];
+let memberActivityRows = [];
 window._msgCat = null;
 
 function readTsKey(){ return 'wanba_read_' + (session && session.user ? session.user.id : 'guest'); }
@@ -11029,7 +11104,8 @@ function unreadCounts(){
   const cmt = cmtNotifs().filter(r => !ts.cmt || (r.created_at||'') > ts.cmt).length;
   const fans = fanRows().filter(r => r.active && (!ts.fans || (r.created_at||'') > ts.fans)).length;
   const lf = lfNotifs().filter(r => !ts.lf || (r.created_at||'') > ts.lf).length;
-  return { dm, cmt, fans, lf, total: dm + cmt + fans + lf };
+  const member = memberActivityRows.filter(r => !r.read_at && (!ts.member || (r.created_at||'') > ts.member)).length;
+  return { dm, cmt, fans, lf, member, total: dm + cmt + fans + lf + member };
 }
 function updateNavMsgDot(){
   const btn = document.querySelector('[data-tab="message"]');
@@ -11040,7 +11116,7 @@ function updateNavMsgDot(){
   if(u.total > 0){
     if(!dot){ dot = document.createElement('span'); dot.className = 'nav-msg-dot'; btn.appendChild(dot); }
   } else if(dot){ dot.remove(); }
-  const map = { dotDm:'dm', dotCmt:'cmt', dotFans:'fans', dotLf:'lf' };
+  const map = { dotDm:'dm', dotCmt:'cmt', dotFans:'fans', dotLf:'lf', dotMember:'member' };
   Object.entries(map).forEach(([id, k]) => {
     const el = document.getElementById(id);
     if(el) el.classList.toggle('on', u[k] > 0);
@@ -11053,6 +11129,39 @@ async function loadDms(){
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/messages?or=(to_id.eq.${me},from_id.eq.${me})&order=created_at.asc`, { method:'GET' });
     dmRows = res.ok ? await res.json() : [];
   } catch(e){ dmRows = []; }
+}
+async function loadMemberActivityNotifications(){
+  const me = session && session.user ? session.user.id : null;
+  if(!me){ memberActivityRows = []; updateNavMsgDot(); return []; }
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/member_activity_notifications?user_id=eq.${encodeURIComponent(me)}&select=*&order=created_at.desc&limit=100`, { method:'GET' });
+    if(!res.ok) throw new Error(await res.text());
+    memberActivityRows = await res.json();
+  } catch(e){ console.warn('会员权益通知读取失败:', e.message); memberActivityRows = []; }
+  updateNavMsgDot();
+  return memberActivityRows;
+}
+async function markMemberActivityRead(){
+  if(!(session && session.user)) return;
+  const unread = memberActivityRows.filter(row => !row.read_at);
+  if(!unread.length) return;
+  const ids = unread.map(row => row.id).filter(Boolean);
+  try {
+    await authedFetch(`${SUPABASE_URL}/rest/v1/member_activity_notifications?id=in.(${ids.join(',')})`, { method:'PATCH', body:JSON.stringify({ read_at:new Date().toISOString() }) });
+    memberActivityRows = memberActivityRows.map(row => ids.includes(row.id) ? Object.assign({}, row, { read_at:new Date().toISOString() }) : row);
+  } catch(e){}
+}
+async function openMemberActivityTarget(row){
+  if(!row) return;
+  if(row.kind === 'coupon' && row.coupon_claim_id){ openMerchantCouponWallet(row.coupon_claim_id); return; }
+  await loadUserMembershipCards(true);
+  const card = (window._userMembershipCards.rows || []).find(item => String(item.id) === String(row.membership_id));
+  if(card) showMemberCardPresenter(card.id);
+  else showToast('对应会员卡暂时不可用');
+}
+function openMemberActivityTargetById(id){
+  const row = (memberActivityRows || []).find(item => String(item.id) === String(id));
+  if(row) openMemberActivityTarget(row);
 }
 function initMessagePage(){
   window._msgCat = null;
@@ -11179,6 +11288,16 @@ function openMsgCat(cat, keep){
         ${p ? `<button onclick="openPost(${p.id})" style="padding:6px 12px;border-radius:999px;border:1px solid var(--sage);background:#fff;color:var(--sage-dark);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">查看笔记</button>` : ''}
       </div>`;
     }).join('') : `<div class="empty-state"><span style="display:block;margin:0 auto 10px;width:36px;height:36px;color:var(--ink-faint);">${uiIcon('heart',36)}</span><p>还没有赞和收藏</p></div>`);
+  } else if(cat === 'member'){
+    if(!keep) loadMemberActivityNotifications().then(() => {
+      if(window._msgCat === 'member' && document.getElementById('msgDetail')?.style.display !== 'none') openMsgCat('member', true);
+    });
+    const rows = memberActivityRows || [];
+    detail.innerHTML = msgDetailShell('会员权益', rows.length ? rows.map(row => {
+      const icon = row.kind === 'coupon' ? uiIcon('inbox',18) : row.kind === 'reward' ? uiIcon('star',18) : row.kind === 'points' ? uiIcon('spark',18) : uiIcon('bag',18);
+      return `<div onclick="openMemberActivityTargetById(${Number(row.id)})" style="display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;"><span style="width:38px;height:38px;border-radius:12px;background:var(--berry-light);color:var(--berry-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${icon}</span><div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:900;">${escHtml(row.title || '会员权益更新')}</div><div style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:3px;">${escHtml(row.body || '')}</div><div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">${escHtml(fmtTime(row.created_at))}</div></div></div>`;
+    }).join('') : `<div class="empty-state"><span style="display:block;margin:0 auto 10px;width:36px;height:36px;color:var(--ink-faint);">${uiIcon('inbox',36)}</span><p>还没有会员权益记录</p></div>`);
+    if(!keep) markMemberActivityRead().then(updateNavMsgDot);
   }
   updateNavMsgDot();
 }
@@ -12193,7 +12312,7 @@ async function bootApp(){
     loadUserProfile(); // 加载用户信息
     loadSession();     // 加载登录会话
     fetchIpLocation(); // 获取真实IP属地
-    setTimeout(() => { if(session) loadDms().then(updateNavMsgDot); }, 3000); // 私信未读红点
+    setTimeout(() => { if(session) Promise.all([loadDms(), loadMemberActivityNotifications()]).then(updateNavMsgDot); }, 3000); // 消息未读红点
     await handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
 
     renderChips();
@@ -12241,7 +12360,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.103 - Quick Member Check-in】');
+console.log('✓ 页面初始化完成 【版本 5.104 - Member Activity Receipts】');
 </script>
 </body>
 </html>
