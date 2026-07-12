@@ -2593,7 +2593,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.102';
+const APP_VERSION = '5.103';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5162,10 +5162,12 @@ function adjustMerchantMemberValue(id, field, delta){
   });
 }
 function closeMerchantMemberDetail(){ document.getElementById('merchantMemberDetail')?.classList.remove('open'); }
-async function openMerchantMemberDetail(id){
+async function openMerchantMemberDetail(id, context){
   const member = activeMerchantMemberById(id);
   if(!member){ showToast('没有找到该会员'); return; }
   window._activeMerchantMemberDetailId = member.id;
+  window._merchantMemberOperationContext = context || 'manual';
+  window._merchantQuickAction = 'stamp';
   document.getElementById('merchantMemberDetail')?.classList.add('open');
   await loadProfilesForIds([member.user_id]);
   renderMerchantMemberDetail();
@@ -5179,6 +5181,9 @@ function renderMerchantMemberDetail(){
   const avatar = resolveAvatarUrl(member.user_id) || profile.avatar;
   const merchant = currentMerchant || {};
   const reward = merchantRewardInfo(member, merchant);
+  const quickAction = window._merchantQuickAction || 'stamp';
+  const operationContext = window._merchantMemberOperationContext || 'manual';
+  const operationHint = operationContext === 'qr_checkin' ? '已通过扫码识别会员卡，请确认本次操作。' : operationContext === 'code_checkin' ? '已通过会员号找到用户，请确认本次操作。' : '选择本次到店操作后确认执行。';
   const cardId = memberCardPublicId(member);
   const txRows = (cachedMerchantTransactions(currentMerchant && currentMerchant.user_id).rows || []).filter(tx => String(tx.membership_id) === String(member.id)).slice(0, 8);
   body.innerHTML = `
@@ -5190,6 +5195,16 @@ function renderMerchantMemberDetail(){
       <div class="merchant-member-summary" style="margin:16px 0 0;"><div><b>${Number(member.stamp_count || 0)}</b><span>消费次数</span></div><div><b>${Number(member.points || 0)}</b><span>积分</span></div></div>
       ${memberRewardProgressHtml(member, merchant)}
     </div>
+    <div class="merchant-checkin-panel" style="margin-top:14px;">
+      <div class="merchant-checkin-title">本次到店操作</div>
+      <div class="merchant-checkin-sub">${escHtml(operationHint)}</div>
+      <div class="member-tx-filter" style="margin:0 0 10px;">
+        <button class="${quickAction==='stamp'?'on':''}" onclick="setMerchantQuickAction('stamp')">消费 +1</button>
+        <button class="${quickAction==='points'?'on':''}" onclick="setMerchantQuickAction('points')">积分 +1</button>
+        <button class="${quickAction==='reward'?'on':''}" onclick="setMerchantQuickAction('reward')">兑换奖励</button>
+      </div>
+      <button class="merchant-reward-redeem-btn" style="margin:0;" onclick="confirmMerchantQuickAction()">${quickAction==='stamp' ? '确认本次消费 +1' : quickAction==='points' ? '确认本次积分 +1' : reward.ready ? `确认兑换「${escHtml(reward.reward)}」` : `还差 ${reward.remain} 次可兑换`}</button>
+    </div>
     <div class="merchant-form-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <button class="primary" onclick="adjustMerchantMemberValue(${JSON.stringify(member.id)},'stamp_count',1)">消费 +1</button>
       <button onclick="adjustMerchantMemberValue(${JSON.stringify(member.id)},'stamp_count',-1)">消费 -1</button>
@@ -5200,6 +5215,33 @@ function renderMerchantMemberDetail(){
     <button class="merchant-member-remove-btn" onclick="pauseMerchantMember(${JSON.stringify(member.id)});closeMerchantMemberDetail();">移除会员</button>
     <div class="member-tx-panel" style="margin-top:16px;"><div class="member-tx-head"><b>近期消费记录</b><button onclick="openMerchantTransactionHistory(${JSON.stringify(member.id)})" style="color:var(--sage-dark);font-weight:900;">查看全部</button></div>${txRows.length ? `<div class="member-tx-list">${txRows.map(tx => memberTransactionRowHtml(tx, currentMerchant.user_id, { merchantView:true })).join('')}</div>` : '<div class="deals-empty-panel" style="margin:0;">还没有消费记录。</div>'}</div>
   `;
+}
+function setMerchantQuickAction(action){
+  window._merchantQuickAction = action || 'stamp';
+  renderMerchantMemberDetail();
+}
+function confirmMerchantQuickAction(){
+  const member = activeMerchantMemberById(window._activeMerchantMemberDetailId);
+  if(!member) return;
+  const action = window._merchantQuickAction || 'stamp';
+  if(action === 'reward'){
+    const info = merchantRewardInfo(member, currentMerchant || {});
+    if(!info.ready){ showToast(`还差 ${info.remain} 次可兑换`); return; }
+    redeemMerchantMemberReward(member.id);
+    return;
+  }
+  const field = action === 'points' ? 'points' : 'stamp_count';
+  const before = Number(member[field] || 0);
+  const source = window._merchantMemberOperationContext === 'qr_checkin' ? 'qr_checkin' : (window._merchantMemberOperationContext === 'code_checkin' ? 'code_checkin' : 'manual');
+  updateMerchantMembershipRow(member.id, { [field]: before + 1 }, {
+    membership:member,
+    action:field === 'points' ? 'points' : 'stamp',
+    delta:1,
+    before,
+    after:before + 1,
+    source,
+    toast:field === 'points' ? '积分已累计' : '消费次数已累计'
+  });
 }
 window._merchantRewardRedeemState = null;
 function merchantRewardRedeemDialog(){
@@ -5347,7 +5389,7 @@ function findMerchantMemberByCode(){
   const input = document.getElementById('merchantCheckinCode');
   const member = memberByPublicCode(input && input.value);
   renderMerchantCheckinResult(member);
-  if(member) setTimeout(() => openMerchantMemberDetail(member.id), 120);
+  if(member) setTimeout(() => openMerchantMemberDetail(member.id, 'code_checkin'), 120);
 }
 let merchantScannerStream = null;
 let merchantScannerTimer = null;
@@ -5414,7 +5456,9 @@ function applyScannedMemberCode(raw){
   const input = document.getElementById('merchantCheckinCode');
   if(input) input.value = code;
   closeMerchantMemberScanner();
-  findMerchantMemberByCode();
+  const member = memberByPublicCode(code);
+  renderMerchantCheckinResult(member);
+  if(member) setTimeout(() => openMerchantMemberDetail(member.id, 'qr_checkin'), 80);
   showToast('已识别会员号');
 }
 function useManualMemberCodeAfterScan(){
@@ -12197,7 +12241,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.102 - Member Card and Profile Fixes】');
+console.log('✓ 页面初始化完成 【版本 5.103 - Quick Member Check-in】');
 </script>
 </body>
 </html>
