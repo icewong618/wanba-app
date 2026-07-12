@@ -611,6 +611,10 @@
   .member-card-actions{display:flex;gap:8px;margin-top:12px;position:relative;z-index:1;}
   .member-card-actions button{flex:1;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-soft);font-size:12px;font-weight:900;padding:9px 10px;}
   .member-card-actions .primary{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .merchant-member-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px;}
+  .merchant-member-summary div{border:1px solid var(--line);border-radius:13px;background:#fff;padding:10px;box-shadow:var(--shadow);}
+  .merchant-member-summary b{display:block;font-size:19px;color:var(--sage-dark);line-height:1;}
+  .merchant-member-summary span{display:block;font-size:11px;color:var(--ink-soft);font-weight:800;margin-top:4px;}
   .member-present-card{background:linear-gradient(160deg,var(--sage-dark),#2f4c38);color:#fff;border-radius:22px;padding:20px;box-shadow:var(--shadow-lift);position:relative;overflow:hidden;}
   .member-present-card:after{content:'';position:absolute;right:-50px;top:-50px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.11);}
   .member-present-top{display:flex;align-items:center;gap:13px;position:relative;z-index:1;}
@@ -2498,7 +2502,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.92';
+const APP_VERSION = '5.93';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4731,10 +4735,21 @@ function renderMerchantMemberManager(){
     body.innerHTML = '<div class="deals-empty-panel">请先运行 5.20 会员数据库脚本。</div>';
     return;
   }
+  if(!cache.loaded){
+    body.innerHTML = '<div class="deals-empty-panel">正在读取会员数据...</div>';
+    return;
+  }
+  const txCache = cachedMerchantTransactions(merchantUserId);
+  const today = new Date().toLocaleDateString('zh-CN');
+  const todayTxCount = (txCache.rows || []).filter(tx => tx.created_at && new Date(tx.created_at).toLocaleDateString('zh-CN') === today).length;
   body.innerHTML = `
     <div class="merchant-dash-card" style="box-shadow:none;">
       <div class="merchant-dash-greeting">会员管理</div>
       <div class="merchant-dash-sub">可以给到店用户增加消费次数和积分，也可以输入会员卡号快速核销。</div>
+    </div>
+    <div class="merchant-member-summary">
+      <div><b>${members.length}</b><span>当前会员</span></div>
+      <div><b>${todayTxCount}</b><span>今日核销 / 兑换</span></div>
     </div>
     <div class="merchant-checkin-panel">
       <div class="merchant-checkin-title">扫码 / 输入会员号核销</div>
@@ -4954,11 +4969,11 @@ async function openMerchantMemberScanner(){
   sheet.classList.add('open');
   const status = document.getElementById('merchantScanStatus');
   if(!('BarcodeDetector' in window)){
-    if(status) status.textContent = '当前浏览器暂不支持直接扫码，请点击“手动输入”后输入会员号。';
+    if(status) status.textContent = '当前浏览器暂不支持直接扫码，请点击“手动输入”，让用户出示会员号后核销。';
     return;
   }
   if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
-    if(status) status.textContent = '当前设备无法打开相机，请手动输入会员号。';
+    if(status) status.textContent = '当前设备无法打开相机，请点击“手动输入”，让用户出示会员号后核销。';
     return;
   }
   try {
@@ -4978,7 +4993,7 @@ async function openMerchantMemberScanner(){
     }, 700);
   } catch(e){
     console.warn('打开会员扫码失败:', e.message);
-    if(status) status.textContent = '相机权限未开启或设备不支持，请手动输入会员号。';
+    if(status) status.textContent = '相机权限未开启或设备不支持，请点击“手动输入”，让用户出示会员号后核销。';
   }
 }
 function applyScannedMemberCode(raw){
@@ -5296,8 +5311,8 @@ function userMembershipCardHtml(row){
       </div>
       ${memberRewardProgressHtml(row, m)}
       <div class="member-card-actions">
-        <button class="primary" onclick="openMerchantPublicPage('${String(row.merchant_user_id || '').replace(/'/g,'')}')">查看店铺</button>
-        <button onclick="showMemberCardPresenter(${JSON.stringify(row.id)})">出示会员卡</button>
+        <button class="primary" onclick="showMemberCardPresenter(${JSON.stringify(row.id)})">出示会员卡</button>
+        <button onclick="openMerchantPublicPage('${String(row.merchant_user_id || '').replace(/'/g,'')}')">查看店铺</button>
       </div>
     </div>
   `;
@@ -11419,7 +11434,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.92 - App Startup Ready Gate】');
+console.log('✓ 页面初始化完成 【版本 5.93 - Member Card Acceptance Polish】');
 </script>
 </body>
 </html>
