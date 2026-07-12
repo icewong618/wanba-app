@@ -677,7 +677,7 @@
   .merchant-product-crop-frame.dragging{cursor:grabbing;}
   .merchant-product-crop-frame img{position:absolute;transform:translate(-50%,-50%);max-width:none;user-select:none;pointer-events:none;}
   .merchant-product-crop-guide{position:absolute;inset:0;border:2px solid rgba(255,255,255,.85);box-shadow:0 0 0 999px rgba(0,0,0,.16);pointer-events:none;}
-  .ai-confirm{position:fixed;inset:0;background:rgba(42,39,33,.48);z-index:960;display:none;align-items:flex-end;justify-content:center;padding:20px;}
+  .ai-confirm{position:fixed;inset:0;background:rgba(42,39,33,.48);z-index:99999;display:none;align-items:flex-end;justify-content:center;padding:20px;}
   .ai-confirm.open{display:flex;}
   .ai-confirm-card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-lift);padding:18px;animation:slideUp .2s ease;}
   .ai-confirm-card h4{font-size:16px;margin:0 0 7px;font-weight:900;}
@@ -2496,7 +2496,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.85';
+const APP_VERSION = '5.86';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4826,6 +4826,15 @@ function adjustMerchantMemberValue(id, field, delta){
   });
 }
 window._merchantRewardRedeemState = null;
+function merchantRewardRedeemDialog(){
+  const el = document.getElementById('merchantRewardRedeemConfirm');
+  if(!el) return null;
+  if(el.parentElement !== document.body) document.body.appendChild(el);
+  el.style.position = 'fixed';
+  el.style.inset = '0';
+  el.style.zIndex = '2147483000';
+  return el;
+}
 function redeemMerchantMemberReward(id){
   const member = activeMerchantMemberById(id);
   if(!member) return;
@@ -4846,10 +4855,19 @@ function redeemMerchantMemberReward(id){
     input.max = String(maxQty);
   }
   if(hint) hint.textContent = `默认兑换 1 次，可手动修改，最大不能超过 ${maxQty}。每次扣除 ${info.target} 次消费记录。`;
-  document.getElementById('merchantRewardRedeemConfirm')?.classList.add('open');
+  const dialog = merchantRewardRedeemDialog();
+  if(dialog){
+    dialog.classList.add('open');
+    dialog.style.display = 'flex';
+    setTimeout(() => input && input.focus && input.focus(), 80);
+  }
 }
 function closeMerchantRewardRedeemConfirm(){
-  document.getElementById('merchantRewardRedeemConfirm')?.classList.remove('open');
+  const dialog = merchantRewardRedeemDialog();
+  if(dialog){
+    dialog.classList.remove('open');
+    dialog.style.display = 'none';
+  }
 }
 function confirmMerchantRewardRedeem(){
   const state = window._merchantRewardRedeemState;
@@ -11351,7 +11369,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.85 - Member Redeem Quantity Fix】');
+console.log('✓ 页面初始化完成 【版本 5.86 - Member Redeem App Popup Fix】');
 </script>
 </body>
 </html>
