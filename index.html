@@ -2518,7 +2518,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.98';
+const APP_VERSION = '5.99';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4343,15 +4343,88 @@ function confirmMerchantProductCrop(){
   closeMerchantProductCropper();
   refreshMerchantItemImagePreview();
 }
-function merchantSlugify(value, fallback){
-  const raw = String(value || fallback || '').trim().toLowerCase();
+const MERCHANT_SLUG_MIN_LENGTH = 3;
+const MERCHANT_SLUG_MAX_LENGTH = 48;
+const MERCHANT_RESERVED_SLUGS = new Set([
+  'm','app','api','admin','index','index-html','app-html','404','404-html','version-json',
+  'versions','assets','favicon','favicon-ico','robots-txt','sitemap-xml','supabase','auth',
+  'login','search','home','week','deals','message','profile','merchant','merchants'
+]);
+let merchantSlugCheckTimer = null;
+let merchantSlugCheckState = { slug:'', available:false };
+function normalizeMerchantSlug(value){
+  const raw = String(value || '').trim().toLowerCase();
   const ascii = raw
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-  return ascii || `merchant-${Date.now().toString(36)}`;
+    .slice(0, MERCHANT_SLUG_MAX_LENGTH);
+  return ascii;
+}
+function merchantSlugify(value, fallback){
+  return normalizeMerchantSlug(value) || normalizeMerchantSlug(fallback) || `merchant-${Date.now().toString(36)}`;
+}
+function merchantSlugCooldownDays(m, nextSlug){
+  const previous = normalizeMerchantSlug(m && m.slug);
+  if(!previous || previous === nextSlug || !(m && m.slug_changed_at)) return 0;
+  const unlockAt = new Date(m.slug_changed_at).getTime() + 365 * 24 * 60 * 60 * 1000;
+  const remaining = unlockAt - Date.now();
+  return remaining > 0 ? Math.ceil(remaining / (24 * 60 * 60 * 1000)) : 0;
+}
+function merchantSlugInputMessage(slug){
+  if(!slug) return '请输入英文、数字或短横线组成的地址。';
+  if(slug.length < MERCHANT_SLUG_MIN_LENGTH) return `地址至少需要 ${MERCHANT_SLUG_MIN_LENGTH} 个字符。`;
+  if(MERCHANT_RESERVED_SLUGS.has(slug)) return '这个地址为系统保留地址，请换一个。';
+  return '';
+}
+function setMerchantSlugStatus(message, tone){
+  const el = document.getElementById('mBizSlugStatus');
+  if(!el) return;
+  const colors = { good:'var(--sage-dark)', warn:'var(--berry-dark)', muted:'var(--ink-faint)' };
+  el.textContent = message || '';
+  el.style.color = colors[tone] || colors.muted;
+}
+async function checkMerchantSlugAvailability(silent){
+  const input = document.getElementById('mBizSlug');
+  if(!input) return { available:false, slug:'' };
+  const slug = normalizeMerchantSlug(input.value);
+  if(input.value !== slug) input.value = slug;
+  const inputMessage = merchantSlugInputMessage(slug);
+  merchantSlugCheckState = { slug, available:false };
+  if(inputMessage){
+    if(!silent) setMerchantSlugStatus(inputMessage, 'warn');
+    return merchantSlugCheckState;
+  }
+  const cooldownDays = merchantSlugCooldownDays(currentMerchant, slug);
+  if(cooldownDays){
+    const message = `链接每 365 天只能修改一次；还需 ${cooldownDays} 天后可以更改。`;
+    if(!silent) setMerchantSlugStatus(message, 'warn');
+    return merchantSlugCheckState;
+  }
+  if(slug === normalizeMerchantSlug(currentMerchant && currentMerchant.slug)){
+    merchantSlugCheckState = { slug, available:true };
+    if(!silent) setMerchantSlugStatus('当前正在使用这个链接。', 'muted');
+    return merchantSlugCheckState;
+  }
+  if(!silent) setMerchantSlugStatus('正在检查链接是否可用…', 'muted');
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?slug=eq.${encodeURIComponent(slug)}&user_id=neq.${encodeURIComponent(session && session.user ? session.user.id : '')}&select=user_id&limit=1`, { method:'GET' });
+    if(!res.ok) throw new Error(await res.text());
+    const rows = await res.json();
+    const available = !rows.length;
+    merchantSlugCheckState = { slug, available };
+    if(!silent) setMerchantSlugStatus(available ? '这个链接可以使用。' : '这个链接已经被其他商家使用。', available ? 'good' : 'warn');
+    return merchantSlugCheckState;
+  } catch(e){
+    console.warn('商家链接检查失败:', e.message);
+    if(!silent) setMerchantSlugStatus('暂时无法检查链接，请稍后再试。', 'warn');
+    return merchantSlugCheckState;
+  }
+}
+function scheduleMerchantSlugCheck(){
+  clearTimeout(merchantSlugCheckTimer);
+  merchantSlugCheckTimer = setTimeout(() => checkMerchantSlugAvailability(false), 360);
 }
 function merchantSiteSlug(m){
   if(!m) return '';
@@ -4360,9 +4433,9 @@ function merchantSiteSlug(m){
 function merchantSiteUrl(m){
   const slug = merchantSiteSlug(m);
   try {
-    return `${window.location.origin}/m/${encodeURIComponent(slug)}`;
+    return `${window.location.origin}/${encodeURIComponent(slug)}`;
   } catch(e){
-    return `/m/${encodeURIComponent(slug)}`;
+    return `/${encodeURIComponent(slug)}`;
   }
 }
 function merchantSocialLinks(m){
@@ -5554,8 +5627,12 @@ function routeMerchantSlugFromLocation(){
   try {
     const url = new URL(window.location.href);
     const querySlug = url.searchParams.get('m') || url.searchParams.get('merchant');
-    const pathMatch = url.pathname.match(/\/m\/([^/?#]+)/);
-    return decodeURIComponent((pathMatch && pathMatch[1]) || querySlug || '').trim();
+    if(querySlug) return normalizeMerchantSlug(querySlug);
+    const parts = url.pathname.split('/').filter(Boolean).map(part => decodeURIComponent(part));
+    const legacySlug = parts.length === 2 && parts[0] === 'm' ? parts[1] : '';
+    const rootSlug = parts.length === 1 ? parts[0] : '';
+    const slug = normalizeMerchantSlug(legacySlug || rootSlug);
+    return MERCHANT_RESERVED_SLUGS.has(slug) ? '' : slug;
   } catch(e){
     return '';
   }
@@ -5872,10 +5949,10 @@ function openMerchantEditSheet(){
     <div style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">微网站地址</label>
       <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:12px;color:var(--ink-faint);white-space:nowrap;">/m/</span>
-        <input type="text" id="mBizSlug" value="${escAttr(slug)}" placeholder="tea-station" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
+        <span style="font-size:12px;color:var(--ink-faint);white-space:nowrap;">escoopcity.com/</span>
+        <input type="text" id="mBizSlug" value="${escAttr(slug)}" placeholder="tea-station" oninput="scheduleMerchantSlugCheck()" onblur="checkMerchantSlugAvailability(false)" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
       </div>
-      <div style="font-size:11px;color:var(--ink-faint);margin-top:5px;">只能使用英文、数字和短横线，建议使用店名拼音或英文名。</div>
+      <div id="mBizSlugStatus" style="font-size:11px;color:var(--ink-faint);margin-top:5px;">只能使用英文、数字和短横线；链接每 365 天只能修改一次。</div>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:12px;">
       <div style="flex:1;">
@@ -5937,6 +6014,7 @@ function openMerchantEditSheet(){
       <button onclick="closeMerchantEditSheet()" style="flex:1;padding:12px;border-radius:10px;background:var(--bg-alt);color:var(--ink);border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:13px;">✕ 取消</button>
     </div>
   `;
+  merchantSlugCheckState = { slug, available:true };
   document.getElementById('merchantEditSheet')?.classList.add('open');
 }
 function closeMerchantEditSheet(){ document.getElementById('merchantEditSheet')?.classList.remove('open'); }
@@ -6032,7 +6110,20 @@ function onMerchantImageSelected(event, type){
 async function saveMerchantProfile(){
   if(!(session && session.user)){ showToast('请先登录'); return; }
   const perks = document.getElementById('mBizPerks').value.split(',').map(s => s.trim()).filter(Boolean).slice(0,4);
-  const slug = merchantSlugify(document.getElementById('mBizSlug').value, document.getElementById('mBizName').value);
+  const slug = normalizeMerchantSlug(document.getElementById('mBizSlug').value);
+  const previousSlug = normalizeMerchantSlug(currentMerchant && currentMerchant.slug);
+  const slugMessage = merchantSlugInputMessage(slug);
+  if(slugMessage){ setMerchantSlugStatus(slugMessage, 'warn'); showToast(slugMessage); return; }
+  const cooldownDays = merchantSlugCooldownDays(currentMerchant, slug);
+  if(cooldownDays){
+    const message = `链接每 365 天只能修改一次，还需 ${cooldownDays} 天后可以更改。`;
+    setMerchantSlugStatus(message, 'warn'); showToast(message); return;
+  }
+  const slugCheck = await checkMerchantSlugAvailability(true);
+  if(!slugCheck.available || slugCheck.slug !== slug){
+    const message = '这个链接已经被使用，或暂时无法核对，请换一个后再保存。';
+    setMerchantSlugStatus(message, 'warn'); showToast(message); return;
+  }
   const externalLinks = document.getElementById('mBizExternalLinks').value
     .split(/\n|,/).map(s => s.trim()).filter(Boolean).slice(0, 5);
   const payload = {
@@ -6066,7 +6157,15 @@ async function saveMerchantProfile(){
       });
       rows = res.ok ? await res.json() : [];
     }
-    if(!res.ok){ showToast('保存失败，请重试'); return; }
+    if(!res.ok){
+      const errorText = await res.text();
+      if(errorText.includes('merchant_slug_change_cooldown')) showToast('链接每 365 天只能修改一次。');
+      else if(errorText.includes('merchant_slug_reserved')) showToast('这个链接为系统保留地址，请换一个。');
+      else if(errorText.includes('merchant_slug_invalid')) showToast('链接只能使用英文、数字和短横线。');
+      else if(errorText.includes('duplicate key') || errorText.includes('merchants_slug_unique_idx')) showToast('这个链接已经被其他商家使用。');
+      else showToast('保存失败，请重试');
+      return;
+    }
     currentMerchant = Object.assign({}, currentMerchant, payload, rows[0] || {});
     setMerchantIdentityCache(session.user.id, currentMerchant);
     closeMerchantEditSheet();
@@ -6075,7 +6174,7 @@ async function saveMerchantProfile(){
     const weekPage = document.getElementById('page-week');
     if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
     if(activePostId) renderPostModal();
-    showToast('✓ 商家资料已保存');
+    showToast(previousSlug && previousSlug !== slug ? '✓ 微网站链接已修改，365 天内不能再次修改' : '✓ 商家资料已保存');
   } catch(e){ console.warn('商家资料保存失败:', e.message); showToast('保存失败：' + e.message); }
 }
 
