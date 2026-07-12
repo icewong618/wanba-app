@@ -591,6 +591,11 @@
   .member-tx-note{font-size:11px;color:var(--ink-soft);line-height:1.45;margin-top:4px;}
   .member-tx-delta{font-size:13px;font-weight:900;color:var(--sage-dark);white-space:nowrap;}
   .member-tx-delta.minus{color:#b9413a;}
+  .member-tx-filter{display:flex;gap:6px;overflow-x:auto;margin:0 0 10px;padding-bottom:2px;}
+  .member-tx-filter button{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-soft);font-size:11px;font-weight:900;padding:6px 10px;}
+  .member-tx-filter button.on{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .member-tx-reverse-btn{margin-top:8px;border:1px solid #efc7bf;border-radius:999px;background:#fff5f2;color:#b9413a;font-size:11px;font-weight:900;padding:6px 10px;}
+  .member-tx-revoked{display:inline-flex;align-items:center;margin-left:4px;border-radius:999px;background:#f1eee7;color:var(--ink-faint);font-size:10px;font-weight:900;padding:2px 7px;}
   .member-card-tabs{display:flex;gap:8px;margin:0 0 12px;overflow-x:auto;padding-bottom:2px;}
   .member-card-tabs button{border:1px solid var(--line);background:#fff;color:var(--ink-soft);border-radius:999px;padding:8px 13px;font-size:12px;font-weight:900;white-space:nowrap;}
   .member-card-tabs button.on{background:var(--sage);border-color:var(--sage);color:#fff;}
@@ -1866,6 +1871,17 @@
   </div>
 </div>
 
+<div class="ai-confirm" id="merchantRewardReversalConfirm">
+  <div class="ai-confirm-card">
+    <h4>撤销本次兑换？</h4>
+    <p id="merchantRewardReversalText">撤销后会恢复本次扣除的消费次数，并保留完整记录。</p>
+    <div class="ai-confirm-actions">
+      <button onclick="closeMerchantRewardReversalConfirm()">取消</button>
+      <button class="danger" onclick="confirmMerchantRewardReversal()">确认撤销</button>
+    </div>
+  </div>
+</div>
+
 <!-- 搜索页面：点击顶部搜索框弹出 -->
 <div class="overlay" id="searchOverlay" onclick="if(event.target.id==='searchOverlay')closeSearchPage()">
   <div class="modal" id="searchModal">
@@ -2502,7 +2518,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.94';
+const APP_VERSION = '5.95';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4901,21 +4917,67 @@ function confirmMerchantRewardRedeem(){
     showToast(`超过最大兑换量，最多可兑换 ${state.maxQty} 次`);
     return;
   }
-  const member = activeMerchantMemberById(state.id) || state.member;
-  const before = Number(member.stamp_count || 0);
-  const deduct = state.info.target * qty;
-  const after = Math.max(0, before - deduct);
   closeMerchantRewardRedeemConfirm();
-  updateMerchantMembershipRow(state.id, { stamp_count: after }, {
-    membership: member,
-    action: 'stamp',
-    delta: -deduct,
-    before,
-    after,
-    source: 'reward_redeem',
-    note: `奖励兑换：${qty} 份「${state.info.reward}」，每份扣 ${state.info.target} 次`,
-    toast: `已兑换 ${qty} 次「${state.info.reward}」`
-  });
+  redeemMerchantRewardWithAudit(state.id, qty, state.info.reward);
+}
+async function redeemMerchantRewardWithAudit(membershipId, qty, reward){
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/redeem_merchant_reward`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ p_membership_id: Number(membershipId), p_quantity: Number(qty) })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    clearMemberCardTransactionCache(membershipId);
+    await Promise.all([
+      loadMerchantMemberships(window._activeMerchantMemberManagerId || currentMerchant.user_id, true),
+      loadMerchantMemberTransactions(window._activeMerchantMemberManagerId || currentMerchant.user_id, true)
+    ]);
+    renderMerchantMemberManager();
+    renderMerchantPage();
+    showToast(`已兑换 ${qty} 次「${reward}」`);
+  } catch(e){
+    console.warn('奖励兑换失败:', e.message);
+    showToast('兑换失败，请稍后再试');
+  }
+}
+window._merchantRewardReversalState = null;
+function openMerchantRewardReversalConfirm(transactionId){
+  const tx = (cachedMerchantTransactions(window._activeMerchantMemberManagerId || (currentMerchant && currentMerchant.user_id)).rows || []).find(row => String(row.id) === String(transactionId));
+  if(!tx || memberTransactionKind(tx) !== 'reward_redeem' || tx.revoked_at) return;
+  window._merchantRewardReversalState = tx;
+  const text = document.getElementById('merchantRewardReversalText');
+  if(text) text.textContent = `将恢复 ${Math.abs(Number(tx.delta || 0))} 次消费记录。撤销后会保留原兑换与撤销流水。`;
+  document.getElementById('merchantRewardReversalConfirm')?.classList.add('open');
+}
+function closeMerchantRewardReversalConfirm(){
+  document.getElementById('merchantRewardReversalConfirm')?.classList.remove('open');
+}
+async function confirmMerchantRewardReversal(){
+  const tx = window._merchantRewardReversalState;
+  if(!tx) return;
+  closeMerchantRewardReversalConfirm();
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/revert_merchant_reward_redemption`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ p_transaction_id: Number(tx.id) })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    clearMemberCardTransactionCache(tx.membership_id);
+    await Promise.all([
+      loadMerchantMemberships(window._activeMerchantMemberManagerId || currentMerchant.user_id, true),
+      loadMerchantMemberTransactions(window._activeMerchantMemberManagerId || currentMerchant.user_id, true)
+    ]);
+    renderMerchantMemberManager();
+    renderMerchantPage();
+    showToast('已撤销兑换，消费次数已恢复');
+  } catch(e){
+    console.warn('撤销奖励兑换失败:', e.message);
+    showToast('撤销失败，记录可能已处理');
+  } finally {
+    window._merchantRewardReversalState = null;
+  }
 }
 function pauseMerchantMember(id){
   updateMerchantMembershipRow(id, { status:'paused' });
@@ -5092,7 +5154,7 @@ async function loadMerchantMemberTransactions(merchantUserId, force){
   const cache = cachedMerchantTransactions(key);
   if(cache.loaded && !force) return cache.rows;
   try {
-    const select = 'id,membership_id,merchant_user_id,user_id,action,delta,before_value,after_value,source,note,created_at';
+    const select = 'id,membership_id,merchant_user_id,user_id,action,delta,before_value,after_value,source,note,transaction_kind,reversal_of_id,revoked_at,revoked_by,created_at';
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions?merchant_user_id=eq.${encodeURIComponent(key)}&select=${select}&order=created_at.desc&limit=80`, { method:'GET' });
     if(!res.ok) throw new Error(await res.text());
     const rows = await res.json();
@@ -5112,11 +5174,22 @@ function memberTransactionActionText(tx){
 }
 function memberTransactionSourceText(tx){
   if(!tx) return '';
+  const kind = memberTransactionKind(tx);
+  if(kind === 'reward_reversal') return '撤销兑换';
+  if(kind === 'reward_redeem') return tx.revoked_at ? '已撤销兑换' : '奖励兑换';
   if(String(tx.note || '').includes('奖励兑换')) return '奖励兑换';
   if(tx.source === 'code_checkin') return '会员号核销';
   if(tx.source === 'qr_checkin') return '扫码核销';
   if(tx.source === 'reward_redeem') return '奖励兑换';
   return '手动调整';
+}
+function memberTransactionKind(tx){
+  if(tx && tx.transaction_kind) return tx.transaction_kind;
+  if(String(tx && tx.note || '').includes('撤销奖励兑换')) return 'reward_reversal';
+  if(String(tx && tx.note || '').includes('奖励兑换')) return 'reward_redeem';
+  if(tx && tx.source === 'code_checkin') return 'stamp_checkin';
+  if(tx && tx.action === 'points') return 'points_adjustment';
+  return 'manual_adjustment';
 }
 function merchantRewardInfo(row, merchant){
   merchant = merchant || {};
@@ -5161,12 +5234,15 @@ function memberTransactionRowHtml(tx, merchantUserId, opts){
   const source = memberTransactionSourceText(tx);
   const title = opts.userView ? `${source} · ${action}` : `${memberTransactionUserName(tx, merchantUserId)} · ${action}`;
   const note = memberTransactionNoteText(tx);
+  const kind = memberTransactionKind(tx);
+  const canReverse = opts.merchantView && kind === 'reward_redeem' && !tx.revoked_at;
   return `
     <div class="member-tx-item">
       <div class="member-tx-main">
-        <div class="member-tx-title">${escHtml(title)}${!opts.userView && source ? `<span class="member-tx-badge">${escHtml(source)}</span>` : ''}</div>
+        <div class="member-tx-title">${escHtml(title)}${!opts.userView && source ? `<span class="member-tx-badge">${escHtml(source)}</span>` : ''}${tx.revoked_at ? '<span class="member-tx-revoked">已撤销</span>' : ''}</div>
         <div class="member-tx-meta">${date ? escHtml(date) + ' · ' : ''}${Number(tx.before_value || 0)} → ${Number(tx.after_value || 0)}</div>
         ${note ? `<div class="member-tx-note">${escHtml(note)}</div>` : ''}
+        ${canReverse ? `<button class="member-tx-reverse-btn" onclick="openMerchantRewardReversalConfirm(${JSON.stringify(tx.id)})">撤销本次兑换</button>` : ''}
       </div>
       <div class="member-tx-delta ${delta < 0 ? 'minus' : ''}">${delta >= 0 ? '+' : ''}${delta}</div>
     </div>
@@ -5177,13 +5253,29 @@ function merchantTransactionPanelHtml(merchantUserId){
   if(cache.missing){
     return '<div class="member-tx-panel"><div class="member-tx-head"><b>近期核销记录</b></div><div class="deals-empty-panel" style="margin:0;">运行 5.60 SQL 后可查看核销流水。</div></div>';
   }
-  const rows = (cache.rows || []).slice(0, 8);
+  const selected = window._merchantTransactionFilter || 'all';
+  const allRows = cache.rows || [];
+  const rows = allRows.filter(tx => {
+    const kind = memberTransactionKind(tx);
+    if(selected === 'redeem') return kind === 'reward_redeem' || kind === 'reward_reversal';
+    if(selected === 'checkin') return kind === 'stamp_checkin' || kind === 'points_adjustment';
+    return true;
+  }).slice(0, 12);
   return `
     <div class="member-tx-panel">
-      <div class="member-tx-head"><b>近期核销 / 兑换记录</b><span>${rows.length ? '最新 8 条' : '暂无记录'}</span></div>
-      ${rows.length ? `<div class="member-tx-list">${rows.map(tx => memberTransactionRowHtml(tx, merchantUserId)).join('')}</div>` : '<div class="deals-empty-panel" style="margin:0;">还没有核销记录。</div>'}
+      <div class="member-tx-head"><b>会员操作记录</b><span>${rows.length ? `显示 ${rows.length} 条` : '暂无记录'}</span></div>
+      <div class="member-tx-filter">
+        <button class="${selected === 'all' ? 'on' : ''}" onclick="setMerchantTransactionFilter('all')">全部</button>
+        <button class="${selected === 'checkin' ? 'on' : ''}" onclick="setMerchantTransactionFilter('checkin')">核销 / 积分</button>
+        <button class="${selected === 'redeem' ? 'on' : ''}" onclick="setMerchantTransactionFilter('redeem')">奖励兑换</button>
+      </div>
+      ${rows.length ? `<div class="member-tx-list">${rows.map(tx => memberTransactionRowHtml(tx, merchantUserId, { merchantView:true })).join('')}</div>` : '<div class="deals-empty-panel" style="margin:0;">这个分类还没有记录。</div>'}
     </div>
   `;
+}
+function setMerchantTransactionFilter(filter){
+  window._merchantTransactionFilter = filter || 'all';
+  renderMerchantMemberManager();
 }
 async function loadMemberCardTransactions(membershipId, force){
   const key = String(membershipId || '');
@@ -5191,7 +5283,7 @@ async function loadMemberCardTransactions(membershipId, force){
   const cache = window._memberCardTransactionCache[key] || { rows: [], loaded:false, missing:false };
   if(cache.loaded && !force) return cache.rows;
   try {
-    const select = 'id,membership_id,merchant_user_id,user_id,action,delta,before_value,after_value,source,note,created_at';
+    const select = 'id,membership_id,merchant_user_id,user_id,action,delta,before_value,after_value,source,note,transaction_kind,reversal_of_id,revoked_at,revoked_by,created_at';
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions?membership_id=eq.${encodeURIComponent(key)}&select=${select}&order=created_at.desc&limit=20`, { method:'GET' });
     if(!res.ok) throw new Error(await res.text());
     const rows = await res.json();
@@ -11440,7 +11532,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.94 - Feed Performance Fix】');
+console.log('✓ 页面初始化完成 【版本 5.95 - Membership Redemption Audit】');
 </script>
 </body>
 </html>
