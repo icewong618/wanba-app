@@ -633,8 +633,7 @@
   .member-present-stat span{font-size:12px;color:rgba(255,255,255,.78);font-weight:800;}
   .member-present-code{position:relative;z-index:1;background:#fff;color:var(--ink);border-radius:18px;padding:16px;text-align:center;}
   .member-present-qr{width:154px;height:154px;margin:0 auto 10px;border-radius:14px;overflow:hidden;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-  .member-present-qr img{width:100%;height:100%;display:block;}
-  .member-present-code .bars{height:86px;border-radius:10px;background:repeating-linear-gradient(90deg,#20251d 0 5px,#fff 5px 9px,#20251d 9px 12px,#fff 12px 18px);margin-bottom:10px;}
+  .member-present-qr img,.member-present-qr svg{width:100%;height:100%;display:block;}
   .member-present-code b{display:block;font-size:17px;letter-spacing:1px;}
   .member-present-code span{display:block;font-size:11px;color:var(--ink-faint);margin-top:4px;}
   .member-scan-video{width:100%;aspect-ratio:3/4;max-height:58vh;object-fit:cover;background:#111;border-radius:18px;display:block;}
@@ -1646,6 +1645,7 @@
     margin-top:calc(var(--deals-fixed-top, 205px) - 75px) !important;
   }
 </style>
+<script src="/vendor/qrcode-generator-2.0.4.js"></script>
 <script>
   try {
     const p = new URLSearchParams(window.location.search || '');
@@ -2518,7 +2518,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.99';
+const APP_VERSION = '5.100';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5541,8 +5541,17 @@ function memberCardPublicId(row){
   const raw = `${row && row.id ? row.id : '0'}`.replace(/[^0-9A-Za-z]/g, '');
   return `LSH-${String(raw).padStart(6, '0').slice(-8)}`;
 }
-function memberCardQrUrl(code){
-  return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(code)}`;
+function memberCardQrHtml(code){
+  try {
+    if(typeof window.qrcode !== 'function') throw new Error('local QR library unavailable');
+    const qr = window.qrcode(0, 'M');
+    qr.addData(String(code || ''));
+    qr.make();
+    return qr.createSvgTag(5, 1, '会员二维码', '乐生活会员卡');
+  } catch(e){
+    console.warn('本地会员二维码生成失败:', e.message);
+    return `<span style="font-size:11px;color:var(--ink-faint);padding:14px;line-height:1.5;">二维码生成失败<br>请使用下方会员号</span>`;
+  }
 }
 function showMemberCardPresenter(id){
   const row = getUserMembershipCardRow(id);
@@ -5571,7 +5580,7 @@ function showMemberCardPresenter(id){
         </div>
         ${memberRewardProgressHtml(row, m, { dark:true })}
         <div class="member-present-code">
-          <div class="member-present-qr"><img src="${escAttr(memberCardQrUrl(publicCode))}" alt="会员二维码"></div>
+          <div class="member-present-qr" aria-label="会员二维码">${memberCardQrHtml(publicCode)}</div>
           <b>${escHtml(publicCode)}</b>
           <span>请向商家出示二维码，无法扫码时可输入会员号</span>
         </div>
@@ -11765,7 +11774,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.98 - Geocoding CORS Fix】');
+console.log('✓ 页面初始化完成 【版本 5.100 - Local Member QR】');
 </script>
 </body>
 </html>
