@@ -2616,7 +2616,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.110';
+const APP_VERSION = '5.120';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -6011,6 +6011,23 @@ function toggleUserMembershipFavorite(id){
   else localStorage.setItem(key, '1');
   renderUserMembershipCards();
 }
+function memberCardNavigationUrl(merchant){
+  const m = merchant || {};
+  const destination = isMembershipCoordinate(m.latitude) && isMembershipCoordinate(m.longitude)
+    ? `${Number(m.latitude)},${Number(m.longitude)}`
+    : (m.address || m.business_name || '');
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}
+function openMemberCardNavigation(membershipId){
+  const row = getUserMembershipCardRow(membershipId);
+  const merchant = row && ((window._userMembershipCards && window._userMembershipCards.merchants || {})[row.merchant_user_id] || window._merchantIdentityCache[row.merchant_user_id]);
+  if(!merchant || !(merchant.address || (isMembershipCoordinate(merchant.latitude) && isMembershipCoordinate(merchant.longitude)))){
+    showToast('这家店暂未设置可导航的位置');
+    return;
+  }
+  const popup = window.open(memberCardNavigationUrl(merchant), '_blank', 'noopener');
+  if(!popup) window.location.href = memberCardNavigationUrl(merchant);
+}
 function renderUserMembershipCards(){
   const body = document.getElementById('userMembershipCards');
   if(!body) return;
@@ -6018,8 +6035,9 @@ function renderUserMembershipCards(){
   const mode = state.mode || '常用';
   let rows = (state.rows || []).slice();
   if(mode === '收藏') rows = rows.filter(r => isUserMembershipFavorite(r.id));
+  let nearbyMissingLocationCount = 0;
   if(mode === '附近' && state.location){
-    rows = rows.map(row => {
+    const ranked = rows.map(row => {
       const merchant = state.merchants[row.merchant_user_id] || {};
       return Object.assign({}, row, { _distanceKm: membershipDistanceKm(state.location.latitude, state.location.longitude, merchant.latitude, merchant.longitude) });
     }).sort((a, b) => {
@@ -6027,21 +6045,24 @@ function renderUserMembershipCards(){
       const db = Number.isFinite(b._distanceKm) ? b._distanceKm : Number.POSITIVE_INFINITY;
       return da - db;
     });
+    nearbyMissingLocationCount = ranked.filter(row => !Number.isFinite(row._distanceKm)).length;
+    rows = ranked.filter(row => Number.isFinite(row._distanceKm));
   }
   const nearbyNote = mode !== '附近' ? '' : state.locating
     ? '<div class="ai-note" style="margin:0 0 12px;">正在获取当前位置…</div>'
     : state.location
-      ? '<div class="ai-note" style="margin:0 0 12px;">已按距离排序。你的定位只在当前设备临时使用，不会上传或保存。</div>'
+      ? `<div class="ai-note" style="margin:0 0 12px;">已找到 ${rows.length} 家可定位门店，已按距离排序。${nearbyMissingLocationCount ? `${nearbyMissingLocationCount} 家门店尚未设置位置，暂不列入附近结果。` : ''}你的定位只在当前设备临时使用，不会上传或保存。</div>`
       : `<div class="ai-note" style="margin:0 0 12px;">${escHtml(state.locationError || '开启定位后，可按距离查看附近可用会员卡。')} <button onclick="requestUserMembershipNearbyLocation()" style="margin-left:6px;border:none;background:none;color:var(--sage-dark);font:inherit;font-weight:900;text-decoration:underline;">${state.locationError ? '重新定位' : '开启定位'}</button></div>`;
   body.innerHTML = `
     <div class="member-card-tabs">
       ${['常用','收藏','附近'].map(tab => `<button class="${mode === tab ? 'on' : ''}" onclick="setUserMembershipMode('${tab}')">${tab}</button>`).join('')}
     </div>
     ${nearbyNote}
-    ${rows.length ? `<div class="member-card-list">${rows.map(userMembershipCardHtml).join('')}</div>` : `<div class="deals-empty-panel">${mode === '收藏' ? '还没有收藏会员卡。' : mode === '附近' ? '附近暂时没有可用会员卡。' : '还没有加入任何商家会员。'}</div>`}
+    ${rows.length ? `<div class="member-card-list">${rows.map((row, index) => userMembershipCardHtml(row, { nearbyRank:mode === '附近' ? index : -1 })).join('')}</div>` : `<div class="deals-empty-panel">${mode === '收藏' ? '还没有收藏会员卡。' : mode === '附近' ? (nearbyMissingLocationCount ? '已加入的商家暂未设置门店位置，暂时无法计算距离。' : '附近暂时没有可用会员卡。') : '还没有加入任何商家会员。'}</div>`}
   `;
 }
-function userMembershipCardHtml(row){
+function userMembershipCardHtml(row, opts){
+  opts = opts || {};
   const state = window._userMembershipCards || { merchants:{} };
   const m = state.merchants[row.merchant_user_id] || window._merchantIdentityCache[row.merchant_user_id] || {};
   const name = m.business_name || '乐生活商家';
@@ -6049,13 +6070,14 @@ function userMembershipCardHtml(row){
   const address = m.address || '地址待补充';
   const distance = formatMembershipDistance(row._distanceKm);
   const fav = isUserMembershipFavorite(row.id);
+  const isNearby = Number(opts.nearbyRank) >= 0;
   return `
     <div class="member-card">
       <button class="member-card-fav ${fav ? 'on' : ''}" onclick="toggleUserMembershipFavorite(${JSON.stringify(row.id)})" aria-label="${fav ? '取消收藏' : '收藏'}">${fav ? '♥' : '♡'}</button>
       <div class="member-card-top">
         <div class="member-card-logo">${logo ? `<img src="${escAttr(logo)}" alt="">` : escHtml(initials(name))}</div>
         <div style="min-width:0;flex:1;">
-          <div class="member-card-name">${escHtml(name)}</div>
+          <div class="member-card-name">${escHtml(name)}${opts.nearbyRank === 0 ? '<span style="margin-left:6px;font-size:10px;padding:3px 6px;border-radius:999px;background:var(--sage-light);color:var(--sage-dark);vertical-align:2px;">最近门店</span>' : ''}</div>
           <div class="member-card-meta">${escHtml(address)}${distance ? ` · 距你 ${escHtml(distance)}` : (window._userMembershipCards.mode === '附近' ? ' · 未设定门店定位' : '')}</div>
         </div>
       </div>
@@ -6067,7 +6089,7 @@ function userMembershipCardHtml(row){
       ${memberTierBenefitsHtml(row, m, currentUser && currentUser.birth)}
       <div class="member-card-actions">
         <button class="primary" onclick="showMemberCardPresenter(${JSON.stringify(row.id)})">出示会员卡</button>
-        <button onclick="openMerchantPublicPage('${String(row.merchant_user_id || '').replace(/'/g,'')}')">查看店铺</button>
+        <button onclick="${isNearby ? `openMemberCardNavigation(${JSON.stringify(row.id)})` : `openMerchantPublicPage('${String(row.merchant_user_id || '').replace(/'/g,'')}')`}">${isNearby ? `${uiIcon('map',14)}到店导航` : '查看店铺'}</button>
       </div>
     </div>
   `;
@@ -12507,7 +12529,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.110 - Membership Tiers & Benefits】');
+console.log('✓ 页面初始化完成 【版本 5.120 - Nearby Membership Cards】');
 </script>
 </body>
 </html>
