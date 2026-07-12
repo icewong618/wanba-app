@@ -2498,7 +2498,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.91';
+const APP_VERSION = '5.92';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -11354,7 +11354,6 @@ window.switchTab = function(tab){
 async function bootApp(){
   const startedAt = Date.now();
   const minSplashMs = 850;
-  const maxSplashMs = 4600;
   syncVisibleAppVersion();
   const embeddedAppEntry = isEmbeddedAppEntry();
 
@@ -11380,11 +11379,7 @@ async function bootApp(){
     renderFeed();
 
     setLaunchStatus('正在加载附近的新鲜事…');
-    const firstRefresh = loadPostsFromSupabase();
-    await Promise.race([
-      firstRefresh,
-      new Promise(resolve => setTimeout(resolve, maxSplashMs))
-    ]);
+    await loadPostsFromSupabase();
     renderFeed();
     updateFixedTopLayout();
     const merchantRouteSlug = routeMerchantSlugFromLocation();
@@ -11424,7 +11419,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.91 - Startup Feed Loading Fix】');
+console.log('✓ 页面初始化完成 【版本 5.92 - App Startup Ready Gate】');
 </script>
 </body>
 </html>
