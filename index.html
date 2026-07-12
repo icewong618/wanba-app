@@ -585,8 +585,10 @@
   .member-tx-list{display:grid;gap:8px;}
   .member-tx-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg-alt);padding:9px 10px;}
   .member-tx-main{min-width:0;flex:1;}
-  .member-tx-title{font-size:12.5px;font-weight:900;color:var(--ink);line-height:1.25;}
+  .member-tx-title{font-size:12.5px;font-weight:900;color:var(--ink);line-height:1.25;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .member-tx-badge{display:inline-flex;align-items:center;border-radius:999px;background:#fff;color:var(--sage-dark);border:1px solid var(--line);font-size:10px;font-weight:900;padding:2px 7px;}
   .member-tx-meta{font-size:10.5px;color:var(--ink-faint);margin-top:3px;}
+  .member-tx-note{font-size:11px;color:var(--ink-soft);line-height:1.45;margin-top:4px;}
   .member-tx-delta{font-size:13px;font-weight:900;color:var(--sage-dark);white-space:nowrap;}
   .member-tx-delta.minus{color:#b9413a;}
   .member-card-tabs{display:flex;gap:8px;margin:0 0 12px;overflow-x:auto;padding-bottom:2px;}
@@ -2496,7 +2498,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.86';
+const APP_VERSION = '5.90';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4803,6 +4805,8 @@ async function updateMerchantMembershipRow(id, patch, audit){
     });
     if(!res.ok) throw new Error(await res.text());
     if(audit) await logMerchantMemberTransaction(audit);
+    clearMemberCardTransactionCache(id);
+    refreshUserMembershipCardCache(audit && audit.membership ? audit.membership : { id }, body);
     await loadMerchantMemberships(merchantUserId, true);
     await loadMerchantMemberTransactions(merchantUserId, true);
     renderMerchantMemberManager();
@@ -4894,6 +4898,7 @@ function confirmMerchantRewardRedeem(){
     before,
     after,
     source: 'reward_redeem',
+    note: `奖励兑换：${qty} 份「${state.info.reward}」，每份扣 ${state.info.target} 次`,
     toast: `已兑换 ${qty} 次「${state.info.reward}」`
   });
 }
@@ -5039,7 +5044,7 @@ async function logMerchantMemberTransaction(audit){
       before_value: Number(audit.before || 0),
       after_value: Number(audit.after || 0),
       source: isRewardRedeem ? 'manual' : (audit.source || 'manual'),
-      note: isRewardRedeem ? '奖励兑换' : (audit.source === 'code_checkin' ? '会员卡号核销' : '商家手动调整')
+      note: audit.note || (isRewardRedeem ? '奖励兑换' : (audit.source === 'code_checkin' ? '会员卡号核销' : '商家手动调整'))
     };
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions`, {
       method:'POST',
@@ -5053,6 +5058,16 @@ async function logMerchantMemberTransaction(audit){
 }
 window._merchantMemberTransactionCache = window._merchantMemberTransactionCache || {};
 window._memberCardTransactionCache = window._memberCardTransactionCache || {};
+function clearMemberCardTransactionCache(membershipId){
+  const key = String(membershipId || '');
+  if(key && window._memberCardTransactionCache) delete window._memberCardTransactionCache[key];
+}
+function refreshUserMembershipCardCache(member, patch){
+  if(!(member && window._userMembershipCards && Array.isArray(window._userMembershipCards.rows))) return;
+  const index = window._userMembershipCards.rows.findIndex(r => String(r.id) === String(member.id));
+  if(index < 0) return;
+  window._userMembershipCards.rows[index] = Object.assign({}, window._userMembershipCards.rows[index], patch || {}, { updated_at: new Date().toISOString() });
+}
 function cachedMerchantTransactions(merchantUserId){
   return window._merchantMemberTransactionCache[String(merchantUserId || '')] || { rows: [], loaded:false, missing:false };
 }
@@ -5117,14 +5132,26 @@ function memberTransactionUserName(tx, merchantUserId){
   const member = cachedMerchantMemberships(merchantUserId).rows.find(r => String(r.id) === String(tx.membership_id));
   return (member && member.user_name) || '会员';
 }
-function memberTransactionRowHtml(tx, merchantUserId){
+function memberTransactionNoteText(tx){
+  const note = String((tx && tx.note) || '').trim();
+  if(!note) return '';
+  if(note === memberTransactionSourceText(tx)) return '';
+  return note;
+}
+function memberTransactionRowHtml(tx, merchantUserId, opts){
+  opts = opts || {};
   const delta = Number(tx.delta || 0);
   const date = tx.created_at ? new Date(tx.created_at).toLocaleString('zh-CN') : '';
+  const action = memberTransactionActionText(tx);
+  const source = memberTransactionSourceText(tx);
+  const title = opts.userView ? `${source} · ${action}` : `${memberTransactionUserName(tx, merchantUserId)} · ${action}`;
+  const note = memberTransactionNoteText(tx);
   return `
     <div class="member-tx-item">
       <div class="member-tx-main">
-        <div class="member-tx-title">${escHtml(memberTransactionUserName(tx, merchantUserId))} · ${escHtml(memberTransactionActionText(tx))}</div>
-        <div class="member-tx-meta">${escHtml(memberTransactionSourceText(tx))}${date ? ' · ' + escHtml(date) : ''} · ${Number(tx.before_value || 0)} → ${Number(tx.after_value || 0)}</div>
+        <div class="member-tx-title">${escHtml(title)}${!opts.userView && source ? `<span class="member-tx-badge">${escHtml(source)}</span>` : ''}</div>
+        <div class="member-tx-meta">${date ? escHtml(date) + ' · ' : ''}${Number(tx.before_value || 0)} → ${Number(tx.after_value || 0)}</div>
+        ${note ? `<div class="member-tx-note">${escHtml(note)}</div>` : ''}
       </div>
       <div class="member-tx-delta ${delta < 0 ? 'minus' : ''}">${delta >= 0 ? '+' : ''}${delta}</div>
     </div>
@@ -5138,7 +5165,7 @@ function merchantTransactionPanelHtml(merchantUserId){
   const rows = (cache.rows || []).slice(0, 8);
   return `
     <div class="member-tx-panel">
-      <div class="member-tx-head"><b>近期核销记录</b><span>${rows.length ? '最新 8 条' : '暂无记录'}</span></div>
+      <div class="member-tx-head"><b>近期核销 / 兑换记录</b><span>${rows.length ? '最新 8 条' : '暂无记录'}</span></div>
       ${rows.length ? `<div class="member-tx-list">${rows.map(tx => memberTransactionRowHtml(tx, merchantUserId)).join('')}</div>` : '<div class="deals-empty-panel" style="margin:0;">还没有核销记录。</div>'}
     </div>
   `;
@@ -5171,7 +5198,7 @@ function renderMemberCardTransactionTarget(membershipId, merchantUserId){
   }
   const rows = (cache.rows || []).slice(0, 5);
   target.innerHTML = rows.length
-    ? `<div class="member-tx-list">${rows.map(tx => memberTransactionRowHtml(tx, merchantUserId)).join('')}</div>`
+    ? `<div class="member-tx-list">${rows.map(tx => memberTransactionRowHtml(tx, merchantUserId, { userView:true })).join('')}</div>`
     : '<div class="deals-empty-panel" style="margin:0;">还没有使用记录。</div>';
 }
 window._userMembershipCards = window._userMembershipCards || { rows: [], merchants: {}, loaded:false, mode:'常用' };
@@ -11369,7 +11396,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.86 - Member Redeem App Popup Fix】');
+console.log('✓ 页面初始化完成 【版本 5.90 - Member Transaction Experience】');
 </script>
 </body>
 </html>
