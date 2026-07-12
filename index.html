@@ -564,7 +564,7 @@
   .merchant-member-controls .primary{background:var(--sage);border-color:var(--sage);color:#fff;}
   .merchant-member-controls .danger{background:#fff5f2;border-color:#f0c9bd;color:#b9413a;}
   .merchant-member-controls .reward{background:var(--berry);border-color:var(--berry);color:#fff;}
-  .merchant-reward-redeem-btn{width:100%;border:none;border-radius:999px;background:var(--berry);color:#fff;font-size:13px;font-weight:900;padding:11px 12px;margin:-2px 0 10px;box-shadow:0 8px 16px rgba(196,69,111,.18);}
+  .merchant-reward-redeem-btn{width:100%;border:none;border-radius:999px;background:var(--berry);color:#fff;font-size:13px;font-weight:900;padding:11px 12px;margin:14px 0 10px;box-shadow:0 8px 16px rgba(196,69,111,.18);position:relative;z-index:2;}
   .merchant-reward-confirm-field{margin:12px 0;}
   .merchant-reward-confirm-field label{display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:6px;}
   .merchant-reward-confirm-field input{width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font-size:18px;font-weight:900;padding:11px 12px;text-align:center;}
@@ -1429,18 +1429,18 @@
     font-weight:700;
   }
   .browsing-history{
-    background:#fff;flex:1;overflow-y:auto;padding:12px 20px;
+    background:#fff;flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 16px calc(20px + env(safe-area-inset-bottom));
     border-radius:20px 20px 0 0;max-height:70vh;
   }
   .history-item{
-    padding:12px 0;border-bottom:1px solid var(--line);
-    display:flex;gap:10px;cursor:pointer;align-items:center;
+    width:100%;min-width:0;padding:12px 0;border-bottom:1px solid var(--line);
+    display:flex;gap:10px;cursor:pointer;align-items:center;overflow:hidden;
   }
   .history-item:last-child{border:none;}
   .history-item-thumb{width:40px;height:50px;background:var(--bg-alt);
     border-radius:4px;overflow:hidden;flex-shrink:0;}
   .history-item-thumb img{width:100%;height:100%;object-fit:cover;}
-  .history-item-info{flex:1;}
+  .history-item-info{flex:1;min-width:0;}
   .history-item-title{font-size:12px;font-weight:700;line-height:1.3;color:var(--ink);}
   .history-item-time{font-size:11px;color:var(--ink-faint);margin-top:2px;}
   .empty-state{
@@ -2300,7 +2300,7 @@
 </div>
 
 <div class="profile-modal" id="browsingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:flex-end;justify-content:center;padding-bottom:56px;">
-  <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:70vh;overflow-y:auto;padding:16px 0;">
+  <div class="browsing-history" style="width:100%;">
     <div style="position:sticky;top:0;background:#fff;padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-weight:700;">
       <span>浏览历史</span>
       <button onclick="closeBrowsingHistory()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
@@ -2593,7 +2593,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.101';
+const APP_VERSION = '5.102';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4297,7 +4297,7 @@ async function confirmMerchantCouponRedeem(id){
     closeMerchantCouponRedeem();
   } catch(e){ console.warn('优惠券核销失败:', e.message); showToast('核销失败：该券可能已使用或已失效'); }
 }
-async function openMerchantCouponWallet(){
+async function openMerchantCouponWallet(focusClaimId){
   if(!(session && session.user)){ openAuth(); return; }
   const sheet = document.getElementById('merchantCouponWallet');
   const body = document.getElementById('merchantCouponWalletBody');
@@ -4310,7 +4310,8 @@ async function openMerchantCouponWallet(){
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${merchantIds.map(encodeURIComponent).join(',')})&select=user_id,business_name,logo`, { method:'GET' });
     if(res.ok) (await res.json()).forEach(row => setMerchantIdentityCache(row.user_id, row));
   }
-  body.innerHTML = rows.length ? rows.map(claim => {
+  const visibleRows = focusClaimId ? rows.filter(claim => Number(claim.id) === Number(focusClaimId)) : rows;
+  body.innerHTML = visibleRows.length ? visibleRows.map(claim => {
     const merchant = window._merchantIdentityCache[claim.merchant_user_id] || {};
     const snapshot = claim.coupon_snapshot || {};
     const redeemed = claim.status === 'redeemed';
@@ -5888,6 +5889,16 @@ function memberCardQrHtml(code){
     return `<span style="font-size:11px;color:var(--ink-faint);padding:14px;line-height:1.5;">二维码生成失败<br>请使用下方会员号</span>`;
   }
 }
+function renderMemberCardCouponTarget(membershipId, merchantUserId){
+  const target = document.getElementById(`memberCardCouponRows-${membershipId}`);
+  if(!target) return;
+  const rows = (window._merchantCouponClaims.rows || []).filter(claim => String(claim.merchant_user_id) === String(merchantUserId));
+  target.innerHTML = rows.length ? rows.map(claim => {
+    const snapshot = claim.coupon_snapshot || {};
+    const redeemed = claim.status === 'redeemed';
+    return `<button onclick="openMerchantCouponWallet(${Number(claim.id)})" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:8px;"><span style="width:34px;height:34px;border-radius:9px;background:var(--berry-light);color:var(--berry-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${uiIcon('inbox',17)}</span><span style="min-width:0;flex:1;"><b style="display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(snapshot.title || '已领取优惠券')}</b><small style="display:block;font-size:11px;color:var(--ink-faint);margin-top:2px;">${redeemed ? '已核销' : '点击出示二维码'}</small></span><span style="font-size:11px;color:${redeemed?'var(--ink-faint)':'var(--sage-dark)'};font-weight:900;">${redeemed?'已使用':'出示'}</span></button>`;
+  }).join('') : '<div style="font-size:12px;color:var(--ink-faint);padding:10px 0;">本店暂时没有已领取的优惠券。</div>';
+}
 function showMemberCardPresenter(id){
   const row = getUserMembershipCardRow(id);
   if(!row){ showToast('没有找到这张会员卡'); return; }
@@ -5924,6 +5935,10 @@ function showMemberCardPresenter(id){
         <div class="member-tx-head"><b>最近使用记录</b><span>这张会员卡</span></div>
         <div id="memberCardTxRows-${row.id}" class="member-dash-sub">正在读取...</div>
       </div>
+      <div class="member-tx-panel" style="margin-top:14px;">
+        <div class="member-tx-head"><b>已领取优惠券</b><button onclick="openMerchantCouponWallet()" style="color:var(--sage-dark);font-weight:900;">全部优惠券</button></div>
+        <div id="memberCardCouponRows-${row.id}" class="member-dash-sub">正在读取...</div>
+      </div>
       <div class="ai-note" style="margin-top:14px;">商家可扫描二维码或输入会员号核销。扫码成功后会自动填入会员号，再选择消费次数或积分累计。</div>
       <div class="merchant-form-actions">
         <button onclick="closeMemberCardPresenter()">关闭</button>
@@ -5933,6 +5948,7 @@ function showMemberCardPresenter(id){
   }
   document.getElementById('memberCardPresenter')?.classList.add('open');
   loadMemberCardTransactions(row.id, true).then(() => renderMemberCardTransactionTarget(row.id, row.merchant_user_id));
+  loadMerchantCouponClaims(true).then(() => renderMemberCardCouponTarget(row.id, row.merchant_user_id));
 }
 function closeMemberCardPresenter(){
   document.getElementById('memberCardPresenter')?.classList.remove('open');
@@ -11096,8 +11112,8 @@ function openMsgCat(cat, keep){
       } else {
         btn = `<button onclick="event.stopPropagation();toggleFollowUser('${r.follower_id}','${String(displayName).replace(/'/g,'')}')" style="padding:6px 14px;border-radius:999px;border:1px solid var(--berry);background:#fff;color:var(--berry);font-size:12px;font-weight:600;cursor:pointer;">关注</button>`;
       }
-      return `<div style="display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);">
-        ${avatarHomeLinkHtml(r.follower_id, displayName, 44)}
+      return `<div onclick="openUserPublicPage('${String(r.follower_id || '').replace(/'/g,'')}','${String(displayName).replace(/'/g,'')}')" style="display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;">
+        <span onclick="event.stopPropagation();openUserPublicPage('${String(r.follower_id || '').replace(/'/g,'')}','${String(displayName).replace(/'/g,'')}')" style="display:inline-flex;cursor:pointer;flex-shrink:0;">${avatarCircleSizedHtml(displayName, r.follower_id, 44)}</span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;">${escHtml(displayName)}</div>
           <div style="font-size:12px;color:var(--ink-faint);">${r.active ? '关注了你' : '曾关注过你（已取关）'} · ${fmtTime(r.created_at)}</div>
@@ -12181,7 +12197,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.101 - Account, Member and Coupon Flow】');
+console.log('✓ 页面初始化完成 【版本 5.102 - Member Card and Profile Fixes】');
 </script>
 </body>
 </html>
