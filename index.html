@@ -677,7 +677,7 @@
   .merchant-product-crop-frame.dragging{cursor:grabbing;}
   .merchant-product-crop-frame img{position:absolute;transform:translate(-50%,-50%);max-width:none;user-select:none;pointer-events:none;}
   .merchant-product-crop-guide{position:absolute;inset:0;border:2px solid rgba(255,255,255,.85);box-shadow:0 0 0 999px rgba(0,0,0,.16);pointer-events:none;}
-  .ai-confirm{position:fixed;inset:0;background:rgba(42,39,33,.48);z-index:410;display:none;align-items:flex-end;justify-content:center;padding:20px;}
+  .ai-confirm{position:fixed;inset:0;background:rgba(42,39,33,.48);z-index:960;display:none;align-items:flex-end;justify-content:center;padding:20px;}
   .ai-confirm.open{display:flex;}
   .ai-confirm-card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-lift);padding:18px;animation:slideUp .2s ease;}
   .ai-confirm-card h4{font-size:16px;margin:0 0 7px;font-weight:900;}
@@ -2496,7 +2496,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.84';
+const APP_VERSION = '5.85';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -11351,7 +11351,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.84 - Member Redeem Quantity】');
+console.log('✓ 页面初始化完成 【版本 5.85 - Member Redeem Quantity Fix】');
 </script>
 </body>
 </html>
