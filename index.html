@@ -2502,7 +2502,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.93';
+const APP_VERSION = '5.94';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -11108,14 +11108,25 @@ function loadPosts(){
 // ====== Supabase 配置 ======
 const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
+const POSTS_REFRESH_COOLDOWN_MS = 12000;
 
 // 从Supabase加载帖子（直接REST API调用）
-async function loadPostsFromSupabase(){
+async function loadPostsFromSupabase(options = {}){
+  const force = options === true || options.force === true;
+  if(window._postsLoadPromise){
+    console.log('⏳ 帖子正在加载，复用当前请求...');
+    return window._postsLoadPromise;
+  }
+  if(!force && window._postsLastFetchedAt && Date.now() - window._postsLastFetchedAt < POSTS_REFRESH_COOLDOWN_MS){
+    console.log('✓ 帖子刚刚更新，暂不重复读取');
+    return posts;
+  }
   const shouldShowLoading = posts.length === 0;
   if(shouldShowLoading){
     feedIsLoading = true;
     renderFeed();
   }
+  window._postsLoadPromise = (async () => {
   try {
     console.log('📥 从 Supabase 加载帖子...');
     
@@ -11124,9 +11135,8 @@ async function loadPostsFromSupabase(){
       'id','title','content','excerpt','category','author','image','images',
       'youtube','likes','event','tags','user_id','visibility','pinned','created_at','location'
     ].join(',');
-    const url = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&order=created_at.desc&limit=120`;
-    const fallbackUrl = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&order=id.desc&limit=80`;
-    const compatibleFallbackUrl = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&order=id.desc&limit=80`;
+    const url = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&order=created_at.desc,id.desc&limit=60`;
+    const fallbackUrl = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&order=id.desc&limit=40`;
     
     console.log('🔗 API请求:', url.slice(0, 60) + '...');
     
@@ -11154,17 +11164,6 @@ async function loadPostsFromSupabase(){
       console.warn(`⚠️ Supabase主查询错误 ${response.status}:`, errorText.slice(0, 160));
       console.log('🔁 使用轻量备用查询重试...');
       response = await fetch(fallbackUrl, requestOptions);
-      if(!response.ok && response.status === 400){
-        const fallbackText = await response.text();
-        if(fallbackText.includes('42703')) response = await fetch(compatibleFallbackUrl, requestOptions);
-        else {
-          console.warn(`⚠️ Supabase备用查询错误 ${response.status}:`, fallbackText.slice(0, 100));
-          console.log('💾 使用本地缓存数据');
-          feedIsLoading = false;
-          renderFeed();
-          return;
-        }
-      }
     }
 
     if(!response.ok){
@@ -11206,6 +11205,7 @@ async function loadPostsFromSupabase(){
         location: p.location || null,
         comments: []
       }));
+      window._postsLastFetchedAt = Date.now();
       feedIsLoading = false;
       renderChips();
       renderQuicklinks();
@@ -11234,6 +11234,12 @@ async function loadPostsFromSupabase(){
     console.log('💾 使用本地缓存数据');
     feedIsLoading = false;
     renderFeed();
+  }
+  })();
+  try {
+    return await window._postsLoadPromise;
+  } finally {
+    window._postsLoadPromise = null;
   }
 }
 
@@ -11434,7 +11440,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.93 - Member Card Acceptance Polish】');
+console.log('✓ 页面初始化完成 【版本 5.94 - Feed Performance Fix】');
 </script>
 </body>
 </html>
