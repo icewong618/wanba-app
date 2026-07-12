@@ -1,0 +1,11 @@
+name = "escoopcity-share-card"
+main = "src/index.js"
+compatibility_date = "2026-07-12"
+workers_dev = true
+
+# These are public website configuration values, not service-role secrets.
+[vars]
+SITE_ORIGIN = "https://escoopcity.com"
+GITHUB_PAGES_ORIGIN = "https://icewong618.github.io/wanba-app"
+SUPABASE_URL = "https://ptxdxepmggmjcndgukjk.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-"

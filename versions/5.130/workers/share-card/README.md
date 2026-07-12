@@ -1,0 +1,41 @@
+# 乐生活动态分享卡 Worker
+
+这个 Worker 让 `https://escoopcity.com/商家名` 在服务端返回商家分享信息，同时继续加载现有 GitHub Pages 的网页。
+
+## 它解决的问题
+
+- Facebook、微信等分享抓取器通常不执行网页 JavaScript。
+- GitHub Pages 无法按商家链接动态生成 Open Graph 标签。
+- Worker 会读取公开认证商家的名称、简介、封面或 Logo，并在 HTML 的 `<head>` 中加入分享标题、简介、图片和规范链接。
+
+## 部署前条件
+
+1. `escoopcity.com` 的 DNS 必须托管在 Cloudflare。
+2. Cloudflare 账户已开通 Workers。
+3. 现有 GitHub Pages 源站保持为 `https://icewong618.github.io/wanba-app`。
+
+## 部署步骤
+
+在本文件夹执行：
+
+```bash
+npx wrangler@4 deploy
+```
+
+首次部署会要求登录 Cloudflare。部署成功后，在 Cloudflare Workers 的“设置 - 域和路由”添加：
+
+```text
+escoopcity.com/*
+```
+
+Worker 会把首页、资源文件、`app.html` 等继续代理到 GitHub Pages；已认证商家的根路径会额外注入动态分享卡。
+
+## 验收
+
+1. 打开一个商家链接，网页内容应与当前乐生活商家微网站一致。
+2. 使用 Facebook Sharing Debugger 抓取该链接，确认标题、简介和缩略图来自商家资料。
+3. 在微信发送商家链接，确认显示乐生活和商家信息。
+
+## 图片说明
+
+只有可公开访问的 `https://` 封面或 Logo 能作为分享缩略图。当前以本地 Base64 保存的图片会自动回退到乐生活品牌图；公测前可把商家封面迁移到公开存储链接，以获得每家商家独立缩略图。
