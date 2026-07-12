@@ -2498,7 +2498,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.90';
+const APP_VERSION = '5.91';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -6519,6 +6519,7 @@ let posts = [
 
 let currentFilter = '全部';
 let currentTag = null;
+let feedIsLoading = false;
 let activePostId = null;
 let selectedCat = null;
 let eventOn = false;
@@ -6602,6 +6603,7 @@ function setTagFilter(tag){
 /* ---------------- render: feed ---------------- */
 function renderFeed(){
   const el = document.getElementById('feed');
+  if(!el) return;
   let list;
   if(currentTag){
     list = posts.filter(p=>p.tags && p.tags.includes(currentTag));
@@ -6609,6 +6611,13 @@ function renderFeed(){
     list = currentFilter==='全部' ? posts : posts.filter(p=>normalizeCategory(p.category)===currentFilter);
   }
   if(list.length===0){
+    if(feedIsLoading){
+      el.innerHTML = `<div class="empty" style="grid-column:1/-1;">
+        <span class="display">正在读取内容</span>
+        新鲜笔记马上就到
+      </div>`;
+      return;
+    }
     el.innerHTML = `<div class="empty" style="grid-column:1/-1;">
       <span class="display">这里还空空的</span>
       ${currentTag ? '暂时没有符合条件的内容,换个分类看看' : '成为第一个分享的人吧'}
@@ -11087,6 +11096,11 @@ const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
 
 // 从Supabase加载帖子（直接REST API调用）
 async function loadPostsFromSupabase(){
+  const shouldShowLoading = posts.length === 0;
+  if(shouldShowLoading){
+    feedIsLoading = true;
+    renderFeed();
+  }
   try {
     console.log('📥 从 Supabase 加载帖子...');
     
@@ -11131,6 +11145,8 @@ async function loadPostsFromSupabase(){
         else {
           console.warn(`⚠️ Supabase备用查询错误 ${response.status}:`, fallbackText.slice(0, 100));
           console.log('💾 使用本地缓存数据');
+          feedIsLoading = false;
+          renderFeed();
           return;
         }
       }
@@ -11140,6 +11156,8 @@ async function loadPostsFromSupabase(){
       const errorText = await response.text();
       console.warn(`⚠️ Supabase错误 ${response.status}:`, errorText.slice(0, 100));
       console.log('💾 使用本地缓存数据');
+      feedIsLoading = false;
+      renderFeed();
       return;
     }
     
@@ -11173,6 +11191,7 @@ async function loadPostsFromSupabase(){
         location: p.location || null,
         comments: []
       }));
+      feedIsLoading = false;
       renderChips();
       renderQuicklinks();
       renderFeed();
@@ -11191,11 +11210,15 @@ async function loadPostsFromSupabase(){
       if(mpOverlay && mpOverlay.classList.contains('open')) renderMerchantDashboard();
     } else {
       console.log('📭 暂无数据或数据格式不正确');
+      feedIsLoading = false;
+      renderFeed();
     }
   } catch(error){
     console.warn('⚠️ 加载失败:', error.message);
     console.error('错误详情:', error);
     console.log('💾 使用本地缓存数据');
+    feedIsLoading = false;
+    renderFeed();
   }
 }
 
@@ -11340,7 +11363,12 @@ async function bootApp(){
     if(updating) return;
     clearOldVersionCache();
     setLaunchStatus('正在检查登录状态…');
-    if(!loadPosts()) posts = [];
+    if(!loadPosts()){
+      posts = [];
+      feedIsLoading = true;
+    } else {
+      feedIsLoading = false;
+    }
     loadUserProfile(); // 加载用户信息
     loadSession();     // 加载登录会话
     fetchIpLocation(); // 获取真实IP属地
@@ -11396,7 +11424,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.90 - Member Transaction Experience】');
+console.log('✓ 页面初始化完成 【版本 5.91 - Startup Feed Loading Fix】');
 </script>
 </body>
 </html>
