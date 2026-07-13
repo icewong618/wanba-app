@@ -13,15 +13,51 @@ function escapeHtml(value) {
 function merchantSlugFromPath(pathname) {
   const parts = pathname.split('/').filter(Boolean);
   if (parts.length !== 1) return '';
-  const slug = decodeURIComponent(parts[0]).trim().toLowerCase();
+  const slug = decodeURIComponent(parts[0])
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
   if (!slug || RESERVED_ROOT_PATHS.has(slug) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return '';
   return slug;
+}
+
+function shareImageSlugFromPath(pathname) {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length !== 2 || parts[0] !== '__share-image') return '';
+  return merchantSlugFromPath(`/${parts[1]}`);
 }
 
 function absoluteImage(value, env) {
   const image = String(value || '').trim();
   if (/^https?:\/\//i.test(image)) return image;
   return `${env.CONTENT_ORIGIN}/assets/leshenghuo-logo.png`;
+}
+
+function inlineImageResponse(value) {
+  const matched = String(value || '').match(/^data:(image\/(?:png|jpeg|webp));base64,([a-z0-9+/=\s]+)$/i);
+  if (!matched) return null;
+  const binary = atob(matched[2].replace(/\s/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': matched[1].toLowerCase(),
+      'Cache-Control': 'public, max-age=86400',
+      'X-Content-Type-Options': 'nosniff'
+    }
+  });
+}
+
+async function merchantShareImageResponse(slug, env) {
+  const merchant = await readMerchant(slug, env);
+  if (!merchant) return new Response('Not found', { status: 404 });
+  const image = merchant.cover_image || merchant.logo;
+  const inlineResponse = inlineImageResponse(image);
+  if (inlineResponse) return inlineResponse;
+  return Response.redirect(absoluteImage(image, env), 302);
 }
 
 function shareMeta({ title, description, image, canonical }) {
@@ -102,6 +138,14 @@ function withShareMeta(response, meta, htmlPage) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const imageSlug = shareImageSlugFromPath(url.pathname);
+    if (imageSlug) {
+      try {
+        return await merchantShareImageResponse(imageSlug, env);
+      } catch (_) {
+        return new Response('Image unavailable', { status: 503 });
+      }
+    }
     const slug = merchantSlugFromPath(url.pathname);
     let merchant = null;
 
@@ -122,7 +166,7 @@ export default {
     const merchantMeta = merchant ? {
       title: `${merchant.business_name || '乐生活商家'} - 乐生活 Scoop City`,
       description: merchant.seo_description || merchant.intro || [merchant.category, merchant.address].filter(Boolean).join(' · ') || defaultMeta.description,
-      image: absoluteImage(merchant.cover_image || merchant.logo, env),
+      image: `${env.SITE_ORIGIN}/__share-image/${encodeURIComponent(merchant.slug)}`,
       canonical: `${env.SITE_ORIGIN}/${encodeURIComponent(merchant.slug)}`
     } : defaultMeta;
 

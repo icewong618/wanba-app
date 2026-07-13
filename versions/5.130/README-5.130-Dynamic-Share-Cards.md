@@ -5,6 +5,7 @@
 - 新增 Cloudflare Worker：`workers/share-card/`。
 - 首页提供固定乐生活分享标题、简介和品牌图。
 - 已认证商家的根路径会读取 Supabase 公开资料，服务端注入动态 Open Graph 分享信息。
+- 商家封面支持 PNG、JPG/JPEG、WebP；当前保存的 Base64 封面也会由 Worker 转为社交平台可访问的分享图。
 - Worker 经由 jsDelivr 读取 GitHub 仓库的静态网页资源，不改变现有网页与 App。
 
 ## 当前状态
