@@ -878,6 +878,23 @@
     display:flex;align-items:center;justify-content:center;font-size:16px;
     box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:5;border:none;cursor:pointer;
   }
+  .share-overlay{position:fixed;inset:0;z-index:880;display:none;align-items:flex-end;justify-content:center;background:rgba(38,36,30,.42);padding:0;}
+  .share-overlay.open{display:flex;}
+  .share-sheet{width:100%;max-width:var(--container-w);background:#fff;border-radius:20px 20px 0 0;box-shadow:var(--shadow-lift);padding:12px 14px calc(18px + env(safe-area-inset-bottom));animation:slideUp .22s ease;}
+  .share-sheet-head{height:38px;display:flex;align-items:center;justify-content:center;position:relative;font-size:16px;font-weight:900;color:var(--ink);}
+  .share-sheet-head button{position:absolute;right:0;width:34px;height:34px;border-radius:999px;background:var(--bg-alt);color:var(--ink-soft);font-size:21px;line-height:1;}
+  .share-recent{display:flex;gap:13px;overflow-x:auto;padding:6px 2px 14px;border-bottom:1px solid var(--line);scrollbar-width:none;}
+  .share-recent::-webkit-scrollbar{display:none;}
+  .share-recent-person{border:none;background:none;width:58px;flex:0 0 58px;padding:0;color:var(--ink-soft);font-size:10px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .share-recent-person .share-recent-avatar{width:48px;height:48px;border-radius:50%;overflow:hidden;margin:0 auto 5px;border:2px solid #fff;box-shadow:0 2px 8px rgba(42,39,33,.12);display:flex;align-items:center;justify-content:center;}
+  .share-recent-person .share-recent-avatar img{width:100%;height:100%;object-fit:cover;display:block;}
+  .share-target-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px 7px;padding:15px 0 12px;}
+  .share-target{border:none;background:none;min-width:0;padding:0;color:var(--ink-soft);font-size:11px;line-height:1.35;display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .share-target-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--bg-alt);color:var(--ink-soft);font-weight:900;font-size:17px;}
+  .share-target-icon.wechat{background:#55bf61;color:#fff;font-size:15px;}.share-target-icon.sms{background:#5e9b75;color:#fff;}.share-target-icon.dm{background:var(--berry);color:#fff;}.share-target-icon.image{background:#f4c65b;color:#fff;}.share-target-icon.save{background:#759dcc;color:#fff;}
+  .share-tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding-top:13px;border-top:1px solid var(--line);}
+  .share-tool{border:none;background:none;color:var(--ink-soft);font-size:11px;line-height:1.35;display:flex;flex-direction:column;align-items:center;gap:6px;}.share-tool span{width:42px;height:42px;border-radius:50%;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);}
+  .share-picker-list{max-height:260px;overflow:auto;padding:4px 0 10px;}.share-picker-row{width:100%;border:none;background:none;display:flex;align-items:center;gap:10px;padding:10px 3px;text-align:left;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);font-weight:800;}.share-picker-row small{display:block;color:var(--ink-faint);font-weight:600;margin-top:2px;}
   #userPublicOverlay{padding:0;background:#fff;align-items:stretch;overflow:hidden;z-index:460;}
   #userPublicModal{position:relative;width:100%;max-width:var(--container-w);height:100vh;height:100dvh;max-height:none;border-radius:0;box-shadow:none;display:flex;flex-direction:column;}
   .user-public-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.98);}
@@ -1969,6 +1986,10 @@
   <div class="modal" style="position:relative;" id="postModal"></div>
 </div>
 
+<div class="share-overlay" id="shareOverlay" onclick="if(event.target.id==='shareOverlay')closeShareSheet()">
+  <div class="share-sheet" id="shareSheet"></div>
+</div>
+
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
 <div class="overlay" id="merchantPublicOverlay" onclick="if(event.target.id==='merchantPublicOverlay')closeMerchantPublicPage()">
   <div class="modal" id="merchantPublicModal">
@@ -2616,7 +2637,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.130';
+const APP_VERSION = '5.131';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4735,18 +4756,54 @@ function copyMerchantSiteLink(userId){
 }
 function shareMerchantSiteLink(userId){
   const m = (currentMerchant && currentMerchant.user_id === userId) ? currentMerchant : window._merchantIdentityCache[userId];
-  const url = merchantSiteUrl(m || { user_id:userId, slug:userId });
-  const title = (m && m.business_name) ? `${m.business_name} - 乐生活` : '乐生活商家主页';
-  if(navigator.share){
-    navigator.share({ title, text:title, url }).catch(() => {});
-  } else {
-    copyMerchantSiteLink(userId);
-  }
+  openShareSheet({ type:'merchant', title:(m && m.business_name) || '乐生活商家主页', text:(m && (m.intro || m.address)) || '发现身边的精彩生活', url:merchantSiteUrl(m || { user_id:userId, slug:userId }), image:m && (m.cover_image || m.logo) });
 }
 function shareCurrentMerchantPublicPage(){
   const userId = document.getElementById('merchantPublicOverlay')?.dataset.userId || '';
   if(userId) shareMerchantSiteLink(userId);
   else showToast('商家链接暂时不可用');
+}
+
+let shareContext = null;
+function shareFollowingPeople(){
+  const me = session && session.user && session.user.id;
+  if(!me) return [];
+  return (window._followRows || []).filter(row => row.active && row.follower_id === me).slice(0, 8).map(row => {
+    const profile = cachedProfile(row.followee_id, row.followee_name || '乐生活好友');
+    return { id:row.followee_id, name:profile.name || row.followee_name || '乐生活好友' };
+  });
+}
+function postShareUrl(p){ return `${window.location.origin}/?post=${encodeURIComponent(p.id)}`; }
+function openPostShare(id){
+  const p = posts.find(row => String(row.id) === String(id));
+  if(!p) return;
+  openShareSheet({ type:'post', title:p.title || '乐生活笔记', text:p.excerpt || p.content || '发现身边的精彩生活', url:postShareUrl(p), image:(p.images && p.images[0]) || p.image || '' });
+}
+function openShareSheet(context){
+  shareContext = context || null;
+  const sheet = document.getElementById('shareSheet');
+  if(!sheet || !shareContext) return;
+  const people = shareFollowingPeople();
+  const recent = people.length ? people.map(person => `<button class="share-recent-person" onclick="shareToFriend('${String(person.id).replace(/'/g,'')}','${String(person.name).replace(/'/g,'')}')"><span class="share-recent-avatar">${avatarCircleSizedHtml(person.name, person.id, 48)}</span>${escHtml(person.name)}</button>`).join('') : `<span style="font-size:12px;color:var(--ink-faint);padding:11px 4px;">关注好友后，可在这里快速私信分享。</span>`;
+  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button><button class="share-tool" onclick="showToast('更多分享方式将随 App 能力提供')"><span>•••</span>更多</button></div>`;
+  document.getElementById('shareOverlay').classList.add('open');
+}
+function closeShareSheet(){ document.getElementById('shareOverlay')?.classList.remove('open'); }
+function openShareFriendPicker(){
+  const people = shareFollowingPeople(); const sheet = document.getElementById('shareSheet');
+  if(!people.length){ showToast('先关注好友，再通过私信分享'); return; }
+  sheet.innerHTML = `<div class="share-sheet-head">选择私信好友<button onclick="openShareSheet(shareContext)" aria-label="返回">‹</button></div><div class="share-picker-list">${people.map(person => `<button class="share-picker-row" onclick="shareToFriend('${String(person.id).replace(/'/g,'')}','${String(person.name).replace(/'/g,'')}')">${avatarCircleSizedHtml(person.name, person.id, 42)}<span>${escHtml(person.name)}<small>发送链接到私信</small></span></button>`).join('')}</div>`;
+}
+function shareToFriend(id, name){ closeShareSheet(); openDmTo(id, name); setTimeout(() => { const input = document.getElementById('dmComposeInput'); if(input && shareContext) input.value = `${shareContext.title}\n${shareContext.url}`; }, 30); }
+async function copyCurrentShareLink(){ if(!shareContext) return; try { await navigator.clipboard.writeText(shareContext.url); showToast('链接已复制'); } catch(e){ showToast(shareContext.url); } }
+async function shareNative(label){ if(!shareContext) return; try { if(navigator.share){ await navigator.share({ title:shareContext.title, text:shareContext.text, url:shareContext.url }); } else { await copyCurrentShareLink(); } } catch(e){} }
+function shareSms(){ if(!shareContext) return; window.location.href = `sms:&body=${encodeURIComponent(`${shareContext.title}\n${shareContext.url}`)}`; }
+function generateShareImage(){
+  if(!shareContext) return; const canvas = document.createElement('canvas'); canvas.width=1080; canvas.height=1440; const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#f6f4ec';ctx.fillRect(0,0,1080,1440);ctx.fillStyle='#5e836a';ctx.fillRect(0,0,1080,92);ctx.fillStyle='#fff';ctx.font='700 42px sans-serif';ctx.fillText('乐生活  SCOOP CITY',64,60);ctx.fillStyle='#292722';ctx.font='700 66px sans-serif';
+  const title=String(shareContext.title||'乐生活').slice(0,34); for(let i=0;i<title.length;i+=15) ctx.fillText(title.slice(i,i+15),64,210+(i/15)*82);ctx.fillStyle='#6c6a63';ctx.font='38px sans-serif';const desc=String(shareContext.text||'发现身边的精彩生活').replace(/\s+/g,' ').slice(0,72);for(let i=0;i<desc.length;i+=24)ctx.fillText(desc.slice(i,i+24),64,430+(i/24)*54);ctx.fillStyle='#fff';ctx.fillRect(64,1120,952,190);ctx.fillStyle='#5e836a';ctx.font='700 38px sans-serif';ctx.fillText('扫码或访问乐生活，发现身边的精彩生活',110,1202);ctx.fillStyle='#8b8980';ctx.font='28px sans-serif';ctx.fillText(shareContext.url.replace(/^https:\/\//,''),110,1260);
+  const save = url => { const a=document.createElement('a');a.href=url;a.download='乐生活分享图.png';a.click();showToast('分享图已生成，可保存或发送'); };
+  if(shareContext.image && String(shareContext.image).startsWith('data:image')){ const img=new Image();img.onload=()=>{ctx.drawImage(img,64,620,952,430);save(canvas.toDataURL('image/png'));};img.onerror=()=>save(canvas.toDataURL('image/png'));img.src=shareContext.image; } else save(canvas.toDataURL('image/png'));
 }
 function callMerchantPhone(phone){
   const clean = String(phone || '').replace(/[^\d+]/g, '');
@@ -4781,6 +4838,7 @@ function merchantContentHtml(m, opts){
         <button class="profile-cover-menu-btn" onclick="toggleMerchantOwnerMenu(event)" aria-label="菜单">${uiIcon('menu',19)}</button>
         <div class="profile-menu merchant-owner-menu" id="merchantOwnerMenu">
           <button onclick="copyMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}复制微网站链接</button>
+          <button onclick="shareMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}转发店铺</button>
           <button onclick="closeProfileMenu();openMerchantEditSheet()">${uiIcon('edit',15)}编辑商家资料</button>
           ${isDealAdmin ? `<button onclick="closeProfileMenu();switchTab('admin')">${uiIcon('settings',15)}管理后台</button>` : ''}
           <button onclick="closeProfileMenu();switchAccount()">${uiIcon('logout',15)}切换账号</button>
@@ -6222,6 +6280,12 @@ function routeMerchantSlugFromLocation(){
   } catch(e){
     return '';
   }
+}
+function routePostIdFromLocation(){
+  try {
+    const raw = new URL(window.location.href).searchParams.get('post');
+    return raw && /^\d+$/.test(raw) ? Number(raw) : null;
+  } catch(e){ return null; }
 }
 async function openMerchantPublicPageBySlug(slug){
   slug = merchantSlugify(slug);
@@ -9731,7 +9795,7 @@ function renderPostModal(){
       <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;">${safeAuthor}${identityBadgeHtml(p.user_id)}</span>
       ${p.user_id && (!session || !session.user || p.user_id !== session.user.id) ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
       ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${uiIcon('message',18)}</button>` : ''}
-      ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" onclick="showToast('链接已复制')">↗</button>`}
+      ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" title="转发" onclick="openPostShare(${JSON.stringify(p.id)})">${uiIcon('share',19)}</button>`}
     </div>
     <div class="xhs-scroll">
       ${media ? `<div class="modal-media ${p.youtube || tikTokInfo ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
@@ -11527,7 +11591,7 @@ function openOwnerSheet(){
     <button class="sheet-item" onclick="closeOwnerSheet();closePost();editPost(${p.id})"><span class="si">${uiIcon('edit',19)}</span>编辑</button>
     <button class="sheet-item" onclick="openVisSheet()"><span class="si">${uiIcon('lock',19)}</span>权限设置 <span style="margin-left:auto;font-size:12px;color:var(--ink-faint);font-weight:400;">${visLabel(p.visibility)}</span></button>
     <button class="sheet-item" onclick="togglePin()"><span class="si">${uiIcon('star',19)}</span>${p.pinned ? '取消置顶' : '置顶'}</button>
-    <button class="sheet-item" onclick="showToast('链接已复制');closeOwnerSheet()"><span class="si">↗</span>转发</button>
+    <button class="sheet-item" onclick="closeOwnerSheet();openPostShare(${p.id})"><span class="si">${uiIcon('share',19)}</span>转发</button>
     <button class="sheet-item" style="color:#d9534f;" onclick="ownerDeletePost(${p.id})"><span class="si">${uiIcon('trash',19)}</span>删除</button>
   `;
   document.getElementById('ownerSheet').style.display = 'block';
@@ -12493,7 +12557,9 @@ async function bootApp(){
     renderFeed();
     updateFixedTopLayout();
     const merchantRouteSlug = routeMerchantSlugFromLocation();
-    if(merchantRouteSlug) setTimeout(() => openMerchantPublicPageBySlug(merchantRouteSlug), 120);
+    const postRouteId = routePostIdFromLocation();
+    if(postRouteId != null) setTimeout(() => openPost(postRouteId), 120);
+    else if(merchantRouteSlug) setTimeout(() => openMerchantPublicPageBySlug(merchantRouteSlug), 120);
 
     setLaunchStatus('内容很快就到…');
     notifyAppReady();
@@ -12504,7 +12570,9 @@ async function bootApp(){
     renderFeed();
     updateFixedTopLayout();
     const merchantRouteSlug = routeMerchantSlugFromLocation();
-    if(merchantRouteSlug) setTimeout(() => openMerchantPublicPageBySlug(merchantRouteSlug), 120);
+    const postRouteId = routePostIdFromLocation();
+    if(postRouteId != null) setTimeout(() => openPost(postRouteId), 120);
+    else if(merchantRouteSlug) setTimeout(() => openMerchantPublicPageBySlug(merchantRouteSlug), 120);
     notifyAppReady();
   } finally {
     const elapsed = Date.now() - startedAt;
@@ -12529,7 +12597,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.130 - Dynamic Share Card Ready】');
+console.log('✓ 页面初始化完成 【版本 5.131 - Unified Share Sheet】');
 </script>
 </body>
 </html>
