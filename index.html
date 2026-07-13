@@ -2660,7 +2660,8 @@ function postCategoryPath(category, subcategory){
   return isValidPostSubcategory(category, subcategory) ? `${main} · ${subcategory}` : main;
 }
 function cardCategoryTag(cat, subcategory=''){
-  return `<span class="cat-tag">${catIcon(cat, 13)}<span>${escHtml(postCategoryPath(cat, subcategory))}</span></span>`;
+  const label = isValidPostSubcategory(cat, subcategory) ? subcategory : catLabel(cat);
+  return `<span class="cat-tag">${catIcon(cat, 13)}<span>${escHtml(label)}</span></span>`;
 }
 const QUICKLINKS = [
   {key:'遛娃', icon:'home'},
@@ -2807,7 +2808,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.160';
+const APP_VERSION = '5.161';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -12922,10 +12923,12 @@ async function submitPost(){
     + (tiktokInfo ? `\n\n${tiktokMarker(tiktokInfo.url)}` : '')
     + (ytVertical ? `\n\n${youtubeVerticalMarker()}` : '');
   const excerpt = content.slice(0,40)+(content.length>40?'…':'');
+  // 最终发布时按当前已选版式重新生成，避免预览主题没有被带到发布封面。
+  const selectedTextCoverTheme = textCardCover?.theme || textCoverDraftTheme || 'garden';
   const automaticTextCover = !videoInfo && selectedVideos.length === 0 && uploadedImages.length === 0
-    ? createTextCoverDataUrl(title, content, cat, textCardCover?.theme || 'garden')
+    ? createTextCoverDataUrl(title, content, cat, selectedTextCoverTheme)
     : '';
-  const textCoverImage = textCardCover?.dataUrl || automaticTextCover;
+  const textCoverImage = automaticTextCover || textCardCover?.dataUrl || '';
   const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[coverImageIndex] : (textCoverImage || null));
   const images = uploadedImages.length > 0 ? uploadedImages : (textCoverImage ? [textCoverImage] : null);
   // 2.93：优先取"我的"页可编辑的昵称
@@ -13945,7 +13948,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Post Subcategories】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Category Tag and Text Cover Fixes】`);
 </script>
 </body>
 </html>

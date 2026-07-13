@@ -135,7 +135,7 @@ function githubRawRequest(request, url, env, merchantPage) {
   upstream.pathname = `${repositoryPath}${requestedPath}`;
   // Keep browser cache-busting parameters out of the source URL, but use a
   // Worker revision token so newly committed static files do not inherit an old 404.
-  upstream.search = 'worker_revision=5.160';
+  upstream.search = 'worker_revision=5.161';
   return new Request(upstream.toString(), request);
 }
 
