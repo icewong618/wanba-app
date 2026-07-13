@@ -335,6 +335,7 @@
   .admin-badge.muted{background:var(--bg-alt);color:var(--ink-faint);border:1px solid var(--line);}
   .admin-badge.hot{background:linear-gradient(135deg,#ff6a3d,#d83f7f);color:#fff;}
   .feedback-overlay{position:fixed;inset:0;z-index:930;display:none;background:#fff;}.feedback-overlay.open{display:flex;flex-direction:column;}.feedback-head{height:calc(58px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);flex-shrink:0;}.feedback-head button{width:38px;height:38px;border-radius:999px;border:0;background:var(--bg-alt);font-size:24px;color:var(--ink);}.feedback-head h3{margin:0;flex:1;text-align:center;font-size:17px;font-weight:900;padding-right:38px;}.feedback-body{flex:1;overflow-y:auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom));}.feedback-field{margin-bottom:16px;}.feedback-field label{display:block;font-size:13px;font-weight:900;margin-bottom:8px;color:var(--ink);}.feedback-field input,.feedback-field textarea,.feedback-field select{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:#fff;font:14px inherit;color:var(--ink);}.feedback-field textarea{min-height:150px;resize:vertical;line-height:1.55;}.feedback-meta{border-radius:10px;background:var(--bg-alt);padding:11px;font-size:11px;color:var(--ink-faint);line-height:1.6;}.feedback-submit{width:100%;height:46px;border:0;border-radius:999px;background:var(--berry);color:#fff;font-size:15px;font-weight:900;margin-top:18px;}
+  .content-report-overlay{position:fixed;inset:0;z-index:932;display:none;background:#fff;}.content-report-overlay.open{display:flex;flex-direction:column;}.content-report-hint{margin:0 0 18px;padding:12px;border-radius:11px;background:var(--bg-alt);font-size:12px;line-height:1.65;color:var(--ink-soft);}.content-report-submit{width:100%;height:46px;border:0;border-radius:999px;background:#b94047;color:#fff;font:900 15px inherit;margin-top:18px;}
   .beta-info-overlay{position:fixed;inset:0;z-index:931;display:none;background:#fff;}.beta-info-overlay.open{display:flex;flex-direction:column;}.beta-info-body{flex:1;overflow-y:auto;padding:20px 16px calc(32px + env(safe-area-inset-bottom));}.beta-info-hero{padding:20px 18px;border-radius:16px;background:linear-gradient(135deg,#fff1e9,#fff8ee);border:1px solid #f0d8c7;margin-bottom:18px;}.beta-info-hero b{display:block;font-size:20px;margin-bottom:7px;}.beta-info-hero p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.7;}.beta-info-section{padding:16px 0;border-bottom:1px solid var(--line);}.beta-info-section:last-child{border-bottom:0;}.beta-info-section h4{margin:0 0 8px;font-size:15px;color:var(--ink);}.beta-info-section p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.72;}.beta-info-list{margin:0;padding-left:20px;color:var(--ink-soft);font-size:13px;line-height:1.9;}.beta-info-feedback{width:100%;height:46px;border:0;border-radius:999px;background:var(--sage);color:#fff;font:900 15px inherit;margin-top:18px;}
   .admin-price-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:7px;}
   .admin-price-line b{font-size:17px;color:var(--ink);}
@@ -2014,6 +2015,16 @@
   </div>
 </div>
 
+<div class="content-report-overlay" id="contentReportOverlay">
+  <div class="feedback-head"><button onclick="closeContentReport()" aria-label="返回">‹</button><h3>举报内容</h3></div>
+  <div class="feedback-body">
+    <p class="content-report-hint" id="contentReportTarget">请如实举报。我们会核查内容与社区规则；恶意举报可能影响账号使用。</p>
+    <div class="feedback-field"><label>举报原因</label><select id="contentReportReason"><option value="spam">垃圾广告或引流</option><option value="misinformation">虚假信息或误导</option><option value="harassment">骚扰、辱骂或仇恨内容</option><option value="privacy">侵犯隐私或冒用他人</option><option value="illegal">违法或危险内容</option><option value="other">其他原因</option></select></div>
+    <div class="feedback-field"><label>补充说明</label><textarea id="contentReportDetail" maxlength="800" placeholder="可选：请说明具体问题，便于我们更快核查。"></textarea></div>
+    <button class="content-report-submit" onclick="submitContentReport()">提交举报</button>
+  </div>
+</div>
+
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
 <div class="overlay" id="merchantPublicOverlay" onclick="if(event.target.id==='merchantPublicOverlay')closeMerchantPublicPage()">
   <div class="modal" id="merchantPublicModal">
@@ -2359,6 +2370,7 @@
       <button class="admin-tab" data-admin-tab="comments" onclick="switchAdminTab('comments')">评论回复</button>
       <button class="admin-tab" data-admin-tab="deals" onclick="switchAdminTab('deals')">省钱运营</button>
       <button class="admin-tab" data-admin-tab="feedback" onclick="switchAdminTab('feedback')">公测反馈</button>
+      <button class="admin-tab" data-admin-tab="reports" onclick="switchAdminTab('reports')">内容举报</button>
       <button class="admin-tab" data-admin-tab="banned" onclick="switchAdminTab('banned')">封禁记录</button>
     </div>
     <div class="admin-stats" id="adminStats"></div>
@@ -2664,7 +2676,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.138';
+const APP_VERSION = '5.139';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4812,7 +4824,8 @@ function openShareSheet(context){
   if(!sheet || !shareContext) return;
   const people = shareFollowingPeople();
   const recent = people.length ? people.map(person => `<button class="share-recent-person" onclick="shareToFriend('${String(person.id).replace(/'/g,'')}','${String(person.name).replace(/'/g,'')}')"><span class="share-recent-avatar">${avatarCircleSizedHtml(person.name, person.id, 48)}</span>${escHtml(person.name)}</button>`).join('') : `<span style="font-size:12px;color:var(--ink-faint);padding:11px 4px;">关注好友后，可在这里快速私信分享。</span>`;
-  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button></div>`;
+  const reportTool = shareContext.type === 'post' ? `<button class="share-tool" onclick="openContentReport()"><span>${uiIcon('flag',21)}</span>举报内容</button>` : '';
+  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reportTool}</div>`;
   document.getElementById('shareOverlay').classList.add('open');
 }
 function closeShareSheet(){ document.getElementById('shareOverlay')?.classList.remove('open'); }
@@ -8620,6 +8633,7 @@ let adminComments = [];
 let adminBanned = [];
 let adminDealPrices = [];
 let adminFeedback = [];
+let adminContentReports = [];
 let adminDealOpsReady = true;
 let adminEditingDealId = '';
 
@@ -8651,6 +8665,7 @@ function switchAdminTab(tab){
     });
   }
   if(tab === 'feedback' && !adminFeedback.length){ loadAdminFeedback().then(() => { if(adminTab === 'feedback') renderAdminPanel(); }); }
+  if(tab === 'reports' && !adminContentReports.length){ loadAdminContentReports().then(() => { if(adminTab === 'reports') renderAdminPanel(); }); }
   renderAdminPanel();
 }
 async function loadAdminCenter(force){
@@ -8673,6 +8688,7 @@ async function loadAdminCenter(force){
       adminBanned = Array.isArray(snap.banned) ? snap.banned : [];
       await loadAdminDealPrices(false);
       await loadAdminFeedback();
+      await loadAdminContentReports();
       renderAdminPanel();
       return;
     }
@@ -8692,6 +8708,7 @@ async function loadAdminCenter(force){
     adminBanned = bRes.ok ? await bRes.json() : [];
     await loadAdminDealPrices(false);
     await loadAdminFeedback();
+    await loadAdminContentReports();
     renderAdminPanel();
   } catch(e){
     console.warn('管理后台读取失败:', e.message);
@@ -8711,6 +8728,7 @@ function adminStatsHtml(){
     <div class="admin-stat"><b>${adminDealPrices.length}</b><span>省钱数据</span></div>
     <div class="admin-stat"><b>${adminBanned.length}</b><span>封禁记录</span></div>
     <div class="admin-stat"><b>${adminFeedback.filter(x => x.status !== 'resolved').length}</b><span>待处理反馈</span></div>
+    <div class="admin-stat"><b>${adminContentReports.filter(x => !['resolved','dismissed'].includes(x.status)).length}</b><span>待处理举报</span></div>
   `;
 }
 function renderAdminPanel(){
@@ -8727,6 +8745,7 @@ function renderAdminPanel(){
   if(adminTab === 'comments') return renderAdminComments(body);
   if(adminTab === 'deals') return renderAdminDeals(body);
   if(adminTab === 'feedback') return renderAdminFeedback(body);
+  if(adminTab === 'reports') return renderAdminContentReports(body);
   renderAdminBanned(body);
 }
 async function loadAdminFeedback(){
@@ -8740,6 +8759,23 @@ async function loadAdminFeedback(){
 function renderAdminFeedback(body){
   const rows = adminFiltered(adminFeedback, ['title','body','user_name','type','status']);
   body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(row => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(row.title || '未命名反馈')} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已解决' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">${escHtml(row.user_name || '用户')} · ${escHtml(row.type || '')} · v${escHtml(row.app_version || '')}<br>${adminTimeText(row.created_at)} · ${escHtml(row.page_path || '')}</div><div class="admin-row-text">${escHtml(row.body || '')}</div></div></div><div class="admin-actions"><button class="primary" onclick="adminUpdateFeedback(${row.id},'reviewing')">处理中</button><button onclick="adminUpdateFeedback(${row.id},'resolved')">标记已解决</button></div></div>`).join('')}</div>` : '<div class="admin-empty">暂时没有公测反馈。</div>';
+}
+async function loadAdminContentReports(){
+  if(!adminHasAccess(true)) return [];
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/content_reports?select=*&order=created_at.desc&limit=120`, { method:'GET' });
+    adminContentReports = res.ok ? await res.json() : [];
+  } catch(e){ console.warn('内容举报读取失败:', e.message); adminContentReports = []; }
+  return adminContentReports;
+}
+function contentReportReasonText(reason){ return ({ spam:'垃圾广告或引流', misinformation:'虚假信息或误导', harassment:'骚扰或仇恨内容', privacy:'侵犯隐私', illegal:'违法或危险内容', other:'其他原因' })[reason] || '其他原因'; }
+function renderAdminContentReports(body){
+  const rows = adminFiltered(adminContentReports, ['reason','detail','status','reported_user_id','reporter_user_id']);
+  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(row => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(contentReportReasonText(row.reason))} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已处理' : row.status === 'dismissed' ? '已驳回' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">举报时间：${adminTimeText(row.created_at)}<br>笔记：${escHtml(row.post_id || '无')} · 被举报用户：${escHtml(uidToNumericId(String(row.reported_user_id || '')))}</div>${row.detail ? `<div class="admin-row-text">${escHtml(row.detail)}</div>` : ''}</div></div><div class="admin-actions"><button class="primary" onclick="adminUpdateContentReport(${row.id},'reviewing')">处理中</button><button onclick="adminOpenReportedPost(${JSON.stringify(row.post_id)})">查看笔记</button><button onclick="adminUpdateContentReport(${row.id},'resolved')">已处理</button><button class="danger" onclick="adminUpdateContentReport(${row.id},'dismissed')">驳回</button></div></div>`).join('')}</div>` : '<div class="admin-empty">暂时没有内容举报。</div>';
+}
+function adminOpenReportedPost(postId){ if(postId === null || postId === undefined){ showToast('该举报没有关联笔记'); return; } switchTab('home'); setTimeout(() => openPost(postId), 50); }
+async function adminUpdateContentReport(id, status){
+  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/content_reports?id=eq.${id}`, { method:'PATCH', body:JSON.stringify({ status, handled_by:session.user.id, resolved_at:['resolved','dismissed'].includes(status) ? new Date().toISOString() : null }) }); if(!res.ok) throw new Error(await res.text()); await loadAdminContentReports(); renderAdminPanel(); showToast(status === 'reviewing' ? '已标记处理中' : status === 'resolved' ? '已标记处理完成' : '已驳回举报'); } catch(e){ showToast('更新失败，请检查管理员权限'); }
 }
 async function adminUpdateFeedback(id, status){
   try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback?id=eq.${id}`, { method:'PATCH', body:JSON.stringify({ status, resolved_at:status === 'resolved' ? new Date().toISOString() : null, handled_by:session.user.id }) }); if(!res.ok) throw new Error(await res.text()); await loadAdminFeedback(); renderAdminPanel(); showToast(status === 'resolved' ? '已标记为解决' : '已标记处理中'); } catch(e){ showToast('更新失败，请检查管理员权限'); }
@@ -12149,6 +12185,31 @@ function openFeedback(){
 function closeFeedback(){ document.getElementById('feedbackOverlay')?.classList.remove('open'); }
 function openBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.add('open'); }
 function closeBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.remove('open'); }
+let contentReportPostId = null;
+function openContentReport(){
+  if(!(session && session.user)){ closeShareSheet(); showToast('登录后即可举报内容'); openAuth('login'); return; }
+  const p = getPost();
+  if(!p){ showToast('暂时找不到要举报的内容'); return; }
+  if(String(p.user_id || '') === String(session.user.id)){ showToast('不能举报自己的内容'); return; }
+  contentReportPostId = p.id;
+  document.getElementById('contentReportReason').value = 'spam';
+  document.getElementById('contentReportDetail').value = '';
+  document.getElementById('contentReportTarget').textContent = `正在举报：${p.title || '未命名笔记'} · 作者 ${p.author || '乐生活用户'}`;
+  closeShareSheet();
+  document.getElementById('contentReportOverlay')?.classList.add('open');
+}
+function closeContentReport(){ document.getElementById('contentReportOverlay')?.classList.remove('open'); contentReportPostId = null; }
+async function submitContentReport(){
+  if(!(session && session.user) || contentReportPostId === null) return;
+  const p = getPost() || posts.find(row => String(row.id) === String(contentReportPostId));
+  if(!p){ showToast('内容已不存在'); closeContentReport(); return; }
+  const payload = { reporter_user_id:session.user.id, reported_user_id:p.user_id || null, post_id:p.id, reason:document.getElementById('contentReportReason').value, detail:document.getElementById('contentReportDetail').value.trim() || null, status:'pending' };
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/content_reports`, { method:'POST', body:JSON.stringify(payload) });
+    if(!res.ok) throw new Error(await res.text());
+    closeContentReport(); showToast('举报已提交，我们会尽快核查');
+  } catch(e){ console.warn('内容举报提交失败:', e.message); showToast('提交失败，请稍后重试'); }
+}
 async function submitFeedback(){
   if(!(session && session.user)) return;
   const title = document.getElementById('feedbackTitle').value.trim();
