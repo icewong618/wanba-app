@@ -27,19 +27,13 @@ jobs:
 
       - name: Pin Worker source to this commit
         run: |
-          sed -i "s|^CONTENT_ORIGIN = .*|CONTENT_ORIGIN = \"https://cdn.jsdelivr.net/gh/icewong618/wanba-app@${GITHUB_SHA}\"|" workers/share-card/wrangler.toml
+          sed -i "s|^CONTENT_ORIGIN = .*|CONTENT_ORIGIN = \"https://raw.githubusercontent.com/icewong618/wanba-app/${GITHUB_SHA}\"|" workers/share-card/wrangler.toml
 
       - name: Deploy Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9b02d2b28bee33e4fa5cc64bf9ab262c
         run: npx --yes wrangler@4 deploy --config workers/share-card/wrangler.toml
-
-      - name: Purge jsDelivr branch cache
-        run: |
-          for file in index.html 404.html app.html version.json; do
-            curl --fail --silent --show-error --retry 3 "https://purge.jsdelivr.net/gh/icewong618/wanba-app@main/${file}"
-          done
 
       - name: Verify live version
         run: |
