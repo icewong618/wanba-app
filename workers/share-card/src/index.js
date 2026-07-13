@@ -135,7 +135,7 @@ function githubRawRequest(request, url, env, merchantPage) {
   upstream.pathname = `${repositoryPath}${requestedPath}`;
   // Keep browser cache-busting parameters out of the source URL, but use a
   // Worker revision token so newly committed static files do not inherit an old 404.
-  upstream.search = 'worker_revision=5.130';
+  upstream.search = 'worker_revision=5.132';
   return new Request(upstream.toString(), request);
 }
 
@@ -161,8 +161,13 @@ function withShareMeta(response, meta, htmlPage) {
   headers.delete('content-disposition');
   headers.delete('etag');
   headers.delete('content-length');
-  headers.set('Content-Type', contentTypeForPath(htmlPage ? '/index.html' : new URL(meta.canonical).pathname));
+  const responsePath = htmlPage ? '/index.html' : new URL(meta.canonical).pathname;
+  headers.set('Content-Type', contentTypeForPath(responsePath));
   headers.set('X-Content-Type-Options', 'nosniff');
+  if (responsePath.endsWith('/version.json') || responsePath === 'version.json') {
+    headers.set('Cache-Control', 'no-store, max-age=0');
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  }
   if (!htmlPage) return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   headers.set('Cache-Control', 'public, max-age=300');
   return new HTMLRewriter()
