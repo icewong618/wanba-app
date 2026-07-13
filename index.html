@@ -895,6 +895,13 @@
   .share-tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding-top:13px;border-top:1px solid var(--line);}
   .share-tool{border:none;background:none;color:var(--ink-soft);font-size:11px;line-height:1.35;display:flex;flex-direction:column;align-items:center;gap:6px;}.share-tool span{width:42px;height:42px;border-radius:50%;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);}
   .share-picker-list{max-height:260px;overflow:auto;padding:4px 0 10px;}.share-picker-row{width:100%;border:none;background:none;display:flex;align-items:center;gap:10px;padding:10px 3px;text-align:left;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);font-weight:800;}.share-picker-row small{display:block;color:var(--ink-faint);font-weight:600;margin-top:2px;}
+  .repost-overlay{position:fixed;inset:0;z-index:910;display:none;background:#fff;}
+  .repost-overlay.open{display:flex;flex-direction:column;}
+  .repost-head{height:calc(58px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;display:grid;grid-template-columns:42px 1fr 68px;align-items:center;border-bottom:1px solid var(--line);background:#fff;flex-shrink:0;}
+  .repost-head h3{margin:0;text-align:center;font-size:17px;font-weight:900;}.repost-head button{height:38px;border:none;background:none;color:var(--ink);font-size:15px;font-weight:900;}.repost-head .repost-back{width:38px;border-radius:999px;background:var(--bg-alt);font-size:25px;font-weight:500;}.repost-head .repost-submit{color:var(--berry);}
+  .repost-body{flex:1;overflow-y:auto;padding:18px 16px calc(26px + env(safe-area-inset-bottom));}.repost-note{width:100%;min-height:106px;border:none;outline:none;resize:none;font:15px/1.65 inherit;color:var(--ink);padding:0;background:transparent;}.repost-note::placeholder{color:var(--ink-faint);}
+  .repost-source-card{display:flex;gap:10px;padding:10px;border-radius:12px;background:var(--bg-alt);border:1px solid var(--line);cursor:pointer;}.repost-source-image{width:68px;height:84px;border-radius:8px;background:#e9e5dc;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);}.repost-source-image img{width:100%;height:100%;object-fit:cover;display:block;}.repost-source-main{min-width:0;flex:1;}.repost-source-kicker{font-size:11px;color:var(--berry-dark);font-weight:900;margin-bottom:4px;}.repost-source-title{font-size:13px;line-height:1.4;font-weight:900;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}.repost-source-author{font-size:11px;color:var(--ink-faint);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .repost-reference{display:flex;gap:8px;padding:8px;margin-top:9px;border-radius:9px;background:var(--bg-alt);border:1px solid var(--line);cursor:pointer;}.repost-reference-image{width:42px;height:52px;border-radius:6px;overflow:hidden;background:#e9e5dc;flex:0 0 42px;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);}.repost-reference-image img{width:100%;height:100%;object-fit:cover;display:block;}.repost-reference-copy{min-width:0;flex:1;}.repost-reference-label{font-size:10.5px;color:var(--berry-dark);font-weight:900;margin-bottom:2px;}.repost-reference-title{font-size:12px;font-weight:800;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink);}.repost-reference-author{font-size:10.5px;color:var(--ink-faint);margin-top:3px;}
   #userPublicOverlay{padding:0;background:#fff;align-items:stretch;overflow:hidden;z-index:460;}
   #userPublicModal{position:relative;width:100%;max-width:var(--container-w);height:100vh;height:100dvh;max-height:none;border-radius:0;box-shadow:none;display:flex;flex-direction:column;}
   .user-public-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.98);}
@@ -1990,6 +1997,18 @@
   <div class="share-sheet" id="shareSheet"></div>
 </div>
 
+<div class="repost-overlay" id="repostOverlay">
+  <div class="repost-head">
+    <button class="repost-back" onclick="closeRepostComposer()" aria-label="返回">‹</button>
+    <h3>转发笔记</h3>
+    <button class="repost-submit" onclick="submitRepost()">发布</button>
+  </div>
+  <div class="repost-body">
+    <textarea id="repostComment" class="repost-note" maxlength="300" placeholder="写下你的想法，让更多人看到…"></textarea>
+    <div id="repostSourcePreview"></div>
+  </div>
+</div>
+
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
 <div class="overlay" id="merchantPublicOverlay" onclick="if(event.target.id==='merchantPublicOverlay')closeMerchantPublicPage()">
   <div class="modal" id="merchantPublicModal">
@@ -2637,7 +2656,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.133';
+const APP_VERSION = '5.134';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3780,7 +3799,8 @@ function youtubeThumbImgHtml(id, alt=''){
 }
 function postUploadedCoverSrc(p){
   if(!p) return '';
-  return p.image || (Array.isArray(p.images) && p.images[0]) || '';
+  const repost = repostSnapshotOf(p);
+  return p.image || (Array.isArray(p.images) && p.images[0]) || (repost && repost.image) || '';
 }
 function postCoverImgHtml(p, alt){
   const cover = postUploadedCoverSrc(p);
@@ -4779,13 +4799,82 @@ function openPostShare(id){
   if(!p) return;
   openShareSheet({ type:'post', title:p.title || '乐生活笔记', text:p.excerpt || p.content || '发现身边的精彩生活', url:postShareUrl(p), image:(p.images && p.images[0]) || p.image || '' });
 }
+let repostSourcePost = null;
+function repostSnapshotOf(p){
+  if(!p || !p.repost_snapshot) return null;
+  if(typeof p.repost_snapshot === 'object') return p.repost_snapshot;
+  try { return JSON.parse(p.repost_snapshot); } catch(e){ return null; }
+}
+function repostSnapshotFromPost(p){
+  return {
+    id:p.id, title:String(p.title || '乐生活笔记').slice(0,80), author:String(p.author || '乐生活用户').slice(0,40),
+    user_id:p.user_id || null, image:postUploadedCoverSrc(p) || '', category:p.category || '',
+    excerpt:String(p.excerpt || cleanPostContent(p.content) || '').slice(0,160)
+  };
+}
+function repostSourceCardHtml(snapshot, compact){
+  if(!snapshot) return '';
+  const target = snapshot.id ? `onclick="event.stopPropagation();openPost(${JSON.stringify(snapshot.id)})"` : '';
+  const image = snapshot.image ? `<img src="${escAttr(snapshot.image)}" alt="">` : uiIcon('edit', compact ? 17 : 25);
+  if(compact){
+    return `<div class="repost-reference" ${target}><div class="repost-reference-image">${image}</div><div class="repost-reference-copy"><div class="repost-reference-label">转发了 ${escHtml(snapshot.author || '乐生活用户')} 的笔记</div><div class="repost-reference-title">${escHtml(snapshot.title || '乐生活笔记')}</div><div class="repost-reference-author">${escHtml(snapshot.excerpt || '')}</div></div></div>`;
+  }
+  return `<div class="repost-source-card" ${target}><div class="repost-source-image">${image}</div><div class="repost-source-main"><div class="repost-source-kicker">转发自 ${escHtml(snapshot.author || '乐生活用户')}</div><div class="repost-source-title">${escHtml(snapshot.title || '乐生活笔记')}</div><div class="repost-source-author">${escHtml(snapshot.excerpt || '')}</div></div></div>`;
+}
+function openRepostComposer(){
+  if(!(session && session.user)){ showToast('登录后即可转发笔记'); openAuth('login'); return; }
+  if(!shareContext || shareContext.type !== 'post'){ showToast('请选择一篇笔记后再转发'); return; }
+  const postId = String(shareContext.url || '').match(/[?&]post=([^&]+)/)?.[1];
+  const source = posts.find(row => String(row.id) === String(postId));
+  if(!source){ showToast('原笔记暂时不可用'); return; }
+  repostSourcePost = source;
+  closeShareSheet();
+  const input = document.getElementById('repostComment');
+  const preview = document.getElementById('repostSourcePreview');
+  if(input) input.value = '';
+  if(preview) preview.innerHTML = repostSourceCardHtml(repostSnapshotFromPost(source), false);
+  document.getElementById('repostOverlay')?.classList.add('open');
+  setTimeout(() => input?.focus(), 100);
+}
+function closeRepostComposer(){ document.getElementById('repostOverlay')?.classList.remove('open'); repostSourcePost = null; }
+async function submitRepost(){
+  const source = repostSourcePost;
+  if(!source || !(session && session.user)) return;
+  if(window._repostSchemaReady === false){ showToast('请先运行 5.134 数据库升级后再使用转发'); return; }
+  const comment = (document.getElementById('repostComment')?.value || '').trim();
+  const snapshot = repostSnapshotFromPost(source);
+  const author = myNick() || '乐生活用户';
+  const titlePrefix = comment ? comment.replace(/\s+/g,' ').slice(0,14) : '转发笔记';
+  const localPost = {
+    id: nextPostId++, category: source.category || '生活', title:`${titlePrefix} · ${String(source.title || '').slice(0,12)}`.slice(0,20),
+    excerpt: comment || `转发了 ${snapshot.author} 的笔记`, user_id:session.user.id, author,
+    content:comment, image:snapshot.image || null, images:null, youtube:null, likes:0, liked:false,
+    event:null, tags:[], location:null, comments:[], repost_post_id:source.id, repost_snapshot:snapshot,
+    time:'刚刚', created_at:new Date().toISOString(), visibility:'public', pinned:false
+  };
+  posts.unshift(localPost); savePosts(); renderFeed(); initProfilePage(); closeRepostComposer(); closePost(); showToast('已转发到乐生活');
+  try {
+    const saved = await supabaseInsertPost({
+      title:localPost.title, content:comment, excerpt:localPost.excerpt, category:localPost.category, author,
+      image:localPost.image, images:null, youtube:null, likes:0, event:null, tags:[], location:null,
+      user_id:session.user.id, visibility:'public', pinned:false, repost_post_id:source.id, repost_snapshot:snapshot
+    });
+    if(saved && saved.id){ localPost.id = saved.id; savePosts(); }
+    window._repostSchemaReady = true;
+  } catch(e){
+    console.warn('站内转发保存失败:', e.message);
+    if(/repost_(post_id|snapshot)/i.test(e.message) || /column/i.test(e.message)) window._repostSchemaReady = false;
+    showToast('云端转发保存失败，请检查 5.134 数据库升级');
+  }
+}
 function openShareSheet(context){
   shareContext = context || null;
   const sheet = document.getElementById('shareSheet');
   if(!sheet || !shareContext) return;
   const people = shareFollowingPeople();
   const recent = people.length ? people.map(person => `<button class="share-recent-person" onclick="shareToFriend('${String(person.id).replace(/'/g,'')}','${String(person.name).replace(/'/g,'')}')"><span class="share-recent-avatar">${avatarCircleSizedHtml(person.name, person.id, 48)}</span>${escHtml(person.name)}</button>`).join('') : `<span style="font-size:12px;color:var(--ink-faint);padding:11px 4px;">关注好友后，可在这里快速私信分享。</span>`;
-  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button><button class="share-tool" onclick="showToast('更多分享方式将随 App 能力提供')"><span>•••</span>更多</button></div>`;
+  const repostTool = shareContext.type === 'post' ? `<button class="share-tool" onclick="openRepostComposer()"><span>${uiIcon('upload',21)}</span>转发笔记</button>` : '';
+  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools">${repostTool}<button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button></div>`;
   document.getElementById('shareOverlay').classList.add('open');
 }
 function closeShareSheet(){ document.getElementById('shareOverlay')?.classList.remove('open'); }
@@ -7719,6 +7808,7 @@ function renderFeed(){
   }
   el.innerHTML = list.map(p=>{
     const media = postCardMediaHtml(p, 40);
+    const repostReference = repostSourceCardHtml(repostSnapshotOf(p), true);
     const stub = p.event ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
     return `
     <div class="card" onclick="openPost(${p.id})">
@@ -7730,6 +7820,7 @@ function renderFeed(){
       </div>
       <div class="card-body">
         <div class="card-title">${p.title}</div>
+        ${repostReference}
         <div class="card-meta">
           <div class="author">
             ${avatarHomeLinkHtml(p.user_id, p.author, 20)}
@@ -9803,6 +9894,7 @@ function renderPostModal(){
       <div class="modal-body">
         <h2 class="modal-title display">${p.title}</h2>
         <div class="modal-content">${visibleContent}</div>
+        ${repostSourceCardHtml(repostSnapshotOf(p), false)}
         <div class="xhs-tags">${catIcon(p.category, 18)}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
         ${p.location ? `<div style="font-size:13px;color:var(--ink-faint);margin:-6px 0 10px;display:flex;align-items:center;gap:4px;">${uiIcon('map',13)} ${p.location}</div>` : ''}
         <div class="xhs-time">编辑于 ${p.time} · 洛杉矶</div>
@@ -12287,14 +12379,16 @@ async function loadPostsFromSupabase(options = {}){
     console.log('📥 从 Supabase 加载帖子...');
     
     // 只读取页面需要的字段，避免 select=* 在数据量增长后触发 Supabase statement timeout。
-    const basePostSelect = [
+    const legacyPostSelect = [
       'id','title','content','excerpt','category','author','image','images',
       'youtube','likes','event','tags','user_id','visibility','pinned','created_at','location'
     ].join(',');
+    const basePostSelect = `${legacyPostSelect},repost_post_id,repost_snapshot`;
     // 首页一直使用公开帖子。此前没有此限制时，RLS 会对全表评估互相关注条件，数据增长后可能超时。
     const publicFilter = 'or=(visibility.eq.public,visibility.is.null)';
     const url = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&${publicFilter}&order=created_at.desc,id.desc&limit=40`;
     const fallbackUrl = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&${publicFilter}&order=created_at.desc,id.desc&limit=24`;
+    const legacyUrl = `${SUPABASE_URL}/rest/v1/posts?select=${legacyPostSelect}&${publicFilter}&order=created_at.desc,id.desc&limit=24`;
     
     console.log('🔗 API请求:', url.slice(0, 60) + '...');
     
@@ -12325,6 +12419,17 @@ async function loadPostsFromSupabase(options = {}){
     
     console.log('📡 HTTP状态:', response.status, response.statusText);
     
+    if(!response.ok && response.status === 400){
+      const errorText = await response.text();
+      if(/repost_(post_id|snapshot)/i.test(errorText)){
+        console.warn('⚠️ 站内转发字段尚未升级，暂用兼容帖子查询');
+        window._repostSchemaReady = false;
+        response = await fetchPostFeed(legacyUrl, requestOptions, 5000);
+      } else {
+        console.warn(`⚠️ Supabase查询错误 ${response.status}:`, errorText.slice(0, 160));
+      }
+    }
+
     if(!response.ok && response.status >= 500){
       const errorText = await response.text();
       console.warn(`⚠️ Supabase主查询错误 ${response.status}:`, errorText.slice(0, 160));
@@ -12345,6 +12450,7 @@ async function loadPostsFromSupabase(options = {}){
     console.log('📦 收到数据:', data.length, '条记录');
     
     if(Array.isArray(data) && data.length > 0){
+      if(!data.length || Object.prototype.hasOwnProperty.call(data[0], 'repost_snapshot')) window._repostSchemaReady = true;
       console.log('✓ 已从数据库加载', data.length, '条帖子');
       posts = data.map(p => ({
         id: p.id,
@@ -12369,6 +12475,8 @@ async function loadPostsFromSupabase(options = {}){
         time: p.created_at ? new Date(p.created_at).toLocaleString('zh-CN') : new Date().toLocaleString('zh-CN'),
         created_at: p.created_at || null,
         location: p.location || null,
+        repost_post_id: p.repost_post_id || null,
+        repost_snapshot: p.repost_snapshot || null,
         comments: []
       }));
       window._postsLastFetchedAt = Date.now();
