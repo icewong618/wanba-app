@@ -62,8 +62,9 @@ function githubRawRequest(request, url, env, merchantPage) {
   const repositoryPath = upstream.pathname.replace(/\/$/, '');
   const requestedPath = merchantPage ? '/index.html' : (url.pathname === '/' ? '/index.html' : url.pathname);
   upstream.pathname = `${repositoryPath}${requestedPath}`;
-  // GitHub Raw does not need the browser cache-busting query parameters.
-  upstream.search = '';
+  // Keep browser cache-busting parameters out of the source URL, but use a
+  // Worker revision token so newly committed static files do not inherit an old 404.
+  upstream.search = 'worker_revision=5.130';
   return new Request(upstream.toString(), request);
 }
 
