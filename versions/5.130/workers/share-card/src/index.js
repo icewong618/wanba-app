@@ -21,7 +21,7 @@ function merchantSlugFromPath(pathname) {
 function absoluteImage(value, env) {
   const image = String(value || '').trim();
   if (/^https?:\/\//i.test(image)) return image;
-  return `${env.GITHUB_RAW_ORIGIN}/assets/leshenghuo-logo.png`;
+  return `${env.CONTENT_ORIGIN}/assets/leshenghuo-logo.png`;
 }
 
 function shareMeta({ title, description, image, canonical }) {
@@ -58,7 +58,7 @@ async function readMerchant(slug, env) {
 }
 
 function githubRawRequest(request, url, env, merchantPage) {
-  const upstream = new URL(env.GITHUB_RAW_ORIGIN);
+  const upstream = new URL(env.CONTENT_ORIGIN);
   const repositoryPath = upstream.pathname.replace(/\/$/, '');
   const requestedPath = merchantPage ? '/index.html' : (url.pathname === '/' ? '/index.html' : url.pathname);
   upstream.pathname = `${repositoryPath}${requestedPath}`;
@@ -116,7 +116,7 @@ export default {
     const defaultMeta = {
       title: '乐生活 Scoop City - 发现身边的精彩生活',
       description: '北美华人本地生活社区，发现附近美食、活动、优惠和商家服务。',
-      image: `${env.GITHUB_RAW_ORIGIN}/assets/leshenghuo-logo.png`,
+      image: `${env.CONTENT_ORIGIN}/assets/leshenghuo-logo.png`,
       canonical: `${env.SITE_ORIGIN}${url.pathname}`
     };
     const merchantMeta = merchant ? {
