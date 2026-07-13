@@ -338,6 +338,7 @@
   .admin-badge.hot{background:linear-gradient(135deg,#ff6a3d,#d83f7f);color:#fff;}
   .feedback-overlay{position:fixed;inset:0;z-index:930;display:none;background:#fff;}.feedback-overlay.open{display:flex;flex-direction:column;}.feedback-head{height:calc(58px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);flex-shrink:0;}.feedback-head button{width:38px;height:38px;border-radius:999px;border:0;background:var(--bg-alt);font-size:24px;color:var(--ink);}.feedback-head h3{margin:0;flex:1;text-align:center;font-size:17px;font-weight:900;padding-right:38px;}.feedback-body{flex:1;overflow-y:auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom));}.feedback-field{margin-bottom:16px;}.feedback-field label{display:block;font-size:13px;font-weight:900;margin-bottom:8px;color:var(--ink);}.feedback-field input,.feedback-field textarea,.feedback-field select{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:#fff;font:14px inherit;color:var(--ink);}.feedback-field textarea{min-height:150px;resize:vertical;line-height:1.55;}.feedback-meta{border-radius:10px;background:var(--bg-alt);padding:11px;font-size:11px;color:var(--ink-faint);line-height:1.6;}.feedback-submit{width:100%;height:46px;border:0;border-radius:999px;background:var(--berry);color:#fff;font-size:15px;font-weight:900;margin-top:18px;}
   .content-report-overlay{position:fixed;inset:0;z-index:932;display:none;background:#fff;}.content-report-overlay.open{display:flex;flex-direction:column;}.content-report-hint{margin:0 0 18px;padding:12px;border-radius:11px;background:var(--bg-alt);font-size:12px;line-height:1.65;color:var(--ink-soft);}.content-report-submit{width:100%;height:46px;border:0;border-radius:999px;background:#b94047;color:#fff;font:900 15px inherit;margin-top:18px;}
+  .my-feedback-overlay{position:fixed;inset:0;z-index:934;display:none;background:#fff;}.my-feedback-overlay.open{display:flex;flex-direction:column;}.my-feedback-body{flex:1;overflow-y:auto;padding:16px 16px calc(30px + env(safe-area-inset-bottom));}.my-feedback-card{border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:10px;background:var(--card);box-shadow:var(--shadow);}.my-feedback-title{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;font-size:14px;font-weight:900;color:var(--ink);line-height:1.4;}.my-feedback-meta{font-size:11px;color:var(--ink-faint);line-height:1.55;margin-top:6px;}.my-feedback-text{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin-top:8px;white-space:pre-wrap;}.my-feedback-new{width:100%;height:46px;border:0;border-radius:999px;background:var(--sage);color:#fff;font:900 15px inherit;margin-top:10px;}
   .beta-info-overlay{position:fixed;inset:0;z-index:931;display:none;background:#fff;}.beta-info-overlay.open{display:flex;flex-direction:column;}.beta-info-body{flex:1;overflow-y:auto;padding:20px 16px calc(32px + env(safe-area-inset-bottom));}.beta-info-hero{padding:20px 18px;border-radius:16px;background:linear-gradient(135deg,#fff1e9,#fff8ee);border:1px solid #f0d8c7;margin-bottom:18px;}.beta-info-hero b{display:block;font-size:20px;margin-bottom:7px;}.beta-info-hero p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.7;}.beta-info-section{padding:16px 0;border-bottom:1px solid var(--line);}.beta-info-section:last-child{border-bottom:0;}.beta-info-section h4{margin:0 0 8px;font-size:15px;color:var(--ink);}.beta-info-section p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.72;}.beta-info-list{margin:0;padding-left:20px;color:var(--ink-soft);font-size:13px;line-height:1.9;}.beta-info-feedback{width:100%;height:46px;border:0;border-radius:999px;background:var(--sage);color:#fff;font:900 15px inherit;margin-top:18px;}
   .policy-overlay{position:fixed;inset:0;z-index:933;display:none;background:#fff;}.policy-overlay.open{display:flex;flex-direction:column;}.policy-body{flex:1;overflow-y:auto;padding:18px 16px calc(32px + env(safe-area-inset-bottom));}.policy-updated{font-size:11px;color:var(--ink-faint);margin:0 0 14px;}.policy-section{padding:18px 0;border-bottom:1px solid var(--line);}.policy-section h4{font-size:16px;margin:0 0 9px;color:var(--ink);}.policy-section p,.policy-section li{font-size:13px;line-height:1.75;color:var(--ink-soft);}.policy-section p{margin:0;}.policy-section ul{padding-left:20px;margin:8px 0 0;}.policy-contact{padding:13px;border-radius:12px;background:var(--bg-alt);font-size:12px;line-height:1.65;color:var(--ink-soft);margin-top:18px;}
   .admin-price-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:7px;}
@@ -2040,6 +2041,11 @@
   </div>
 </div>
 
+<div class="my-feedback-overlay" id="myFeedbackOverlay">
+  <div class="feedback-head"><button onclick="closeMyFeedback()" aria-label="返回">‹</button><h3>我的反馈</h3></div>
+  <div class="my-feedback-body"><div id="myFeedbackList"><div class="admin-empty">正在读取你的反馈...</div></div><button class="my-feedback-new" onclick="closeMyFeedback();openFeedback()">提交新反馈</button></div>
+</div>
+
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
 <div class="overlay" id="merchantPublicOverlay" onclick="if(event.target.id==='merchantPublicOverlay')closeMerchantPublicPage()">
   <div class="modal" id="merchantPublicModal">
@@ -2267,6 +2273,7 @@
               <button id="authLoginBtn" onclick="event.stopPropagation();openProfileLogin()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
               <button onclick="closeProfileMenu();openBetaInfo()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M5 7a7 7 0 0 1 14 0c0 5-7 14-7 14S5 12 5 7z"></path><circle cx="12" cy="8" r="1"></circle></svg></span>关于本次公测</button>
               <button onclick="closeProfileMenu();openPolicy()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>隐私与社区规则</button>
+              <button onclick="closeProfileMenu();openMyFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 4v16"></path><path d="M5 8h14M5 16h14"></path><circle cx="12" cy="12" r="9"></circle></svg></span>我的反馈</button>
               <button onclick="closeProfileMenu();openFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path><path d="M8 9h8M8 13h5"></path></svg></span>公测反馈</button>
               <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="closeProfileMenu();openMerchantApplySheet()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M4 10h16"></path><path d="M5 10l1-5h12l1 5"></path><path d="M6 10v10h12V10"></path><path d="M9 20v-6h6v6"></path></svg></span>成为商家</button>
               <button id="profileAdminBtn" onclick="closeProfileMenu();switchTab('admin')" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6V20a2 2 0 0 1-4 0v-.08a1.8 1.8 0 0 0-1-.6 1.8 1.8 0 0 0-1.98.36l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-.6-1H4a2 2 0 0 1 0-4h.08a1.8 1.8 0 0 0 .6-1 1.8 1.8 0 0 0-.36-1.98l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05A1.8 1.8 0 0 0 9 4.6a1.8 1.8 0 0 0 1-.6V4a2 2 0 0 1 4 0v.08a1.8 1.8 0 0 0 1 .6 1.8 1.8 0 0 0 1.98-.36l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05A1.8 1.8 0 0 0 19.4 9c.2.34.4.66.6 1H20a2 2 0 0 1 0 4h-.08a1.8 1.8 0 0 0-.52 1z"></path></svg></span>管理后台</button>
@@ -2695,7 +2702,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.142';
+const APP_VERSION = '5.143';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -12217,6 +12224,25 @@ function openBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.a
 function closeBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.remove('open'); }
 function openPolicy(){ document.getElementById('policyOverlay')?.classList.add('open'); }
 function closePolicy(){ document.getElementById('policyOverlay')?.classList.remove('open'); }
+function feedbackStatusLabel(status){ return status === 'resolved' ? '已解决' : status === 'reviewing' ? '处理中' : '待处理'; }
+function feedbackTypeLabel(type){ return ({ bug:'问题反馈', suggestion:'功能建议', experience:'体验建议' })[type] || '公测反馈'; }
+function feedbackStatusClass(status){ return status === 'resolved' ? 'good' : status === 'reviewing' ? 'warn' : 'muted'; }
+async function openMyFeedback(){
+  if(!(session && session.user)){ showToast('登录后即可查看反馈状态'); openAuth('login'); return; }
+  const overlay = document.getElementById('myFeedbackOverlay');
+  const list = document.getElementById('myFeedbackList');
+  if(!overlay || !list) return;
+  overlay.classList.add('open');
+  list.innerHTML = '<div class="admin-empty">正在读取你的反馈...</div>';
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/user_feedback?user_id=eq.${encodeURIComponent(session.user.id)}&select=id,type,title,body,app_version,status,created_at,resolved_at&order=created_at.desc&limit=80`;
+    const res = await authedFetch(url, { method:'GET' });
+    if(!res.ok) throw new Error(await res.text());
+    const rows = await res.json();
+    list.innerHTML = rows.length ? rows.map(row => `<article class="my-feedback-card"><div class="my-feedback-title"><span>${escHtml(row.title || '未命名反馈')}</span><span class="admin-badge ${feedbackStatusClass(row.status)}">${feedbackStatusLabel(row.status)}</span></div><div class="my-feedback-meta">${feedbackTypeLabel(row.type)} · v${escHtml(row.app_version || '')} · ${adminTimeText(row.created_at)}</div><div class="my-feedback-text">${escHtml(row.body || '')}</div>${row.resolved_at ? `<div class="my-feedback-meta">处理时间：${adminTimeText(row.resolved_at)}</div>` : ''}</article>`).join('') : '<div class="admin-empty">你还没有提交过公测反馈。使用下方按钮告诉我们你的体验。</div>';
+  } catch(e){ console.warn('我的反馈读取失败:', e.message); list.innerHTML = '<div class="admin-empty">暂时无法读取反馈状态，请稍后重试。</div>'; }
+}
+function closeMyFeedback(){ document.getElementById('myFeedbackOverlay')?.classList.remove('open'); }
 let contentReportPostId = null;
 function openContentReport(){
   if(!(session && session.user)){ closeShareSheet(); showToast('登录后即可举报内容'); openAuth('login'); return; }
