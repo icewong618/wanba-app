@@ -405,6 +405,7 @@
   .merchant-stat-box{background:var(--bg-alt);border-radius:10px;padding:12px;}
   .merchant-stat-label{font-size:11.5px;color:var(--ink-soft);display:flex;align-items:center;gap:4px;margin-bottom:6px;}
   .merchant-stat-num{font-size:20px;font-weight:700;color:var(--ink);}
+  .merchant-analytics-range{display:flex;gap:8px;margin:0 0 16px;}.merchant-analytics-range button{flex:1;height:36px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-soft);font:800 12px inherit;}.merchant-analytics-range button.active{background:var(--sage);border-color:var(--sage);color:#fff;}.merchant-analytics-summary{font-size:12px;color:var(--ink-faint);line-height:1.55;margin:-4px 0 15px;}.merchant-analytics-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}.merchant-analytics-metric{min-height:92px;border:1px solid var(--line);border-radius:12px;padding:11px;background:var(--card);}.merchant-analytics-metric span{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-soft);font-weight:800;}.merchant-analytics-metric b{display:block;margin-top:9px;font-size:24px;color:var(--ink);line-height:1;}.merchant-analytics-metric small{display:block;margin-top:5px;font-size:10.5px;color:var(--ink-faint);}.merchant-analytics-section{margin-top:20px;}.merchant-analytics-section h4{margin:0 0 10px;font-size:15px;color:var(--ink);}.merchant-analytics-post{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}.merchant-analytics-post:last-child{border-bottom:0;}.merchant-analytics-post img{width:45px;height:45px;object-fit:cover;border-radius:9px;background:var(--bg-alt);}.merchant-analytics-post-main{flex:1;min-width:0;}.merchant-analytics-post-main b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.merchant-analytics-post-main span{display:block;margin-top:4px;font-size:11px;color:var(--ink-faint);}.merchant-analytics-post-score{color:var(--sage-dark);font-size:12px;font-weight:900;white-space:nowrap;}.merchant-analytics-trend{display:grid;gap:9px;}.merchant-analytics-trend-row{display:grid;grid-template-columns:52px 1fr 54px;align-items:center;gap:8px;font-size:11px;color:var(--ink-faint);}.merchant-analytics-bar{height:8px;overflow:hidden;border-radius:999px;background:var(--bg-alt);}.merchant-analytics-bar i{display:block;height:100%;border-radius:999px;background:var(--sage);}.merchant-analytics-note{margin-top:18px;padding:11px;border-radius:11px;background:var(--bg-alt);font-size:11.5px;line-height:1.6;color:var(--ink-soft);}
   .merchant-recent-row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
   .merchant-recent-row:last-child{border-bottom:none;}
   .merchant-recent-img{width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--bg-alt);}
@@ -1107,6 +1108,20 @@
   }
   .form-field textarea{min-height:90px;resize:vertical;}
   .form-field input:focus, .form-field textarea:focus{outline:2px solid var(--sage-light);border-color:var(--sage);}
+  .compose-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:2px;padding-right:48px;}
+  .compose-title-row .modal-title{margin:0;}
+  .compose-draft-entry{border:0;background:var(--bg-alt);color:var(--sage-dark);border-radius:999px;padding:7px 10px;font:800 12px inherit;white-space:nowrap;}
+  .compose-draft-status{font-size:11px;color:var(--ink-faint);margin:-7px 0 12px;min-height:16px;}
+  .compose-draft-card{display:flex;gap:11px;padding:13px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+  .compose-draft-card:last-child{border-bottom:0;}
+  .compose-draft-art{width:54px;height:68px;border-radius:9px;background:var(--sage-light);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--sage-dark);}
+  .compose-draft-art img{width:100%;height:100%;object-fit:cover;}
+  .compose-draft-main{min-width:0;flex:1;}
+  .compose-draft-main b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;color:var(--ink);}
+  .compose-draft-main p{margin:4px 0 0;font-size:11.5px;line-height:1.45;color:var(--ink-faint);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .compose-draft-main span{display:block;margin-top:6px;font-size:10.5px;color:var(--ink-faint);}
+  .compose-draft-delete{align-self:center;border:0;background:transparent;color:var(--ink-faint);padding:9px;font-size:19px;}
+  .compose-draft-local-note{margin:14px 0 0;padding:11px;border-radius:10px;background:var(--bg-alt);font-size:11.5px;line-height:1.6;color:var(--ink-soft);}
   .upload-box{
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
     border:1.5px dashed var(--line-strong);border-radius:12px;
@@ -1937,6 +1952,11 @@
   </div>
 </div>
 
+<div class="feedback-overlay" id="merchantAnalyticsOverlay">
+  <div class="feedback-head"><button onclick="closeMerchantAnalytics()" aria-label="返回">‹</button><h3>店铺数据中心</h3></div>
+  <div class="feedback-body" id="merchantAnalyticsBody"><div class="admin-empty">正在读取店铺数据...</div></div>
+</div>
+
 <!-- 乐生活 3.1：认证商家 AI 发布流程（当前为前端流程，真实 AI 接口后续接入） -->
 <div class="overlay" id="merchantAiOverlay" onclick="if(event.target.id==='merchantAiOverlay'){ if(merchantAiState && merchantAiState.isGenerating){ showToast('AI 正在生成，请稍等'); } else closeMerchantAiFlow(); }">
   <div class="modal ai-flow-modal" id="merchantAiModal" style="position:relative;">
@@ -2121,8 +2141,12 @@
   <div class="modal compose-fullscreen-modal" style="position:fixed;inset:0;width:100vw;height:100dvh;max-width:none;max-height:none;border-radius:0;box-shadow:none;background:#fff;display:flex;flex-direction:column;overflow:hidden;">
     <button class="modal-close compose-fullscreen-close" onclick="closeCompose()" style="top:calc(14px + env(safe-area-inset-top));right:14px;width:42px;height:42px;">✕</button>
     <div class="modal-body compose-fullscreen-body">
-      <h2 class="modal-title display" style="font-size:22px;">发布新内容</h2>
+      <div class="compose-title-row">
+        <h2 class="modal-title display" style="font-size:22px;">发布新内容</h2>
+        <button type="button" class="compose-draft-entry" onclick="openComposeDrafts()">草稿箱</button>
+      </div>
       <p style="font-size:12.5px;color:var(--ink-faint);margin-top:-4px;margin-bottom:12px;">和邻居们分享村里的好去处</p>
+      <div class="compose-draft-status" id="composeDraftStatus">本机草稿会自动保存</div>
       <button type="button" onclick="openXhsPaste()" style="width:100%;margin-bottom:18px;padding:11px;border-radius:10px;border:1.5px dashed #FF2442;background:#FFF5F6;color:#FF2442;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
         <span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5z"></path><path d="M8 7h8M8 11h8M8 15h5"></path></svg></span>粘贴文案，自动整理
       </button>
@@ -2203,6 +2227,11 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="feedback-overlay" id="composeDraftOverlay">
+  <div class="feedback-head"><button onclick="closeComposeDrafts()" aria-label="返回">‹</button><h3>草稿箱</h3></div>
+  <div class="feedback-body" id="composeDraftBody"></div>
 </div>
 
 </div>
@@ -2756,7 +2785,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.157';
+const APP_VERSION = '5.159';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7394,6 +7423,12 @@ function renderMerchantDashboard(){
         <div class="merchant-quick-sub">进入省钱页审核池</div>
         <button class="merchant-quick-btn" style="background:var(--sky);" onclick="closeMerchantPublishDashboard();switchTab('deals');setTimeout(()=>openDealReportForm('merchant_submit'),80);">提交优惠</button>
       </div>
+      <div class="merchant-quick-card">
+        <div class="merchant-quick-ico" style="background:var(--sage-light);color:var(--sage-dark);">${uiIcon('eye',20)}</div>
+        <div class="merchant-quick-title">数据中心</div>
+        <div class="merchant-quick-sub">查看内容与会员数据</div>
+        <button class="merchant-quick-btn" style="background:var(--sage-dark);" onclick="closeMerchantPublishDashboard();openMerchantAnalytics();">查看数据</button>
+      </div>
     </div>
 
     <div class="merchant-dash-card">
@@ -7462,6 +7497,138 @@ async function fetchPostStats(postId){
     const favsN = fRes.ok ? (await fRes.json()).length : 0;
     return { views, engagement: likesN + commentsN, favs: favsN };
   } catch(e){ console.warn('数据统计加载失败:', e.message); return { views:0, engagement:0, favs:0 }; }
+}
+let merchantAnalyticsRangeDays = 7;
+let merchantAnalyticsLoading = false;
+
+function merchantAnalyticsStart(days){
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - Math.max(1, days) + 1);
+  return date;
+}
+function merchantAnalyticsDateLabel(value){
+  const date = new Date(value);
+  if(Number.isNaN(date.getTime())) return '';
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+function merchantAnalyticsCountText(value){ return value === null || value === undefined ? '—' : String(value); }
+function merchantAnalyticsMetric(label, icon, value, note){
+  return `<div class="merchant-analytics-metric"><span>${uiIcon(icon,14)}${label}</span><b>${merchantAnalyticsCountText(value)}</b><small>${escHtml(note)}</small></div>`;
+}
+async function merchantAnalyticsRows(path){
+  const response = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, { method:'GET' });
+  if(!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+function merchantAnalyticsResult(result){ return result && result.status === 'fulfilled' ? result.value : null; }
+function merchantAnalyticsRowsForDays(rows, days){
+  const start = merchantAnalyticsStart(days).getTime();
+  return (rows || []).filter(row => new Date(row.created_at || row.claimed_at || row.joined_at || row.redeemed_at || 0).getTime() >= start);
+}
+function merchantAnalyticsTrendRows(rows, days){
+  const shownDays = Math.min(days, 7);
+  const result = [];
+  for(let offset = shownDays - 1; offset >= 0; offset -= 1){
+    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - offset);
+    const end = new Date(start); end.setDate(end.getDate() + 1);
+    result.push({
+      label:merchantAnalyticsDateLabel(start),
+      count:(rows || []).filter(row => {
+        const time = new Date(row.created_at || 0).getTime();
+        return time >= start.getTime() && time < end.getTime();
+      }).length
+    });
+  }
+  return result;
+}
+function merchantAnalyticsPanelShell(){
+  const name = (currentMerchant && currentMerchant.business_name) || '店铺';
+  return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;"><div><h3 style="margin:0;font-size:20px;color:var(--ink);">${escHtml(name)}</h3><p class="merchant-analytics-summary">只统计店铺自己有权限读取的真实内容、优惠券与会员记录。</p></div><button onclick="loadMerchantAnalytics()" style="flex-shrink:0;border:0;border-radius:999px;padding:8px 11px;background:var(--bg-alt);color:var(--sage-dark);font:900 12px inherit;">刷新</button></div><div class="merchant-analytics-range"><button class="${merchantAnalyticsRangeDays === 7 ? 'active' : ''}" onclick="setMerchantAnalyticsRange(7)">近 7 天</button><button class="${merchantAnalyticsRangeDays === 30 ? 'active' : ''}" onclick="setMerchantAnalyticsRange(30)">近 30 天</button></div><div id="merchantAnalyticsContent"><div class="admin-empty">正在读取真实数据...</div></div>`;
+}
+function openMerchantAnalytics(){
+  if(!(session && session.user && currentMerchant && currentMerchant.verified)){
+    showToast('认证商家可查看店铺数据中心');
+    return;
+  }
+  const overlay = document.getElementById('merchantAnalyticsOverlay');
+  const body = document.getElementById('merchantAnalyticsBody');
+  if(!overlay || !body) return;
+  overlay.classList.add('open');
+  body.innerHTML = merchantAnalyticsPanelShell();
+  loadMerchantAnalytics();
+}
+function closeMerchantAnalytics(){ document.getElementById('merchantAnalyticsOverlay')?.classList.remove('open'); }
+function setMerchantAnalyticsRange(days){
+  merchantAnalyticsRangeDays = Number(days) === 30 ? 30 : 7;
+  const body = document.getElementById('merchantAnalyticsBody');
+  if(body) body.innerHTML = merchantAnalyticsPanelShell();
+  loadMerchantAnalytics();
+}
+async function loadMerchantAnalytics(){
+  if(merchantAnalyticsLoading || !(session && session.user && currentMerchant && currentMerchant.verified)) return;
+  const target = document.getElementById('merchantAnalyticsContent');
+  if(!target) return;
+  merchantAnalyticsLoading = true;
+  target.innerHTML = '<div class="admin-empty">正在汇总真实数据...</div>';
+  const merchantId = session.user.id;
+  const since = merchantAnalyticsStart(merchantAnalyticsRangeDays).toISOString();
+  try {
+    const ownPosts = await merchantAnalyticsRows(`posts?user_id=eq.${encodeURIComponent(merchantId)}&select=id,title,image,created_at&order=created_at.desc&limit=200`);
+    const postIds = ownPosts.map(post => Number(post.id)).filter(Number.isFinite);
+    const postFilter = postIds.length ? `post_id=in.(${postIds.join(',')})&` : '';
+    const range = `created_at=gte.${encodeURIComponent(since)}`;
+    const requests = {
+      views: postIds.length ? merchantAnalyticsRows(`post_views?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
+      likes: postIds.length ? merchantAnalyticsRows(`likes?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
+      comments: postIds.length ? merchantAnalyticsRows(`comments?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
+      favorites: postIds.length ? merchantAnalyticsRows(`favorites?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
+      claims: merchantAnalyticsRows(`merchant_coupon_claims?merchant_user_id=eq.${encodeURIComponent(merchantId)}&claimed_at=gte.${encodeURIComponent(since)}&select=id,claimed_at,status`),
+      redeemed: merchantAnalyticsRows(`merchant_coupon_claims?merchant_user_id=eq.${encodeURIComponent(merchantId)}&redeemed_at=gte.${encodeURIComponent(since)}&select=id,redeemed_at,status`),
+      newMembers: merchantAnalyticsRows(`merchant_memberships?merchant_user_id=eq.${encodeURIComponent(merchantId)}&joined_at=gte.${encodeURIComponent(since)}&select=id,joined_at`),
+      activeMembers: merchantAnalyticsRows(`merchant_memberships?merchant_user_id=eq.${encodeURIComponent(merchantId)}&status=eq.active&select=id`),
+      checkins: merchantAnalyticsRows(`merchant_member_transactions?merchant_user_id=eq.${encodeURIComponent(merchantId)}&created_at=gte.${encodeURIComponent(since)}&transaction_kind=eq.stamp_checkin&select=id,created_at`)
+    };
+    const settled = await Promise.allSettled(Object.values(requests));
+    const keys = Object.keys(requests);
+    const data = Object.fromEntries(keys.map((key, index) => [key, merchantAnalyticsResult(settled[index])]));
+    const views = data.views;
+    const likes = data.likes;
+    const comments = data.comments;
+    const favorites = data.favorites;
+    const interactions = likes !== null && comments !== null ? likes.length + comments.length : null;
+    const performance = ownPosts.map(post => {
+      const id = Number(post.id);
+      const count = rows => rows === null ? null : rows.filter(row => Number(row.post_id) === id).length;
+      const viewCount = count(views);
+      const likeCount = count(likes);
+      const commentCount = count(comments);
+      const favoriteCount = count(favorites);
+      const score = (viewCount || 0) + ((likeCount || 0) + (commentCount || 0)) * 3 + (favoriteCount || 0) * 2;
+      return { post, viewCount, likeCount, commentCount, favoriteCount, score };
+    }).filter(item => item.score > 0).sort((a,b) => b.score - a.score).slice(0, 3);
+    const trendRows = merchantAnalyticsTrendRows(views || [], merchantAnalyticsRangeDays);
+    const trendMax = Math.max(1, ...trendRows.map(row => row.count));
+    const unavailable = keys.filter((key, index) => settled[index].status === 'rejected');
+    target.innerHTML = `
+      <div class="merchant-analytics-grid">
+        ${merchantAnalyticsMetric('内容浏览', 'eye', views?.length, `近 ${merchantAnalyticsRangeDays} 天`)}
+        ${merchantAnalyticsMetric('内容互动', 'message', interactions, '点赞与评论')}
+        ${merchantAnalyticsMetric('收藏', 'heart', favorites?.length, `近 ${merchantAnalyticsRangeDays} 天`)}
+        ${merchantAnalyticsMetric('领取优惠券', 'bag', data.claims?.length, `近 ${merchantAnalyticsRangeDays} 天`)}
+        ${merchantAnalyticsMetric('核销优惠券', 'bag', data.redeemed?.length, `近 ${merchantAnalyticsRangeDays} 天`)}
+        ${merchantAnalyticsMetric('新增会员', 'user', data.newMembers?.length, `当前活跃 ${merchantAnalyticsCountText(data.activeMembers?.length)} 位`)}
+      </div>
+      <section class="merchant-analytics-section"><h4>会员到店记录</h4><div class="merchant-analytics-metric" style="min-height:auto;"><span>${uiIcon('calendar',14)}会员签到</span><b>${merchantAnalyticsCountText(data.checkins?.length)}</b><small>只统计商家完成的会员签到，不等同于销售额。</small></div></section>
+      <section class="merchant-analytics-section"><h4>内容表现</h4>${performance.length ? performance.map(item => `<div class="merchant-analytics-post"><img src="${escAttr(item.post.image || '')}" alt=""><div class="merchant-analytics-post-main"><b>${escHtml(item.post.title || '未命名笔记')}</b><span>浏览 ${merchantAnalyticsCountText(item.viewCount)} · 互动 ${merchantAnalyticsCountText(item.likeCount === null || item.commentCount === null ? null : item.likeCount + item.commentCount)} · 收藏 ${merchantAnalyticsCountText(item.favoriteCount)}</span></div><div class="merchant-analytics-post-score">${item.score} 分</div></div>`).join('') : '<div class="admin-empty">这个周期还没有内容互动数据。发布后有人浏览、点赞、评论或收藏时会在这里显示。</div>'}</section>
+      <section class="merchant-analytics-section"><h4>最近 ${Math.min(merchantAnalyticsRangeDays, 7)} 天浏览趋势</h4><div class="merchant-analytics-trend">${views === null ? '<div class="admin-empty">浏览记录暂时不可读。</div>' : trendRows.map(row => `<div class="merchant-analytics-trend-row"><span>${row.label}</span><div class="merchant-analytics-bar"><i style="width:${Math.max(row.count ? 8 : 0, Math.round(row.count / trendMax * 100))}%"></i></div><b>${row.count} 次</b></div>`).join('')}</div></section>
+      <div class="merchant-analytics-note">统计口径：内容浏览按笔记详情打开次数计算；互动为点赞和评论之和；优惠券与会员数据来自实际领取、核销与签到记录。${unavailable.length ? `其中 ${unavailable.length} 项暂时无法读取，已显示为“—”。` : ''}</div>`;
+  } catch(error){
+    console.warn('商家数据中心读取失败:', error.message);
+    target.innerHTML = '<div class="admin-empty">店铺数据暂时无法读取，请稍后刷新。现有业务数据不会受影响。</div>';
+  } finally {
+    merchantAnalyticsLoading = false;
+  }
 }
 /* 记录一次真实浏览（仅登录用户，游客暂不记录）。每次打开笔记详情调用一次 */
 function recordPostView(postId){
@@ -7824,6 +7991,7 @@ function handleTagInput(e){
     // 空输入框按退格删除最后一个标签
     customTags.pop();
     renderCustomTags();
+    scheduleComposeDraftSave();
   }
 }
 function addCustomTag(raw){
@@ -7834,10 +8002,12 @@ function addCustomTag(raw){
   if(customTags.includes(t)){ showToast('标签已存在'); return; }
   customTags.push(t);
   renderCustomTags();
+  scheduleComposeDraftSave();
 }
 function removeCustomTag(i){
   customTags.splice(i, 1);
   renderCustomTags();
+  scheduleComposeDraftSave();
 }
 function renderCustomTags(){
   const box = document.getElementById('customTagChips');
@@ -11305,43 +11475,149 @@ function viewMerchantAiPublishedPost(){
   switchTab('home');
   if(id) setTimeout(() => openPost(id), 120);
 }
+/* ====== 本机草稿箱：内容仅保存在当前设备，不写入云端 ====== */
+const COMPOSE_DRAFT_DB = 'leshenghuo_compose_drafts_v1';
+const COMPOSE_DRAFT_STORE = 'drafts';
+const COMPOSE_DRAFT_LIMIT = 12;
+let composeDraftId = null;
+let composeDraftSaveTimer = null;
+let composeDraftDbPromise = null;
+
+function composeDraftOwner(){ return session && session.user ? session.user.id : 'guest'; }
+function composeDraftOpenDb(){
+  if(composeDraftDbPromise) return composeDraftDbPromise;
+  composeDraftDbPromise = new Promise((resolve, reject) => {
+    if(!window.indexedDB) return reject(new Error('浏览器不支持设备草稿')); 
+    const request = indexedDB.open(COMPOSE_DRAFT_DB, 1);
+    request.onupgradeneeded = () => {
+      const store = request.result.createObjectStore(COMPOSE_DRAFT_STORE, { keyPath:'id' });
+      store.createIndex('owner', 'owner', { unique:false });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('草稿数据库不可用'));
+  });
+  return composeDraftDbPromise;
+}
+async function composeDraftStore(action, value){
+  const db = await composeDraftOpenDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(COMPOSE_DRAFT_STORE, action === 'getAll' ? 'readonly' : 'readwrite');
+    const store = transaction.objectStore(COMPOSE_DRAFT_STORE);
+    let request;
+    if(action === 'put') request = store.put(value);
+    if(action === 'delete') request = store.delete(value);
+    if(action === 'getAll') request = store.index('owner').getAll(value);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('草稿操作失败'));
+  });
+}
+function composeDraftHasContent(draft){
+  return !!(draft && (draft.title || draft.content || draft.location || draft.youtube || (draft.customTags || []).length || (draft.uploadedImages || []).length || draft.textCardCover));
+}
+function composeDraftSnapshot(){
+  const value = id => document.getElementById(id)?.value || '';
+  return {
+    id: composeDraftId || `draft_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    owner: composeDraftOwner(),
+    title: value('fTitle').trim(), content: value('fContent').trim(), location: value('fLocation').trim(), youtube: value('fYoutube').trim(),
+    capacity: value('fCapacity'), deadline: value('fDeadline').trim(), customTags:[...customTags], selectedCat, eventOn,
+    uploadedImages:[...uploadedImages], coverImageIndex, textCardCover: textCardCover ? {...textCardCover} : null,
+    createdAt: Date.now(), updatedAt: Date.now(), videoNeedsReselect: selectedVideos.length > 0
+  };
+}
+function updateComposeDraftStatus(text){
+  const status = document.getElementById('composeDraftStatus');
+  if(status) status.textContent = text || '本机草稿会自动保存';
+}
+function scheduleComposeDraftSave(){
+  if(!document.getElementById('composeOverlay')?.classList.contains('open') || editingPostId !== null) return;
+  clearTimeout(composeDraftSaveTimer);
+  composeDraftSaveTimer = setTimeout(() => saveComposeDraft(), 450);
+}
+async function saveComposeDraft(){
+  if(editingPostId !== null) return;
+  const draft = composeDraftSnapshot();
+  if(!composeDraftHasContent(draft)) return;
+  composeDraftId = draft.id;
+  try {
+    const existing = await composeDraftStore('getAll', draft.owner);
+    const old = (existing || []).find(item => item.id === draft.id);
+    if(old) draft.createdAt = old.createdAt || draft.createdAt;
+    if(!old && (existing || []).length >= COMPOSE_DRAFT_LIMIT){
+      const oldest = [...existing].sort((a,b) => (a.updatedAt || 0) - (b.updatedAt || 0))[0];
+      if(oldest) await composeDraftStore('delete', oldest.id);
+    }
+    await composeDraftStore('put', draft);
+    updateComposeDraftStatus('草稿已保存到本机');
+  } catch(error){
+    console.warn('草稿保存失败:', error.message);
+    updateComposeDraftStatus('草稿暂未保存，请勿清除浏览器数据');
+  }
+}
+async function removeComposeDraft(id = composeDraftId){
+  if(!id) return;
+  try { await composeDraftStore('delete', id); } catch(error) { console.warn('草稿删除失败:', error.message); }
+  if(id === composeDraftId) composeDraftId = null;
+}
+function resetComposeForm(){
+  selectedCat = null; eventOn = false; editingPostId = null; composeDraftId = null;
+  document.getElementById('fTitle').value=''; document.getElementById('fContent').value=''; document.getElementById('fYoutube').value='';
+  updateYoutubePreview(); document.getElementById('fCapacity').value=''; document.getElementById('fDeadline').value='';
+  document.getElementById('eventSwitch').classList.remove('on'); document.getElementById('eventFields').classList.remove('open');
+  document.querySelectorAll('.cat-pick').forEach(b=>b.classList.remove('sel'));
+  uploadedImages = []; textCardCover = null; textCoverDraftImage = '';
+  selectedVideos.forEach(v => URL.revokeObjectURL(v.url)); selectedVideos = []; customTags = []; renderCustomTags();
+  const tagIn = document.getElementById('fCustomTag'); if(tagIn) tagIn.value = '';
+  coverImageIndex = 0; document.getElementById('fImages').value = ''; document.getElementById('imagesGrid').style.display = 'none'; document.getElementById('uploadBox').style.display = 'flex';
+  document.getElementById('titleCount').textContent = '0'; document.getElementById('contentCount').textContent = '0';
+  const locInput = document.getElementById('fLocation'); if(locInput) locInput.value = '';
+  const locBox = document.getElementById('locationSuggestions'); if(locBox){ locBox.style.display = 'none'; locBox.innerHTML = ''; }
+  updateComposeDraftStatus();
+}
+async function openComposeDrafts(){
+  const overlay = document.getElementById('composeDraftOverlay'); const body = document.getElementById('composeDraftBody');
+  if(!overlay || !body) return;
+  overlay.classList.add('open'); body.innerHTML = '<div class="admin-empty">正在读取本机草稿...</div>';
+  try {
+    const rows = (await composeDraftStore('getAll', composeDraftOwner())).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    body.innerHTML = rows.length ? rows.map(draft => {
+      const title = draft.title || '未命名草稿'; const preview = draft.content || draft.location || draft.youtube || '继续编辑这篇内容';
+      const image = draft.uploadedImages?.[draft.coverImageIndex || 0] || draft.textCardCover?.dataUrl || '';
+      return `<div class="compose-draft-card" onclick="resumeComposeDraft('${draft.id}')"><div class="compose-draft-art">${image ? `<img src="${escAttr(image)}" alt="">` : uiIcon('edit',22)}</div><div class="compose-draft-main"><b>${escHtml(title)}</b><p>${escHtml(preview)}</p><span>${draft.selectedCat || '未分类'} · ${new Date(draft.updatedAt || Date.now()).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}${draft.videoNeedsReselect ? ' · 视频需重新选择' : ''}</span></div><button class="compose-draft-delete" onclick="event.stopPropagation();deleteComposeDraft('${draft.id}')" aria-label="删除草稿">×</button></div>`;
+    }).join('') + '<div class="compose-draft-local-note">草稿只保存在这台设备，不会上传到乐生活服务器。清除浏览器数据、卸载 App 或更换设备后，草稿会消失。</div>' : '<div class="admin-empty">还没有本机草稿。写到一半返回或关闭发布页，内容会自动保存在这里。</div><div class="compose-draft-local-note">草稿只保存在这台设备，不会上传到乐生活服务器。清除浏览器数据、卸载 App 或更换设备后，草稿会消失。</div>';
+  } catch(error){ body.innerHTML = '<div class="admin-empty">本机草稿暂时不可读。请确认浏览器没有关闭网站数据存储权限。</div>'; }
+}
+function closeComposeDrafts(){ document.getElementById('composeDraftOverlay')?.classList.remove('open'); }
+async function deleteComposeDraft(id){
+  if(!confirm('删除这篇本机草稿？此操作无法恢复。')) return;
+  await removeComposeDraft(id); openComposeDrafts();
+}
+async function resumeComposeDraft(id){
+  try {
+    const rows = await composeDraftStore('getAll', composeDraftOwner()); const draft = rows.find(item => item.id === id);
+    if(!draft) throw new Error('草稿不存在');
+    closeComposeDrafts(); resetComposeForm(); composeDraftId = draft.id;
+    document.getElementById('fTitle').value = draft.title || ''; document.getElementById('fContent').value = draft.content || ''; document.getElementById('fYoutube').value = draft.youtube || ''; document.getElementById('fLocation').value = draft.location || '';
+    document.getElementById('fCapacity').value = draft.capacity || ''; document.getElementById('fDeadline').value = draft.deadline || '';
+    selectedCat = draft.selectedCat || null; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null;
+    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn);
+    document.getElementById('titleCount').textContent = (draft.title || '').length; document.getElementById('contentCount').textContent = (draft.content || '').length; renderCustomTags(); renderImageGrid(); updateYoutubePreview();
+    document.getElementById('composeOverlay').classList.add('open'); updateComposeDraftStatus(draft.videoNeedsReselect ? '草稿已恢复，视频文件需重新选择' : '已恢复本机草稿');
+  } catch(error){ showToast('草稿恢复失败，请稍后重试'); }
+}
 function openCompose(){
+  if(!document.getElementById('composeOverlay').classList.contains('open') && editingPostId === null) resetComposeForm();
   document.getElementById('composeOverlay').classList.add('open');
 }
-function closeCompose(){
+function closeCompose(saveDraft=true){
+  if(saveDraft) saveComposeDraft();
   document.getElementById('composeOverlay').classList.remove('open');
-  selectedCat = null; eventOn = false;
-  document.getElementById('fTitle').value='';
-  document.getElementById('fContent').value='';
-  document.getElementById('fYoutube').value='';
-  updateYoutubePreview();
-  document.getElementById('fCapacity').value='';
-  document.getElementById('fDeadline').value='';
-  document.getElementById('eventSwitch').classList.remove('on');
-  document.getElementById('eventFields').classList.remove('open');
-  document.querySelectorAll('.cat-pick').forEach(b=>b.classList.remove('sel'));
-  uploadedImages = [];
-  textCardCover = null;
-  textCoverDraftImage = '';
-  selectedVideos.forEach(v => URL.revokeObjectURL(v.url));
-  selectedVideos = [];
-  customTags = [];
-  renderCustomTags();
-  const tagIn = document.getElementById('fCustomTag'); if(tagIn) tagIn.value = '';
-  coverImageIndex = 0;
-  document.getElementById('fImages').value = '';
-  document.getElementById('imagesGrid').style.display = 'none';
-  document.getElementById('uploadBox').style.display = 'flex';
-  document.getElementById('titleCount').textContent = '0';
-  document.getElementById('contentCount').textContent = '0';
-  const locInput = document.getElementById('fLocation');
-  if(locInput) locInput.value = '';
-  const locBox = document.getElementById('locationSuggestions');
-  if(locBox){ locBox.style.display = 'none'; locBox.innerHTML = ''; }
+  resetComposeForm();
 }
 function pickCat(c){
   selectedCat = c;
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c===c));
+  scheduleComposeDraftSave();
 }
 /* ====== 标记地点：自建地点库（不依赖Google Maps），输入时先搜本地已有地点，没有就直接用新地点 ====== */
 let locationSearchTimer = null;
@@ -11583,12 +11859,14 @@ function useTextCover(){
   textCardCover = { dataUrl:textCoverDraftImage, theme:textCoverDraftTheme, title:source.title, content:source.content };
   closeTextCoverMaker();
   renderImageGrid();
+  scheduleComposeDraftSave();
   showToast('已使用文字配图作为封面');
 }
 function removeTextCardCover(event){
   if(event) event.stopPropagation();
   textCardCover = null;
   renderImageGrid();
+  scheduleComposeDraftSave();
 }
 function handleMultiImageUpload(e){
   const all = Array.from(e.target.files);
@@ -11611,6 +11889,7 @@ function handleMultiImageUpload(e){
       captureVideoPoster(vObj); // 自动截第一帧做封面（可手动替换）
     }
     renderImageGrid();
+    scheduleComposeDraftSave();
   }
 
   /* ---- 照片 ---- */
@@ -11627,6 +11906,7 @@ function handleMultiImageUpload(e){
         uploadedImages = [compressedData]; // 覆盖为唯一封面
         coverImageIndex = 0;
         renderImageGrid();
+        scheduleComposeDraftSave();
         showToast('✓ 封面已设置');
       });
     };
@@ -11648,7 +11928,7 @@ function handleMultiImageUpload(e){
         uploadedImages.push(compressedData);
         if(uploadedImages.length === 1) coverImageIndex = 0;
         processed++;
-        if(processed === files.length) renderImageGrid();
+        if(processed === files.length){ renderImageGrid(); scheduleComposeDraftSave(); }
       });
     };
     reader.readAsDataURL(file);
@@ -12290,11 +12570,13 @@ function removeVideo(e, i){
   URL.revokeObjectURL(selectedVideos[i].url);
   selectedVideos.splice(i, 1);
   renderImageGrid();
+  scheduleComposeDraftSave();
   showToast('已移除视频');
 }
 function setCover(idx){
   coverImageIndex = idx;
   renderImageGrid();
+  scheduleComposeDraftSave();
   showToast('已设置为封面');
 }
 function removeImage(e, idx){
@@ -12302,11 +12584,13 @@ function removeImage(e, idx){
   uploadedImages.splice(idx, 1);
   if(coverImageIndex >= uploadedImages.length) coverImageIndex = Math.max(0, uploadedImages.length-1);
   renderImageGrid();
+  scheduleComposeDraftSave();
 }
 function toggleEvent(){
   eventOn = !eventOn;
   document.getElementById('eventSwitch').classList.toggle('on', eventOn);
   document.getElementById('eventFields').classList.toggle('open', eventOn);
+  scheduleComposeDraftSave();
 }
 function cleanYoutubeId(value){
   const m = String(value || '').match(/[A-Za-z0-9_-]{11}/);
@@ -12620,7 +12904,8 @@ async function submitPost(){
     }
     const idToUpdate = editingPostId;
     editingPostId = null;
-    closeCompose();
+    await removeComposeDraft();
+    closeCompose(false);
     renderChips(); renderFeed(); initProfilePage(); savePosts();
     showToast('✓ 已更新');
     if(location) upsertLocation(location);
@@ -12646,7 +12931,8 @@ async function submitPost(){
   };
   posts.unshift(localPost);
 
-  closeCompose();
+  await removeComposeDraft();
+  closeCompose(false);
   currentFilter = '全部';
   renderChips();
   renderFeed();
@@ -13020,6 +13306,15 @@ document.getElementById('postOverlay').addEventListener('click', e=>{
 });
 document.getElementById('composeOverlay').addEventListener('click', e=>{
   if(e.target.id==='composeOverlay') closeCompose();
+});
+document.getElementById('composeOverlay').addEventListener('input', e=>{
+  if(e.target && e.target.matches('input,textarea')) scheduleComposeDraftSave();
+});
+document.getElementById('composeOverlay').addEventListener('change', e=>{
+  if(e.target && e.target.matches('input,textarea')) scheduleComposeDraftSave();
+});
+window.addEventListener('pagehide', () => {
+  if(document.getElementById('composeOverlay')?.classList.contains('open')) saveComposeDraft();
 });
 if(document.getElementById('browsingModal')){
   document.getElementById('browsingModal').addEventListener('click', e=>{
@@ -13604,7 +13899,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Distinct Text Cover Layouts】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Analytics and Local Drafts】`);
 </script>
 </body>
 </html>
