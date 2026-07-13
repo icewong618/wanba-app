@@ -2721,7 +2721,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.144';
+const APP_VERSION = '5.145';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8743,7 +8743,7 @@ async function submitDealReport(type){
   }
 }
 async function openDealRankings(){
-  renderDealPanelShell('实时热榜', '按最近 7 天点击、复制、收藏和精选权重排序。', '<div class="deals-empty-panel">正在读取热榜...</div>');
+  renderDealPanelShell('实时热榜', '按精选标记、食品低价与近期优惠排序。', '<div class="deals-empty-panel">正在读取热榜...</div>');
   try {
     const select = 'id,deal_date,retailer_key,retailer_name,category,product_name,product_name_cn,original_price,current_price,unit,percent_off,save_amount,location,source_url,is_hot,is_food_low_price,stock_status,price_note,ai_summary_cn,source_type,updated_at,click_count,favorite_count,copy_count,hot_score';
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/deal_rankings?select=${select}&order=hot_score.desc&limit=20`, { method:'GET' });
@@ -9512,14 +9512,9 @@ function dealSessionKey(){
 async function recordDealInteraction(id, type){
   if(!id) return;
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/deal_interactions`, {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/deal_interactions`, {
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Prefer':'return=minimal'
-      },
+      headers:{'Prefer':'return=minimal'},
       body: JSON.stringify({
         deal_id: id,
         event_type: type,
@@ -9527,6 +9522,7 @@ async function recordDealInteraction(id, type){
         session_key: dealSessionKey()
       })
     });
+    if(!res.ok && res.status !== 409) console.warn('互动记录失败:', res.status);
   } catch(e){
     console.warn('互动记录失败:', e.message);
   }
@@ -11269,9 +11265,8 @@ async function upsertLocation(name){
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/locations?name=eq.${encodeURIComponent(name)}&select=id,use_count`);
     const rows = res.ok ? await res.json() : [];
     if(rows.length){
-      await authedFetch(`${SUPABASE_URL}/rest/v1/locations?id=eq.${rows[0].id}`, {
-        method: 'PATCH', body: JSON.stringify({ use_count: (rows[0].use_count || 1) + 1 })
-      });
+      // 已有地点仅复用名称；使用次数不再由客户端直接修改，避免任意用户改写地点库。
+      return;
     } else {
       await authedFetch(`${SUPABASE_URL}/rest/v1/locations`, {
         method: 'POST', body: JSON.stringify({ name, use_count: 1, created_by: session.user.id })
