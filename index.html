@@ -176,6 +176,19 @@
     background:var(--sage);border-color:var(--sage-dark);color:#fff;
   }
   .chip .dot-emoji{font-size:14px;}
+  .feed-mode-row{
+    display:flex;align-items:center;gap:8px;max-width:var(--container-w);margin:10px auto 0;padding:0 20px;
+  }
+  .feed-mode-switch{display:inline-flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--card);}
+  .feed-mode-switch button{border:0;background:transparent;border-radius:999px;padding:6px 13px;color:var(--ink-faint);font-size:12.5px;font-weight:800;white-space:nowrap;}
+  .feed-mode-switch button.active{background:var(--sage);color:#fff;box-shadow:0 2px 5px rgba(61,100,72,.18);}
+  .feed-mode-note{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .feed-preference-btn{margin-left:auto;border:0;background:transparent;color:var(--sage-dark);font-size:12px;font-weight:800;padding:6px 2px;white-space:nowrap;}
+  .feed-preference-panel{display:grid;gap:12px;}
+  .feed-preference-help{font-size:13px;color:var(--ink-soft);line-height:1.6;}
+  .feed-preference-list{display:flex;flex-wrap:wrap;gap:8px;min-height:34px;}
+  .feed-preference-tag{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:var(--sage-light);color:var(--sage-dark);font-size:12px;font-weight:800;}
+  .feed-preference-tag button{border:0;background:transparent;padding:0;color:var(--sage-dark);font-size:16px;line-height:1;cursor:pointer;}
 
   /* ---------- deals page (省钱) ---------- */
   .deals-hero{
@@ -1745,6 +1758,7 @@
       </div>
     </div>
     <div class="chip-row" id="chipRow"></div>
+    <div class="feed-mode-row" id="feedModeRow"></div>
   </div>
 </header>
 
@@ -2044,6 +2058,11 @@
 <div class="my-feedback-overlay" id="myFeedbackOverlay">
   <div class="feedback-head"><button onclick="closeMyFeedback()" aria-label="返回">‹</button><h3>我的反馈</h3></div>
   <div class="my-feedback-body"><div id="myFeedbackList"><div class="admin-empty">正在读取你的反馈...</div></div><button class="my-feedback-new" onclick="closeMyFeedback();openFeedback()">提交新反馈</button></div>
+</div>
+
+<div class="feedback-overlay" id="feedPreferenceOverlay">
+  <div class="feedback-head"><button onclick="closeFeedPreferences()" aria-label="返回">‹</button><h3>内容偏好</h3></div>
+  <div class="feedback-body"><div id="feedPreferenceBody" class="feed-preference-panel"></div></div>
 </div>
 
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
@@ -2702,7 +2721,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.143';
+const APP_VERSION = '5.144';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4842,7 +4861,7 @@ function postShareUrl(p){ return `${window.location.origin}/?post=${encodeURICom
 function openPostShare(id){
   const p = posts.find(row => String(row.id) === String(id));
   if(!p) return;
-  openShareSheet({ type:'post', title:p.title || '乐生活笔记', text:p.excerpt || p.content || '发现身边的精彩生活', url:postShareUrl(p), image:(p.images && p.images[0]) || p.image || '' });
+  openShareSheet({ type:'post', postId:p.id, category:normalizeCategory(p.category), title:p.title || '乐生活笔记', text:p.excerpt || p.content || '发现身边的精彩生活', url:postShareUrl(p), image:(p.images && p.images[0]) || p.image || '' });
 }
 function openShareSheet(context){
   shareContext = context || null;
@@ -4851,7 +4870,8 @@ function openShareSheet(context){
   const people = shareFollowingPeople();
   const recent = people.length ? people.map(person => `<button class="share-recent-person" onclick="shareToFriend('${String(person.id).replace(/'/g,'')}','${String(person.name).replace(/'/g,'')}')"><span class="share-recent-avatar">${avatarCircleSizedHtml(person.name, person.id, 48)}</span>${escHtml(person.name)}</button>`).join('') : `<span style="font-size:12px;color:var(--ink-faint);padding:11px 4px;">关注好友后，可在这里快速私信分享。</span>`;
   const reportTool = shareContext.type === 'post' ? `<button class="share-tool" onclick="openContentReport()"><span>${uiIcon('flag',21)}</span>举报内容</button>` : '';
-  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reportTool}</div>`;
+  const reduceTool = shareContext.type === 'post' && shareContext.category ? `<button class="share-tool" onclick="reduceFeedCategory('${String(shareContext.category).replace(/'/g,'')}')"><span>${uiIcon('eye',21)}</span>减少此类内容</button>` : '';
+  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reduceTool}${reportTool}</div>`;
   document.getElementById('shareOverlay').classList.add('open');
 }
 function closeShareSheet(){ document.getElementById('shareOverlay')?.classList.remove('open'); }
@@ -7696,6 +7716,9 @@ let posts = [
 
 let currentFilter = '全部';
 let currentTag = null;
+let feedMode = localStorage.getItem('leshenghuo_feed_mode') || 'recommend';
+let mutedFeedCategories = new Set();
+let feedPreferencesLoadedFor = null;
 let feedIsLoading = false;
 let feedLoadFailed = false;
 let activePostId = null;
@@ -7761,6 +7784,67 @@ function renderChips(){
 }
 function setFilter(cat){ currentFilter = cat; currentTag = null; renderChips(); renderQuicklinks(); renderFeed(); }
 
+function renderFeedModes(){
+  const row = document.getElementById('feedModeRow');
+  if(!row) return;
+  const hasSignals = !!(session && session.user && ((window._likeRows || []).length || (window._favRows || []).length || (window._cmtRows || []).length || (window._followRows || []).length));
+  const note = feedMode === 'latest'
+    ? '按发布时间排列'
+    : (hasSignals ? '根据你的关注和互动排序' : '结合新鲜内容与大家的互动排序');
+  row.innerHTML = `<div class="feed-mode-switch"><button class="${feedMode==='recommend'?'active':''}" onclick="setFeedMode('recommend')">推荐</button><button class="${feedMode==='latest'?'active':''}" onclick="setFeedMode('latest')">最新</button></div><span class="feed-mode-note">${note}</span><button class="feed-preference-btn" onclick="openFeedPreferences()">偏好</button>`;
+}
+function setFeedMode(mode){
+  feedMode = mode === 'latest' ? 'latest' : 'recommend';
+  localStorage.setItem('leshenghuo_feed_mode', feedMode);
+  renderFeedModes();
+  renderFeed();
+}
+function postTimestamp(post){
+  const parsed = Date.parse(post && post.created_at ? post.created_at : '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function feedInterestSignals(){
+  const me = session && session.user && session.user.id;
+  const categories = Object.create(null);
+  const authors = Object.create(null);
+  const postById = new Map(posts.map(p => [String(p.id), p]));
+  const add = (postId, weight) => {
+    const p = postById.get(String(postId));
+    if(!p) return;
+    const category = normalizeCategory(p.category);
+    categories[category] = (categories[category] || 0) + weight;
+    if(p.user_id) authors[p.user_id] = (authors[p.user_id] || 0) + weight;
+  };
+  (window._likeRows || []).filter(row => row.user_id === me).forEach(row => add(row.post_id, 2));
+  (window._favRows || []).filter(row => row.user_id === me).forEach(row => add(row.post_id, 4));
+  (window._cmtRows || []).filter(row => row.user_id === me).forEach(row => add(row.post_id, 3));
+  return { categories, authors };
+}
+function feedScore(post, signals){
+  const category = normalizeCategory(post.category);
+  if(mutedFeedCategories.has(category)) return -100000;
+  const now = Date.now();
+  const ageDays = Math.max(0, (now - postTimestamp(post)) / 86400000);
+  const recency = Math.max(0, 18 - ageDays * 1.25);
+  const quality = Math.min(12, Math.log2(1 + Number(post.likes || 0)) * 2) + Math.min(6, Number(post.commentCount || 0) * 0.75) + Math.min(6, Number(post.favs || 0) * 0.9);
+  let score = recency + quality;
+  score += Math.min(20, (signals.categories[category] || 0) * 2.5);
+  if(post.user_id) score += Math.min(16, (signals.authors[post.user_id] || 0) * 2);
+  const me = session && session.user && session.user.id;
+  if(me && post.user_id && (window._followRows || []).some(row => row.active && row.follower_id === me && row.followee_id === post.user_id)) score += 24;
+  return score;
+}
+function orderedFeedPosts(list){
+  const base = list.slice();
+  if(feedMode === 'latest') return base.sort((a,b) => postTimestamp(b) - postTimestamp(a) || Number(b.id) - Number(a.id));
+  const signals = feedInterestSignals();
+  return base
+    .map((post, index) => ({ post, index, score:feedScore(post, signals) }))
+    .filter(row => row.score > -100000)
+    .sort((a,b) => b.score - a.score || postTimestamp(b.post) - postTimestamp(a.post) || a.index - b.index)
+    .map(row => row.post);
+}
+
 /* ---------------- render: quicklinks ---------------- */
 function renderQuicklinks(){
   const row = document.getElementById('quickRow');
@@ -7778,16 +7862,96 @@ function setTagFilter(tag){
   renderFeed();
 }
 
+function localFeedPreferenceKey(){
+  return `leshenghuo_muted_feed_categories_${session && session.user ? session.user.id : 'guest'}`;
+}
+function readLocalFeedPreferences(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(localFeedPreferenceKey()) || '[]');
+    mutedFeedCategories = new Set(Array.isArray(saved) ? saved.map(normalizeCategory) : []);
+  } catch(e){ mutedFeedCategories = new Set(); }
+}
+function saveLocalFeedPreferences(){
+  localStorage.setItem(localFeedPreferenceKey(), JSON.stringify([...mutedFeedCategories]));
+}
+async function loadFeedPreferences(){
+  const userId = session && session.user && session.user.id;
+  if(!userId){
+    readLocalFeedPreferences();
+    feedPreferencesLoadedFor = 'guest';
+    renderFeedModes();
+    renderFeed();
+    return;
+  }
+  if(feedPreferencesLoadedFor === userId) return;
+  readLocalFeedPreferences();
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feed_preferences?user_id=eq.${userId}&select=muted_categories`, { method:'GET' });
+    if(res.ok){
+      const rows = await res.json();
+      if(rows[0] && Array.isArray(rows[0].muted_categories)){
+        mutedFeedCategories = new Set(rows[0].muted_categories.map(normalizeCategory));
+        saveLocalFeedPreferences();
+      }
+    } else if(res.status !== 404){
+      console.warn('内容偏好读取失败:', res.status);
+    }
+  } catch(e){ console.warn('内容偏好读取失败:', e.message); }
+  feedPreferencesLoadedFor = userId;
+  renderFeedModes();
+  renderFeed();
+}
+async function persistFeedPreferences(){
+  saveLocalFeedPreferences();
+  const userId = session && session.user && session.user.id;
+  if(!userId) return;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feed_preferences?on_conflict=user_id`, {
+      method:'POST',
+      headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+      body:JSON.stringify({ user_id:userId, muted_categories:[...mutedFeedCategories], updated_at:new Date().toISOString() })
+    });
+    if(!res.ok && res.status !== 404) console.warn('内容偏好保存失败:', res.status);
+  } catch(e){ console.warn('内容偏好保存失败:', e.message); }
+}
+function reduceFeedCategory(category){
+  const normalized = normalizeCategory(category);
+  mutedFeedCategories.add(normalized);
+  persistFeedPreferences();
+  closeShareSheet();
+  renderFeedModes();
+  renderFeed();
+  showToast(`将减少 ${normalized} 内容，可在“偏好”恢复`);
+}
+function openFeedPreferences(){
+  const overlay = document.getElementById('feedPreferenceOverlay');
+  const body = document.getElementById('feedPreferenceBody');
+  if(!overlay || !body) return;
+  const muted = [...mutedFeedCategories];
+  body.innerHTML = `<div class="feed-preference-help">推荐会参考你关注的人、点赞、收藏、评论、内容分类和发布时间。已减少的内容不会出现在“推荐”中，“最新”仍会完整显示。</div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">已减少的内容</label><div class="feed-preference-list">${muted.length ? muted.map(category => `<span class="feed-preference-tag">${escHtml(category)}<button onclick="restoreFeedCategory('${String(category).replace(/'/g, '')}')" aria-label="恢复 ${escAttr(category)}">×</button></span>`).join('') : '<span style="font-size:13px;color:var(--ink-faint);">目前没有减少任何分类。</span>'}</div></div><div class="feedback-meta">${session && session.user ? '偏好会同步到此账号。' : '登录后可同步内容偏好到其他设备。'}</div>`;
+  overlay.classList.add('open');
+}
+function closeFeedPreferences(){ document.getElementById('feedPreferenceOverlay')?.classList.remove('open'); }
+function restoreFeedCategory(category){
+  mutedFeedCategories.delete(normalizeCategory(category));
+  persistFeedPreferences();
+  renderFeedModes();
+  renderFeed();
+  openFeedPreferences();
+}
+
 /* ---------------- render: feed ---------------- */
 function renderFeed(){
   const el = document.getElementById('feed');
   if(!el) return;
+  renderFeedModes();
   let list;
   if(currentTag){
     list = posts.filter(p=>p.tags && p.tags.includes(currentTag));
   } else {
     list = currentFilter==='全部' ? posts : posts.filter(p=>normalizeCategory(p.category)===currentFilter);
   }
+  list = orderedFeedPosts(list);
   if(list.length===0){
     if(feedIsLoading){
       el.innerHTML = `<div class="empty" style="grid-column:1/-1;">
@@ -7876,6 +8040,7 @@ async function loadEngagement(){
         p.liked = false;
         p.collected = false;
       });
+      await loadFeedPreferences();
       renderFeed();
       updateNavMsgDot();
       return;
@@ -7905,6 +8070,7 @@ async function loadEngagement(){
     window._favRows = favs;
     window._cmtRows = cmts;
     window._followRows = flr.ok ? await flr.json() : [];
+    await loadFeedPreferences();
     renderFeed();
     renderProfileFollowStats();
     updateNavMsgDot();
