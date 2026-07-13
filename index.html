@@ -2296,6 +2296,7 @@
               <button id="authLoginBtn" onclick="event.stopPropagation();openProfileLogin()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
               <button onclick="closeProfileMenu();openBetaInfo()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M5 7a7 7 0 0 1 14 0c0 5-7 14-7 14S5 12 5 7z"></path><circle cx="12" cy="8" r="1"></circle></svg></span>关于本次公测</button>
               <button onclick="closeProfileMenu();openPolicy()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>隐私与社区规则</button>
+              <button onclick="closeProfileMenu();exportMyData()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 21h16"></path></svg></span>导出我的数据</button>
               <button onclick="closeProfileMenu();openMyFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 4v16"></path><path d="M5 8h14M5 16h14"></path><circle cx="12" cy="12" r="9"></circle></svg></span>我的反馈</button>
               <button onclick="closeProfileMenu();openFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path><path d="M8 9h8M8 13h5"></path></svg></span>公测反馈</button>
               <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="closeProfileMenu();openMerchantApplySheet()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M4 10h16"></path><path d="M5 10l1-5h12l1 5"></path><path d="M6 10v10h12V10"></path><path d="M9 20v-6h6v6"></path></svg></span>成为商家</button>
@@ -2725,7 +2726,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.147';
+const APP_VERSION = '5.148';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -12405,6 +12406,51 @@ function openBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.a
 function closeBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.remove('open'); }
 function openPolicy(){ document.getElementById('policyOverlay')?.classList.add('open'); }
 function closePolicy(){ document.getElementById('policyOverlay')?.classList.remove('open'); }
+async function exportMyData(){
+  if(!(session && session.user)){ showToast('登录后即可导出个人数据'); openAuth('login'); return; }
+  const uid = encodeURIComponent(session.user.id);
+  const resources = {
+    profile: `profiles?user_id=eq.${uid}&select=*`,
+    posts: `posts?user_id=eq.${uid}&select=*&order=created_at.desc&limit=1000`,
+    comments: `comments?user_id=eq.${uid}&select=*&order=created_at.desc&limit=1000`,
+    likes: `likes?user_id=eq.${uid}&select=*&order=created_at.desc&limit=1000`,
+    favorites: `favorites?user_id=eq.${uid}&select=*&order=created_at.desc&limit=1000`,
+    follows: `follows?or=(follower_id.eq.${uid},followee_id.eq.${uid})&select=*&order=created_at.desc&limit=1000`,
+    messages: `messages?or=(from_id.eq.${uid},to_id.eq.${uid})&select=*&order=created_at.desc&limit=1000`,
+    memberships: `merchant_memberships?user_id=eq.${uid}&select=*&order=created_at.desc&limit=500`,
+    member_transactions: `merchant_member_transactions?user_id=eq.${uid}&select=*&order=created_at.desc&limit=1000`,
+    coupon_claims: `merchant_coupon_claims?user_id=eq.${uid}&select=*&order=created_at.desc&limit=500`,
+    feedback: `user_feedback?user_id=eq.${uid}&select=*&order=created_at.desc&limit=500`
+  };
+  showToast('正在整理你的数据…');
+  const entries = await Promise.all(Object.entries(resources).map(async ([key, path]) => {
+    try {
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, { method:'GET' });
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      return [key, await res.json()];
+    } catch(e){
+      console.warn(`个人数据导出跳过 ${key}:`, e.message);
+      return [key, { unavailable:true, reason:'暂时无法读取此项数据' }];
+    }
+  }));
+  const data = {
+    export_format: 'leshenghuo-personal-data-v1',
+    exported_at: new Date().toISOString(),
+    app_version: APP_VERSION,
+    account: { user_id:session.user.id, email:session.user.email || null },
+    data: Object.fromEntries(entries)
+  };
+  const file = new Blob([JSON.stringify(data, null, 2)], { type:'application/json;charset=utf-8' });
+  const href = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = `乐生活-我的数据-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 1500);
+  showToast('个人数据已开始导出');
+}
 function feedbackStatusLabel(status){ return status === 'resolved' ? '已解决' : status === 'reviewing' ? '处理中' : '待处理'; }
 function feedbackTypeLabel(type){ return ({ bug:'问题反馈', suggestion:'功能建议', experience:'体验建议' })[type] || '公测反馈'; }
 function feedbackStatusClass(status){ return status === 'resolved' ? 'good' : status === 'reviewing' ? 'warn' : 'muted'; }
