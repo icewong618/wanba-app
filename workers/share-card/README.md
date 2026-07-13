@@ -30,7 +30,7 @@ escoopcity.com
 
 不要再添加 `escoopcity.com/*` 路由。这个 Worker 会主动代理 GitHub Pages，因此应作为根域名的自定义域；Cloudflare 会自动创建对应 DNS 记录和证书。若提示根域名已有 CNAME 冲突，先确认 Worker 已部署成功，再在 Cloudflare 的 DNS 记录中删除旧的根域名 GitHub Pages 记录，然后重新添加自定义域。
 
-Worker 会经由 jsDelivr 读取 GitHub 仓库指定提交的静态网页文件，避免 GitHub Pages 自定义域自动跳转和 GitHub 原始文件限流；发布新版本时需同步更新该提交标识，已认证商家的根路径会额外注入动态分享卡。
+Worker 会经由 jsDelivr 读取 GitHub 仓库指定提交的静态网页文件，避免 GitHub Pages 自定义域自动跳转和 GitHub 原始文件限流；自动部署工作流会在每次推送后将该标识更新为当前提交，已认证商家的根路径会额外注入动态分享卡。
 
 仓库的 `.github/workflows/deploy-share-card.yml` 会在推送 `main` 后自动使用该次提交的 SHA 部署 Worker，并清理 jsDelivr 缓存。只需在 GitHub 仓库的 `Settings → Secrets and variables → Actions` 新建 `CLOUDFLARE_API_TOKEN`；令牌只需要本账户的 **Workers Scripts: Edit** 权限。
 

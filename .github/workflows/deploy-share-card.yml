@@ -3,12 +3,6 @@ name: Deploy Share Card Worker
 on:
   push:
     branches: [main]
-    paths:
-      - 'index.html'
-      - '404.html'
-      - 'app.html'
-      - 'version.json'
-      - 'workers/share-card/**'
   workflow_dispatch:
 
 permissions:
