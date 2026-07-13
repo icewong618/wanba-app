@@ -339,6 +339,7 @@
   .feedback-overlay{position:fixed;inset:0;z-index:930;display:none;background:#fff;}.feedback-overlay.open{display:flex;flex-direction:column;}.feedback-head{height:calc(58px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);flex-shrink:0;}.feedback-head button{width:38px;height:38px;border-radius:999px;border:0;background:var(--bg-alt);font-size:24px;color:var(--ink);}.feedback-head h3{margin:0;flex:1;text-align:center;font-size:17px;font-weight:900;padding-right:38px;}.feedback-body{flex:1;overflow-y:auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom));}.feedback-field{margin-bottom:16px;}.feedback-field label{display:block;font-size:13px;font-weight:900;margin-bottom:8px;color:var(--ink);}.feedback-field input,.feedback-field textarea,.feedback-field select{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:#fff;font:14px inherit;color:var(--ink);}.feedback-field textarea{min-height:150px;resize:vertical;line-height:1.55;}.feedback-meta{border-radius:10px;background:var(--bg-alt);padding:11px;font-size:11px;color:var(--ink-faint);line-height:1.6;}.feedback-submit{width:100%;height:46px;border:0;border-radius:999px;background:var(--berry);color:#fff;font-size:15px;font-weight:900;margin-top:18px;}
   .content-report-overlay{position:fixed;inset:0;z-index:932;display:none;background:#fff;}.content-report-overlay.open{display:flex;flex-direction:column;}.content-report-hint{margin:0 0 18px;padding:12px;border-radius:11px;background:var(--bg-alt);font-size:12px;line-height:1.65;color:var(--ink-soft);}.content-report-submit{width:100%;height:46px;border:0;border-radius:999px;background:#b94047;color:#fff;font:900 15px inherit;margin-top:18px;}
   .beta-info-overlay{position:fixed;inset:0;z-index:931;display:none;background:#fff;}.beta-info-overlay.open{display:flex;flex-direction:column;}.beta-info-body{flex:1;overflow-y:auto;padding:20px 16px calc(32px + env(safe-area-inset-bottom));}.beta-info-hero{padding:20px 18px;border-radius:16px;background:linear-gradient(135deg,#fff1e9,#fff8ee);border:1px solid #f0d8c7;margin-bottom:18px;}.beta-info-hero b{display:block;font-size:20px;margin-bottom:7px;}.beta-info-hero p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.7;}.beta-info-section{padding:16px 0;border-bottom:1px solid var(--line);}.beta-info-section:last-child{border-bottom:0;}.beta-info-section h4{margin:0 0 8px;font-size:15px;color:var(--ink);}.beta-info-section p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.72;}.beta-info-list{margin:0;padding-left:20px;color:var(--ink-soft);font-size:13px;line-height:1.9;}.beta-info-feedback{width:100%;height:46px;border:0;border-radius:999px;background:var(--sage);color:#fff;font:900 15px inherit;margin-top:18px;}
+  .policy-overlay{position:fixed;inset:0;z-index:933;display:none;background:#fff;}.policy-overlay.open{display:flex;flex-direction:column;}.policy-body{flex:1;overflow-y:auto;padding:18px 16px calc(32px + env(safe-area-inset-bottom));}.policy-updated{font-size:11px;color:var(--ink-faint);margin:0 0 14px;}.policy-section{padding:18px 0;border-bottom:1px solid var(--line);}.policy-section h4{font-size:16px;margin:0 0 9px;color:var(--ink);}.policy-section p,.policy-section li{font-size:13px;line-height:1.75;color:var(--ink-soft);}.policy-section p{margin:0;}.policy-section ul{padding-left:20px;margin:8px 0 0;}.policy-contact{padding:13px;border-radius:12px;background:var(--bg-alt);font-size:12px;line-height:1.65;color:var(--ink-soft);margin-top:18px;}
   .admin-price-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:7px;}
   .admin-price-line b{font-size:17px;color:var(--ink);}
   .admin-price-line del{font-size:12px;color:var(--ink-faint);}
@@ -2027,6 +2028,18 @@
   </div>
 </div>
 
+<div class="policy-overlay" id="policyOverlay">
+  <div class="feedback-head"><button onclick="closePolicy()" aria-label="返回">‹</button><h3>隐私与社区规则</h3></div>
+  <div class="policy-body">
+    <p class="policy-updated">公测版规则 · 更新于 2026 年 7 月</p>
+    <section class="policy-section"><h4>数据与隐私</h4><p>乐生活仅在提供社区、商家主页、会员卡、互动和客服支持所需的范围内处理账号资料、公开内容、上传图片、地点信息和使用记录。请勿发布他人的电话、住址、证件、支付信息或其他敏感个人资料。</p><ul><li>公开发布的笔记、评论和商家资料会向其他用户展示。</li><li>你可在个人或商家资料页修改公开资料；删除内容后，缓存更新可能需要短暂时间。</li><li>账号密码由认证服务安全处理，乐生活页面不会展示或保存明文密码。</li></ul></section>
+    <section class="policy-section"><h4>社区内容规则</h4><p>请分享真实、有帮助并与本地生活相关的信息。禁止发布或传播以下内容：</p><ul><li>虚假优惠、欺诈、诱导交易、垃圾广告或恶意引流。</li><li>骚扰、歧视、辱骂、仇恨、暴力、违法或危险内容。</li><li>侵犯他人隐私、肖像、版权、商标或其他合法权益的内容。</li></ul></section>
+    <section class="policy-section"><h4>商家、优惠与会员</h4><p>商家应如实填写门店资料、商品、优惠和营业信息。优惠券、会员奖励及核销记录以商家实际规则为准；用户到店前请自行确认适用门店、库存、有效期与限制条件。发现问题可使用“举报内容”或“公测反馈”。</p></section>
+    <section class="policy-section"><h4>账号与处理</h4><p>对于违规内容，我们可能采取下架、限制互动、取消商家认证或限制账号使用等措施。公测期间，功能、规则和数据展示会根据安全与体验需要持续调整。</p></section>
+    <div class="policy-contact">需要协助或发现问题：请从“我”的菜单进入“公测反馈”。对笔记或用户的具体违规问题，请在笔记转发面板中选择“举报内容”。</div>
+  </div>
+</div>
+
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
 <div class="overlay" id="merchantPublicOverlay" onclick="if(event.target.id==='merchantPublicOverlay')closeMerchantPublicPage()">
   <div class="modal" id="merchantPublicModal">
@@ -2253,6 +2266,7 @@
             <div class="profile-menu" id="profileMenu">
               <button id="authLoginBtn" onclick="event.stopPropagation();openProfileLogin()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
               <button onclick="closeProfileMenu();openBetaInfo()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M5 7a7 7 0 0 1 14 0c0 5-7 14-7 14S5 12 5 7z"></path><circle cx="12" cy="8" r="1"></circle></svg></span>关于本次公测</button>
+              <button onclick="closeProfileMenu();openPolicy()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>隐私与社区规则</button>
               <button onclick="closeProfileMenu();openFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path><path d="M8 9h8M8 13h5"></path></svg></span>公测反馈</button>
               <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="closeProfileMenu();openMerchantApplySheet()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M4 10h16"></path><path d="M5 10l1-5h12l1 5"></path><path d="M6 10v10h12V10"></path><path d="M9 20v-6h6v6"></path></svg></span>成为商家</button>
               <button id="profileAdminBtn" onclick="closeProfileMenu();switchTab('admin')" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6V20a2 2 0 0 1-4 0v-.08a1.8 1.8 0 0 0-1-.6 1.8 1.8 0 0 0-1.98.36l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-.6-1H4a2 2 0 0 1 0-4h.08a1.8 1.8 0 0 0 .6-1 1.8 1.8 0 0 0-.36-1.98l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05A1.8 1.8 0 0 0 9 4.6a1.8 1.8 0 0 0 1-.6V4a2 2 0 0 1 4 0v.08a1.8 1.8 0 0 0 1 .6 1.8 1.8 0 0 0 1.98-.36l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05A1.8 1.8 0 0 0 19.4 9c.2.34.4.66.6 1H20a2 2 0 0 1 0 4h-.08a1.8 1.8 0 0 0-.52 1z"></path></svg></span>管理后台</button>
@@ -2681,7 +2695,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.141';
+const APP_VERSION = '5.142';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -12201,6 +12215,8 @@ function openFeedback(){
 function closeFeedback(){ document.getElementById('feedbackOverlay')?.classList.remove('open'); }
 function openBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.add('open'); }
 function closeBetaInfo(){ document.getElementById('betaInfoOverlay')?.classList.remove('open'); }
+function openPolicy(){ document.getElementById('policyOverlay')?.classList.add('open'); }
+function closePolicy(){ document.getElementById('policyOverlay')?.classList.remove('open'); }
 let contentReportPostId = null;
 function openContentReport(){
   if(!(session && session.user)){ closeShareSheet(); showToast('登录后即可举报内容'); openAuth('login'); return; }
