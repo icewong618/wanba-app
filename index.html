@@ -2756,7 +2756,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.156';
+const APP_VERSION = '5.157';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7801,10 +7801,10 @@ let textCardCover = null;
 let textCoverDraftTheme = 'garden';
 let textCoverDraftImage = '';
 const TEXT_COVER_THEMES = [
-  { id:'garden', name:'绿意', note:'自然清爽', bg:'#E8F1E6', ink:'#23412C', accent:'#6C9870', label:'#F9FCF7' },
-  { id:'paper', name:'留白', note:'简洁干净', bg:'#FBF7EF', ink:'#292721', accent:'#C87B55', label:'#FFFDF8' },
-  { id:'sunset', name:'暖橙', note:'热闹温暖', bg:'#FCE6D7', ink:'#572F25', accent:'#D66A43', label:'#FFF7F1' },
-  { id:'night', name:'夜色', note:'深色醒目', bg:'#24312C', ink:'#F7F4E9', accent:'#B8D5A0', label:'#31443A' }
+  { id:'garden', name:'绿意', note:'侧栏清爽', bg:'#E8F1E6', ink:'#23412C', accent:'#6C9870', label:'#F9FCF7' },
+  { id:'paper', name:'留白', note:'网格留白', bg:'#FFFDF7', ink:'#292721', accent:'#C87B55', label:'#FFFDF8' },
+  { id:'sunset', name:'暖橙', note:'大色块标题', bg:'#E6764C', ink:'#FFF9F2', accent:'#FFE2C9', label:'#FDE9D9' },
+  { id:'night', name:'夜色', note:'深色海报', bg:'#202B27', ink:'#F7F4E9', accent:'#B8D5A0', label:'#31443A' }
 ];
 
 let merchantAiState = null;
@@ -11451,39 +11451,98 @@ function createTextCoverDataUrl(title, content, category, themeId){
     if(!context) return '';
     context.fillStyle = theme.bg;
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = theme.accent;
-    context.globalAlpha = .36;
-    context.lineWidth = 5;
-    context.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
-    context.globalAlpha = 1;
-    context.fillStyle = theme.label;
-    context.fillRect(72, 82, 132, 42);
-    context.fillStyle = theme.accent;
-    context.font = '700 20px "PingFang SC", "Noto Sans SC", sans-serif';
-    context.fillText(String(category || '生活').slice(0, 8), 91, 110);
-    context.fillStyle = theme.accent;
-    context.font = '700 88px Georgia, serif';
-    context.fillText('“', 72, 252);
-    context.fillStyle = theme.ink;
-    context.font = '900 52px "PingFang SC", "Noto Sans SC", sans-serif';
-    const titleLines = wrapTextForCanvas(context, title, 570, 4);
+    let x = 76;
     let y = 306;
-    titleLines.forEach(line => { context.fillText(line, 76, y); y += 72; });
+    let titleWidth = 570;
+    let bodyWidth = 540;
+    let titleColor = theme.ink;
+    let bodyColor = theme.ink;
+
+    if(theme.id === 'garden'){
+      context.fillStyle = theme.accent;
+      context.fillRect(0, 0, 128, canvas.height);
+      context.globalAlpha = .32;
+      context.fillStyle = '#fff';
+      context.fillRect(38, 74, 12, 812);
+      context.globalAlpha = 1;
+      x = 166;
+      titleWidth = 470;
+      bodyWidth = 452;
+      context.fillStyle = theme.label;
+      context.fillRect(x, 88, 126, 42);
+      context.fillStyle = theme.accent;
+      context.font = '800 20px "PingFang SC", "Noto Sans SC", sans-serif';
+      context.fillText(String(category || '生活').slice(0, 8), x + 17, 116);
+      context.fillStyle = theme.accent;
+      context.font = '700 82px Georgia, serif';
+      context.fillText('“', x, 248);
+    } else if(theme.id === 'paper'){
+      context.strokeStyle = '#E5DDD0';
+      context.lineWidth = 2;
+      for(let offset = 84; offset < 900; offset += 88){
+        context.beginPath(); context.moveTo(58, offset); context.lineTo(662, offset); context.stroke();
+      }
+      context.fillStyle = theme.accent;
+      context.fillRect(76, 84, 90, 14);
+      context.fillStyle = theme.ink;
+      context.font = '800 21px "PingFang SC", "Noto Sans SC", sans-serif';
+      context.fillText(String(category || '生活').slice(0, 8), 76, 145);
+      context.fillStyle = theme.accent;
+      context.font = '700 102px Georgia, serif';
+      context.fillText('“', 72, 270);
+      y = 330;
+    } else if(theme.id === 'sunset'){
+      context.fillStyle = theme.label;
+      context.fillRect(58, 80, 604, 616);
+      context.fillStyle = theme.accent;
+      context.fillRect(58, 80, 604, 126);
+      context.fillStyle = '#5D3329';
+      context.font = '900 22px "PingFang SC", "Noto Sans SC", sans-serif';
+      context.fillText(String(category || '生活').slice(0, 8), 86, 157);
+      context.fillStyle = '#5D3329';
+      context.font = '700 98px Georgia, serif';
+      context.fillText('“', 78, 294);
+      titleColor = '#4A2A22';
+      bodyColor = '#654036';
+      x = 86;
+      y = 354;
+      titleWidth = 530;
+      bodyWidth = 510;
+    } else if(theme.id === 'night'){
+      context.strokeStyle = theme.accent;
+      context.globalAlpha = .55;
+      context.lineWidth = 4;
+      context.strokeRect(42, 42, 636, 876);
+      context.beginPath(); context.moveTo(78, 186); context.lineTo(642, 186); context.stroke();
+      context.globalAlpha = 1;
+      context.fillStyle = theme.accent;
+      context.font = '800 20px "PingFang SC", "Noto Sans SC", sans-serif';
+      context.fillText(String(category || '生活').slice(0, 8).toUpperCase(), 78, 130);
+      context.fillStyle = theme.accent;
+      context.font = '700 96px Georgia, serif';
+      context.fillText('“', 72, 300);
+      y = 354;
+    }
+
+    context.fillStyle = titleColor;
+    context.font = '900 52px "PingFang SC", "Noto Sans SC", sans-serif';
+    const titleLines = wrapTextForCanvas(context, title, titleWidth, 4);
+    titleLines.forEach(line => { context.fillText(line, x, y); y += 72; });
     context.fillStyle = theme.accent;
-    context.fillRect(76, y + 20, 74, 8);
-    context.fillStyle = theme.ink;
+    context.fillRect(x, y + 20, theme.id === 'sunset' ? 122 : 74, 8);
+    context.fillStyle = bodyColor;
     context.globalAlpha = .82;
     context.font = '500 26px "PingFang SC", "Noto Sans SC", sans-serif';
-    const bodyLines = wrapTextForCanvas(context, content, 540, 4);
+    const bodyLines = wrapTextForCanvas(context, content, bodyWidth, 4);
     y += 92;
-    bodyLines.forEach(line => { context.fillText(line, 76, y); y += 42; });
+    bodyLines.forEach(line => { context.fillText(line, x, y); y += 42; });
     context.globalAlpha = 1;
     context.fillStyle = theme.accent;
     context.font = '800 18px "PingFang SC", "Noto Sans SC", sans-serif';
-    context.fillText('乐生活  SCOOP CITY', 76, 884);
+    context.fillText('乐生活  SCOOP CITY', x, 884);
     context.globalAlpha = .52;
     context.fillStyle = theme.accent;
-    context.fillRect(76, 906, 568, 2);
+    context.fillRect(x, 906, theme.id === 'garden' ? 452 : 568, 2);
     context.globalAlpha = 1;
     return canvas.toDataURL('image/jpeg', .84);
   } catch(error){
@@ -11500,7 +11559,10 @@ function renderTextCoverPreview(){
   const source = textCoverSourceText();
   textCoverDraftImage = createTextCoverDataUrl(source.title, source.content, source.category, textCoverDraftTheme);
   const preview = document.getElementById('textCoverPreviewImage');
-  if(preview) preview.src = textCoverDraftImage;
+  if(preview){
+    preview.src = textCoverDraftImage;
+    preview.alt = `${textCoverTheme(textCoverDraftTheme).name}文字配图预览`;
+  }
   renderTextCoverThemes();
 }
 function openTextCoverMaker(){
@@ -13542,7 +13604,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Text Cover Cards】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Distinct Text Cover Layouts】`);
 </script>
 </body>
 </html>
