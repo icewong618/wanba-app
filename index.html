@@ -1281,6 +1281,8 @@
     width:100%;display:flex;align-items:center;gap:8px;text-align:left;
     padding:10px 11px;border-radius:10px;color:var(--ink);font-size:13px;font-weight:800;
   }
+  .profile-menu-feedback-badge{margin-left:auto;display:none;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:999px;background:var(--berry);color:#fff;font-size:10px;font-weight:900;line-height:1;}
+  .profile-menu-feedback-badge.show{display:inline-flex;}
   .profile-menu .merchant-apply-top-btn{
     margin:0;border:0;background:transparent;box-shadow:none;color:var(--ink);
     justify-content:flex-start;max-width:none;
@@ -2313,7 +2315,7 @@
               <button onclick="closeProfileMenu();openBetaInfo()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M5 7a7 7 0 0 1 14 0c0 5-7 14-7 14S5 12 5 7z"></path><circle cx="12" cy="8" r="1"></circle></svg></span>关于本次公测</button>
               <button onclick="closeProfileMenu();openPolicy()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>隐私与社区规则</button>
               <button onclick="closeProfileMenu();exportMyData()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 21h16"></path></svg></span>导出我的数据</button>
-              <button onclick="closeProfileMenu();openMyFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 4v16"></path><path d="M5 8h14M5 16h14"></path><circle cx="12" cy="12" r="9"></circle></svg></span>我的反馈</button>
+              <button id="myFeedbackMenuBtn" onclick="closeProfileMenu();openMyFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 4v16"></path><path d="M5 8h14M5 16h14"></path><circle cx="12" cy="12" r="9"></circle></svg></span>我的反馈<span class="profile-menu-feedback-badge" id="myFeedbackReplyBadge" aria-label="有新的管理员回复"></span></button>
               <button onclick="closeProfileMenu();openFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path><path d="M8 9h8M8 13h5"></path></svg></span>公测反馈</button>
               <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="closeProfileMenu();openMerchantApplySheet()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M4 10h16"></path><path d="M5 10l1-5h12l1 5"></path><path d="M6 10v10h12V10"></path><path d="M9 20v-6h6v6"></path></svg></span>成为商家</button>
               <button id="profileAdminBtn" onclick="closeProfileMenu();switchTab('admin')" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6V20a2 2 0 0 1-4 0v-.08a1.8 1.8 0 0 0-1-.6 1.8 1.8 0 0 0-1.98.36l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-.6-1H4a2 2 0 0 1 0-4h.08a1.8 1.8 0 0 0 .6-1 1.8 1.8 0 0 0-.36-1.98l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05A1.8 1.8 0 0 0 9 4.6a1.8 1.8 0 0 0 1-.6V4a2 2 0 0 1 4 0v.08a1.8 1.8 0 0 0 1 .6 1.8 1.8 0 0 0 1.98-.36l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05A1.8 1.8 0 0 0 19.4 9c.2.34.4.66.6 1H20a2 2 0 0 1 0 4h-.08a1.8 1.8 0 0 0-.52 1z"></path></svg></span>管理后台</button>
@@ -2742,7 +2744,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.154';
+const APP_VERSION = '5.155';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3048,6 +3050,7 @@ function updateAuthUI(){
     // 关键：切换到该账号自己的资料档案
     loadUserProfile();
     checkDealAdmin();
+    checkFeedbackReplyNotices();
   } else {
     if(status) status.textContent = '未登录（游客模式）';
     if(inBtn) inBtn.style.display = 'flex';
@@ -3056,6 +3059,7 @@ function updateAuthUI(){
     currentMerchant = null;
     currentMerchantApplication = null;
     isDealAdmin = false;
+    updateMyFeedbackReplyBadge(0);
     updateDealReviewButton();
     loadUserProfile(); // 回到干净游客档案
   }
@@ -3121,7 +3125,9 @@ function switchAccount(){
 }
 function toggleProfileMenu(e){
   if(e) e.stopPropagation();
-  document.getElementById('profileMenu')?.classList.toggle('open');
+  const menu = document.getElementById('profileMenu');
+  if(menu && !menu.classList.contains('open')) checkFeedbackReplyNotices();
+  menu?.classList.toggle('open');
 }
 function closeProfileMenu(){
   document.getElementById('profileMenu')?.classList.remove('open');
@@ -12470,6 +12476,55 @@ const FEEDBACK_ATTACHMENT_MAX_BYTES = 4 * 1024 * 1024;
 let feedbackAttachmentQueue = [];
 let myFeedbackAttachmentMap = new Map();
 let feedbackAttachmentObjectUrls = [];
+const FEEDBACK_REPLY_SEEN_KEY = 'leshenghuo_feedback_reply_seen_v1';
+
+function feedbackReplySeenStorageKey(){
+  return session && session.user ? `${FEEDBACK_REPLY_SEEN_KEY}:${session.user.id}` : '';
+}
+function getSeenFeedbackReplyKeys(){
+  const key = feedbackReplySeenStorageKey();
+  if(!key) return new Set();
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); }
+  catch(error){ return new Set(); }
+}
+function saveSeenFeedbackReplyKeys(keys){
+  const key = feedbackReplySeenStorageKey();
+  if(!key) return;
+  try { localStorage.setItem(key, JSON.stringify([...keys].slice(-200))); }
+  catch(error){}
+}
+function feedbackReplyKey(row){
+  return `${row.id}:${row.replied_at || ''}`;
+}
+function updateMyFeedbackReplyBadge(count){
+  const badge = document.getElementById('myFeedbackReplyBadge');
+  const button = document.getElementById('myFeedbackMenuBtn');
+  if(!badge) return;
+  const visible = Number(count) > 0;
+  badge.textContent = visible ? (count > 9 ? '9+' : String(count)) : '';
+  badge.classList.toggle('show', visible);
+  if(button) button.setAttribute('aria-label', visible ? `我的反馈，有 ${count} 条新的管理员回复` : '我的反馈');
+}
+async function checkFeedbackReplyNotices(){
+  if(!(session && session.user)){ updateMyFeedbackReplyBadge(0); return; }
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/user_feedback?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=replied_at.desc&limit=80`;
+    const res = await authedFetch(url, { method:'GET' });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const seen = getSeenFeedbackReplyKeys();
+    const replies = (await res.json()).filter(row => row.admin_reply && row.replied_at);
+    updateMyFeedbackReplyBadge(replies.filter(row => !seen.has(feedbackReplyKey(row))).length);
+  } catch(error){
+    console.warn('反馈回复提醒读取失败:', error.message);
+    updateMyFeedbackReplyBadge(0);
+  }
+}
+function markFeedbackRepliesSeen(rows){
+  const seen = getSeenFeedbackReplyKeys();
+  (rows || []).filter(row => row.admin_reply && row.replied_at).forEach(row => seen.add(feedbackReplyKey(row)));
+  saveSeenFeedbackReplyKeys(seen);
+  updateMyFeedbackReplyBadge(0);
+}
 
 function clearFeedbackAttachmentObjectUrls(){
   feedbackAttachmentObjectUrls.forEach(url => URL.revokeObjectURL(url));
@@ -12696,6 +12751,7 @@ async function openMyFeedback(){
     try { myFeedbackAttachmentMap = await loadFeedbackAttachmentMap(rows); }
     catch(error){ console.warn('我的反馈截图读取失败:', error.message); myFeedbackAttachmentMap = new Map(); }
     list.innerHTML = rows.length ? rows.map(row => `<article class="my-feedback-card"><div class="my-feedback-title"><span>${escHtml(row.title || '未命名反馈')}</span><span class="admin-badge ${feedbackStatusClass(row.status)}">${feedbackStatusLabel(row.status)}</span></div><div class="my-feedback-meta">${feedbackTypeLabel(row.type)} · v${escHtml(row.app_version || '')} · ${adminTimeText(row.created_at)}</div><div class="my-feedback-text">${escHtml(row.body || '')}</div>${row.admin_reply ? `<div class="my-feedback-reply"><b>管理员回复</b>${escHtml(row.admin_reply)}${row.replied_at ? `<div class="my-feedback-meta">${adminTimeText(row.replied_at)}</div>` : ''}</div>` : ''}${row.resolved_at ? `<div class="my-feedback-meta">处理时间：${adminTimeText(row.resolved_at)}</div>` : ''}${feedbackAttachmentButtonHtml(row.id, myFeedbackAttachmentMap)}</article>`).join('') : '<div class="admin-empty">你还没有提交过公测反馈。使用下方按钮告诉我们你的体验。</div>';
+    markFeedbackRepliesSeen(rows);
   } catch(e){ console.warn('我的反馈读取失败:', e.message); myFeedbackAttachmentMap = new Map(); list.innerHTML = '<div class="admin-empty">暂时无法读取反馈状态，请稍后重试。</div>'; }
 }
 function closeMyFeedback(){ document.getElementById('myFeedbackOverlay')?.classList.remove('open'); }
@@ -13335,7 +13391,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Beta Feedback Replies】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Beta Feedback Reply Notices】`);
 </script>
 </body>
 </html>
