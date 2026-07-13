@@ -306,8 +306,6 @@
   /* ---------- admin center ---------- */
   .admin-shell{background:var(--card);min-height:72vh;padding:16px 16px 92px;}
   .admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;}
-  .admin-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-shrink:0;}
-  .admin-return-btn{width:38px;height:38px;border:1px solid var(--line);border-radius:999px;background:var(--bg-alt);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;}
   .admin-title{font-size:20px;font-weight:900;color:var(--ink);}
   .admin-sub{font-size:12px;color:var(--ink-faint);line-height:1.55;margin-top:3px;}
   .admin-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none;}
@@ -2364,10 +2362,7 @@
         <div class="admin-title">管理后台</div>
         <div class="admin-sub">查看注册用户、内容安全和省钱数据运营。删除、封禁和价格展示控制只对管理员开放。</div>
       </div>
-      <div class="admin-head-actions">
-        <button class="merchant-apply-top-btn" style="display:inline-flex;" onclick="switchTab('deals')"><span class="ui-icon" style="width:13px;height:13px;"><svg viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg></span>审核优惠</button>
-        <button class="admin-return-btn" onclick="switchTab('profile')" aria-label="返回我的页面" title="返回我的页面"><span class="ui-icon" style="width:18px;height:18px;"><svg viewBox="0 0 24 24"><path d="M19 12H5"></path><path d="m11 18-6-6 6-6"></path></svg></span></button>
-      </div>
+      <button class="merchant-apply-top-btn" style="display:inline-flex;" onclick="switchTab('deals')"><span class="ui-icon" style="width:13px;height:13px;"><svg viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg></span>审核优惠</button>
     </div>
     <div class="admin-tabs">
       <button class="admin-tab active" data-admin-tab="users" onclick="switchAdminTab('users')">注册用户</button>
@@ -2681,7 +2676,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.141';
+const APP_VERSION = '5.140';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';

@@ -306,6 +306,8 @@
   /* ---------- admin center ---------- */
   .admin-shell{background:var(--card);min-height:72vh;padding:16px 16px 92px;}
   .admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;}
+  .admin-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-shrink:0;}
+  .admin-return-btn{width:38px;height:38px;border:1px solid var(--line);border-radius:999px;background:var(--bg-alt);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;}
   .admin-title{font-size:20px;font-weight:900;color:var(--ink);}
   .admin-sub{font-size:12px;color:var(--ink-faint);line-height:1.55;margin-top:3px;}
   .admin-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none;}
@@ -2362,7 +2364,10 @@
         <div class="admin-title">管理后台</div>
         <div class="admin-sub">查看注册用户、内容安全和省钱数据运营。删除、封禁和价格展示控制只对管理员开放。</div>
       </div>
-      <button class="merchant-apply-top-btn" style="display:inline-flex;" onclick="switchTab('deals')"><span class="ui-icon" style="width:13px;height:13px;"><svg viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg></span>审核优惠</button>
+      <div class="admin-head-actions">
+        <button class="merchant-apply-top-btn" style="display:inline-flex;" onclick="switchTab('deals')"><span class="ui-icon" style="width:13px;height:13px;"><svg viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg></span>审核优惠</button>
+        <button class="admin-return-btn" onclick="switchTab('profile')" aria-label="返回我的页面" title="返回我的页面"><span class="ui-icon" style="width:18px;height:18px;"><svg viewBox="0 0 24 24"><path d="M19 12H5"></path><path d="m11 18-6-6 6-6"></path></svg></span></button>
+      </div>
     </div>
     <div class="admin-tabs">
       <button class="admin-tab active" data-admin-tab="users" onclick="switchAdminTab('users')">注册用户</button>
@@ -2676,7 +2681,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.139';
+const APP_VERSION = '5.141';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7894,6 +7899,12 @@ function closePost(){
     document.getElementById('merchantAiOverlay').classList.add('open');
     renderMerchantAiFlow();
   }
+  if(window.adminReportPostReturn){
+    window.adminReportPostReturn = false;
+    adminTab = 'reports';
+    switchTab('admin');
+    setTimeout(() => switchAdminTab('reports'), 0);
+  }
 }
 function getPost(){ return posts.find(p=>p.id===activePostId); }
 
@@ -8773,7 +8784,12 @@ function renderAdminContentReports(body){
   const rows = adminFiltered(adminContentReports, ['reason','detail','status','reported_user_id','reporter_user_id']);
   body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(row => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(contentReportReasonText(row.reason))} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已处理' : row.status === 'dismissed' ? '已驳回' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">举报时间：${adminTimeText(row.created_at)}<br>笔记：${escHtml(row.post_id || '无')} · 被举报用户：${escHtml(uidToNumericId(String(row.reported_user_id || '')))}</div>${row.detail ? `<div class="admin-row-text">${escHtml(row.detail)}</div>` : ''}</div></div><div class="admin-actions"><button class="primary" onclick="adminUpdateContentReport(${row.id},'reviewing')">处理中</button><button onclick="adminOpenReportedPost(${JSON.stringify(row.post_id)})">查看笔记</button><button onclick="adminUpdateContentReport(${row.id},'resolved')">已处理</button><button class="danger" onclick="adminUpdateContentReport(${row.id},'dismissed')">驳回</button></div></div>`).join('')}</div>` : '<div class="admin-empty">暂时没有内容举报。</div>';
 }
-function adminOpenReportedPost(postId){ if(postId === null || postId === undefined){ showToast('该举报没有关联笔记'); return; } switchTab('home'); setTimeout(() => openPost(postId), 50); }
+function adminOpenReportedPost(postId){
+  if(postId === null || postId === undefined){ showToast('该举报没有关联笔记'); return; }
+  window.adminReportPostReturn = true;
+  switchTab('home');
+  setTimeout(() => openPost(postId), 50);
+}
 async function adminUpdateContentReport(id, status){
   try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/content_reports?id=eq.${id}`, { method:'PATCH', body:JSON.stringify({ status, handled_by:session.user.id, resolved_at:['resolved','dismissed'].includes(status) ? new Date().toISOString() : null }) }); if(!res.ok) throw new Error(await res.text()); await loadAdminContentReports(); renderAdminPanel(); showToast(status === 'reviewing' ? '已标记处理中' : status === 'resolved' ? '已标记处理完成' : '已驳回举报'); } catch(e){ showToast('更新失败，请检查管理员权限'); }
 }
