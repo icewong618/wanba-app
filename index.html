@@ -1784,9 +1784,13 @@
       <input type="email" id="authEmail" placeholder="you@example.com" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
     </div>
     <div style="margin-bottom:18px;">
-      <label id="authPassLabel" style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">密码（至少6位）</label>
+      <label id="authPassLabel" style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">密码</label>
       <input type="password" id="authPass" placeholder="••••••" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
       <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--ink-soft);cursor:pointer;"><input type="checkbox" onchange="toggleAuthPasswordVisibility(this.checked)">显示密码</label>
+    </div>
+    <div id="authPassConfirmBlock" style="display:none;margin-top:-8px;margin-bottom:18px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">确认密码</label>
+      <input type="password" id="authPassConfirm" placeholder="再次输入密码" autocomplete="new-password" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
     </div>
     <button id="authSubmit" onclick="submitAuth()" style="width:100%;background:var(--berry);color:#fff;border:none;padding:13px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">登入</button>
     <div id="authLinks" style="display:flex;justify-content:center;gap:14px;margin-top:12px;font-size:12px;"></div>
@@ -2721,7 +2725,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.145';
+const APP_VERSION = '5.146';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3052,12 +3056,14 @@ function renderAuthMode(){
   const title = document.getElementById('authTitle');
   const emailBlock = document.getElementById('authEmailBlock');
   const label = document.getElementById('authPassLabel');
+  const confirmBlock = document.getElementById('authPassConfirmBlock');
   const submit = document.getElementById('authSubmit');
   const links = document.getElementById('authLinks');
   const hint = document.getElementById('authHint');
   if(title) title.textContent = reset ? '设置新密码' : register ? '注册 乐生活' : '登入 乐生活';
   if(emailBlock) emailBlock.style.display = reset ? 'none' : '';
-  if(label) label.textContent = reset ? '新密码（至少6位）' : '密码（至少6位）';
+  if(label) label.textContent = reset ? '新密码（至少10位，含字母和数字）' : register ? '密码（至少10位，含字母和数字）' : '密码';
+  if(confirmBlock) confirmBlock.style.display = (reset || register) ? '' : 'none';
   if(submit) submit.textContent = reset ? '保存新密码' : register ? '注册' : '登入';
   if(links){
     links.innerHTML = reset
@@ -3071,6 +3077,14 @@ function renderAuthMode(){
 function toggleAuthPasswordVisibility(show){
   const input = document.getElementById('authPass');
   if(input) input.type = show ? 'text' : 'password';
+  const confirm = document.getElementById('authPassConfirm');
+  if(confirm) confirm.type = show ? 'text' : 'password';
+}
+function passwordSafetyMessage(pass){
+  if(String(pass || '').length < 10) return '密码至少需要 10 位';
+  if(!/[A-Za-z]/.test(pass)) return '密码需要包含英文字母';
+  if(!/\d/.test(pass)) return '密码需要包含数字';
+  return '';
 }
 function openProfileLogin(){
   closeProfileMenu();
@@ -3167,10 +3181,16 @@ async function resendVerifyEmail(email){
 async function submitAuth(){
   const email = document.getElementById('authEmail').value.trim().toLowerCase();
   const pass = document.getElementById('authPass').value;
+  const passConfirm = document.getElementById('authPassConfirm')?.value || '';
   const name = email.split('@')[0];
   const msg = document.getElementById('authMsg');
   msg.style.color = 'var(--berry)';
-  if(pass.length < 6){ msg.textContent = '密码至少6位'; return; }
+  if(!pass){ msg.textContent = '请输入密码'; return; }
+  if(authMode === 'register' || authMode === 'reset'){
+    const passwordIssue = passwordSafetyMessage(pass);
+    if(passwordIssue){ msg.textContent = passwordIssue; return; }
+    if(pass !== passConfirm){ msg.textContent = '两次输入的密码不一致'; return; }
+  }
   if(authMode !== 'reset' && (!email || !email.includes('@'))){ msg.textContent = '请输入有效邮箱'; return; }
   msg.textContent = '处理中…';
 
