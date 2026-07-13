@@ -2650,7 +2650,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.136';
+const APP_VERSION = '5.137';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7644,6 +7644,7 @@ let posts = [
 let currentFilter = '全部';
 let currentTag = null;
 let feedIsLoading = false;
+let feedLoadFailed = false;
 let activePostId = null;
 let selectedCat = null;
 let eventOn = false;
@@ -7740,6 +7741,10 @@ function renderFeed(){
         <span class="display">正在读取内容</span>
         新鲜笔记马上就到
       </div>`;
+      return;
+    }
+    if(feedLoadFailed){
+      el.innerHTML = `<div class="empty" style="grid-column:1/-1;"><span class="display">内容暂时没连上</span>请检查网络后重试<br><button onclick="loadPostsFromSupabase({force:true})" style="margin-top:12px;padding:9px 16px;border-radius:999px;border:1px solid var(--sage);background:#fff;color:var(--sage-dark);font-weight:900;">重新加载</button></div>`;
       return;
     }
     el.innerHTML = `<div class="empty" style="grid-column:1/-1;">
@@ -12394,6 +12399,7 @@ async function loadPostsFromSupabase(options = {}){
   const shouldShowLoading = posts.length === 0;
   if(shouldShowLoading){
     feedIsLoading = true;
+    feedLoadFailed = false;
     renderFeed();
   }
   window._postsLoadPromise = (async () => {
@@ -12432,6 +12438,7 @@ async function loadPostsFromSupabase(options = {}){
         window._postsNextRetryAt = Date.now() + POSTS_NETWORK_BACKOFF_MS;
         console.warn('⚠️ 帖子服务暂时不可达，稍后自动恢复:', retryError.message);
         feedIsLoading = false;
+        feedLoadFailed = posts.length === 0;
         renderFeed();
         return;
       }
@@ -12451,6 +12458,7 @@ async function loadPostsFromSupabase(options = {}){
       console.warn(`⚠️ Supabase错误 ${response.status}:`, errorText.slice(0, 100));
       console.log('💾 使用本地缓存数据');
       feedIsLoading = false;
+      feedLoadFailed = posts.length === 0;
       renderFeed();
       return;
     }
@@ -12488,6 +12496,7 @@ async function loadPostsFromSupabase(options = {}){
       window._postsLastFetchedAt = Date.now();
       window._postsNextRetryAt = 0;
       feedIsLoading = false;
+      feedLoadFailed = false;
       renderChips();
       renderQuicklinks();
       renderFeed();
@@ -12507,6 +12516,7 @@ async function loadPostsFromSupabase(options = {}){
     } else {
       console.log('📭 暂无数据或数据格式不正确');
       feedIsLoading = false;
+      feedLoadFailed = false;
       renderFeed();
     }
   } catch(error){
@@ -12514,6 +12524,7 @@ async function loadPostsFromSupabase(options = {}){
     console.error('错误详情:', error);
     console.log('💾 使用本地缓存数据');
     feedIsLoading = false;
+    feedLoadFailed = posts.length === 0;
     renderFeed();
   }
   })();
