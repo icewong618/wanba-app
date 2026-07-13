@@ -139,6 +139,12 @@ function githubRawRequest(request, url, env, merchantPage) {
   return new Request(upstream.toString(), request);
 }
 
+function staticCacheRequest(url, env) {
+  const key = new URL(url.origin + url.pathname);
+  key.searchParams.set('content_origin', env.CONTENT_ORIGIN);
+  return new Request(key.toString(), { method: 'GET' });
+}
+
 function contentTypeForPath(pathname) {
   const extension = pathname.split('.').pop().toLowerCase();
   return ({
@@ -165,7 +171,7 @@ function withShareMeta(response, meta, htmlPage) {
   headers.set('Content-Type', contentTypeForPath(responsePath));
   headers.set('X-Content-Type-Options', 'nosniff');
   if (responsePath.endsWith('/version.json') || responsePath === 'version.json') {
-    headers.set('Cache-Control', 'no-store, max-age=0');
+    headers.set('Cache-Control', 'public, max-age=60');
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
   if (!htmlPage) return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -193,6 +199,14 @@ export default {
     }
     const slug = merchantSlugFromPath(url.pathname);
     const postId = sharedPostId(url);
+    const canCacheStatic = request.method === 'GET' && !slug && postId == null;
+    const cacheKey = canCacheStatic ? staticCacheRequest(url, env) : null;
+    const cache = caches.default;
+
+    if (cacheKey) {
+      const cached = await cache.match(cacheKey);
+      if (cached) return cached;
+    }
     let merchant = null;
     let post = null;
 
@@ -227,7 +241,23 @@ export default {
     } : merchantMeta;
 
     const htmlPage = Boolean(merchant || post) || url.pathname === '/' || /\.html$/i.test(url.pathname);
-    const originResponse = await fetch(githubRawRequest(request, url, env, Boolean(merchant || post)));
-    return withShareMeta(originResponse, postMeta, htmlPage);
+    try {
+      const originResponse = await fetch(githubRawRequest(request, url, env, Boolean(merchant || post)));
+      if (!originResponse.ok && cacheKey) {
+        const stale = await cache.match(cacheKey);
+        if (stale) return stale;
+      }
+      const response = withShareMeta(originResponse, postMeta, htmlPage);
+      if (cacheKey && response.ok) {
+        await cache.put(cacheKey, response.clone());
+      }
+      return response;
+    } catch (error) {
+      if (cacheKey) {
+        const stale = await cache.match(cacheKey);
+        if (stale) return stale;
+      }
+      return new Response('内容暂时不可用，请稍后重试。', { status: 503 });
+    }
   }
 };
