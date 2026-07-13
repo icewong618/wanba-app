@@ -1774,11 +1774,11 @@
   </div>
 </div>
 
-<!-- 登录/注册弹窗 -->
+<!-- 登录或注册弹窗 -->
 <div id="authModal" style="display:none;position:fixed;inset:0;background:rgba(42,39,33,.45);z-index:210;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;position:relative;box-shadow:var(--shadow-lift);padding:26px;">
     <button class="modal-close" onclick="closeAuth()">✕</button>
-    <h3 id="authTitle" style="font-size:17px;font-weight:700;margin-bottom:16px;text-align:center;">登入 乐生活</h3>
+    <h3 id="authTitle" style="font-size:17px;font-weight:700;margin-bottom:16px;text-align:center;">登录或注册 乐生活</h3>
     <div id="authEmailBlock" style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">邮箱</label>
       <input type="email" id="authEmail" placeholder="you@example.com" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
@@ -2726,7 +2726,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.151';
+const APP_VERSION = '5.152';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3045,7 +3045,7 @@ function updateAuthUI(){
   }
 }
 function openAuth(mode){
-  authMode = mode || 'login';
+  authMode = mode === 'reset' ? 'reset' : 'login';
   document.getElementById('authModal').style.display = 'flex';
   document.getElementById('authMsg').textContent = '';
   renderAuthMode();
@@ -3053,7 +3053,6 @@ function openAuth(mode){
 function closeAuth(){ document.getElementById('authModal').style.display = 'none'; }
 function renderAuthMode(){
   const reset = authMode === 'reset';
-  const register = authMode === 'register';
   const title = document.getElementById('authTitle');
   const emailBlock = document.getElementById('authEmailBlock');
   const label = document.getElementById('authPassLabel');
@@ -3061,19 +3060,17 @@ function renderAuthMode(){
   const submit = document.getElementById('authSubmit');
   const links = document.getElementById('authLinks');
   const hint = document.getElementById('authHint');
-  if(title) title.textContent = reset ? '设置新密码' : register ? '注册 乐生活' : '登入 乐生活';
+  if(title) title.textContent = reset ? '设置新密码' : '登录或注册 乐生活';
   if(emailBlock) emailBlock.style.display = reset ? 'none' : '';
-  if(label) label.textContent = reset ? '新密码（至少10位，含字母和数字）' : register ? '密码（至少10位，含字母和数字）' : '密码';
-  if(confirmBlock) confirmBlock.style.display = (reset || register) ? '' : 'none';
-  if(submit) submit.textContent = reset ? '保存新密码' : register ? '注册' : '登入';
+  if(label) label.textContent = reset ? '新密码（至少10位，含字母和数字）' : '密码';
+  if(confirmBlock) confirmBlock.style.display = reset ? '' : 'none';
+  if(submit) submit.textContent = reset ? '保存新密码' : '继续';
   if(links){
     links.innerHTML = reset
       ? '<button onclick="openAuth(\'login\')" style="color:var(--sage-dark);">返回登入</button>'
-      : register
-        ? '<button onclick="openAuth(\'login\')" style="color:var(--sage-dark);">已有账号？登入</button>'
-        : '<button onclick="openAuth(\'register\')" style="color:var(--sage-dark);">新用户注册</button><button onclick="requestPasswordReset()" style="color:var(--berry);">忘记密码</button>';
+      : '<button onclick="requestPasswordReset()" style="color:var(--berry);">忘记密码</button>';
   }
-  if(hint) hint.textContent = register ? '注册后请点击邮箱中的验证链接完成注册。' : reset ? '请设置新的登录密码。' : '';
+  if(hint) hint.textContent = reset ? '请设置新的登录密码。' : '首次使用该邮箱会自动创建乐生活账号。';
 }
 function toggleAuthPasswordVisibility(show){
   const input = document.getElementById('authPass');
@@ -3086,6 +3083,12 @@ function passwordSafetyMessage(pass){
   if(!/[A-Za-z]/.test(pass)) return '密码需要包含英文字母';
   if(!/\d/.test(pass)) return '密码需要包含数字';
   return '';
+}
+function showAuthValidation(message){
+  const msg = document.getElementById('authMsg');
+  if(msg){ msg.style.color = 'var(--berry)'; msg.textContent = message; }
+  document.getElementById('authPass')?.focus();
+  showToast(message);
 }
 function openProfileLogin(){
   closeProfileMenu();
@@ -3179,6 +3182,38 @@ async function resendVerifyEmail(email){
 }
 
 /* ---- 一体化登入：自动判断 注册/登录/补发验证 ---- */
+async function createAccountFromAuth(email, pass, name, msg){
+  const passwordIssue = passwordSafetyMessage(pass);
+  if(passwordIssue){
+    showAuthValidation(`新账号${passwordIssue}`);
+    return 'invalid_password';
+  }
+  msg.textContent = '首次使用该邮箱，正在创建账号…';
+  const reg = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+    body: JSON.stringify({ email, password:pass, data:{ name } })
+  });
+  const rd = await reg.json();
+  if(!reg.ok){
+    msg.textContent = '注册失败：' + (rd.msg || rd.error_description || reg.status);
+    return 'failed';
+  }
+  if(rd.user && Array.isArray(rd.user.identities) && rd.user.identities.length === 0){
+    msg.textContent = '邮箱或密码错误。忘记密码可点击下方“忘记密码”。';
+    return 'existing_account';
+  }
+  if(rd.access_token){
+    session = { access_token:rd.access_token, refresh_token:rd.refresh_token, user:rd.user };
+    localStorage.setItem('wanba_session', JSON.stringify(session));
+    updateAuthUI(); closeAuth(); fetchProfileFromDb(); fetchMerchantProfile();
+    showToast('注册成功，已登录');
+  } else {
+    pushVerifyLog(email);
+    msg.style.color = 'var(--sage-dark)';
+    msg.textContent = '验证邮件已发送，请点击邮件中的链接完成注册。';
+  }
+  return 'created';
+}
 async function submitAuth(){
   const email = document.getElementById('authEmail').value.trim().toLowerCase();
   const pass = document.getElementById('authPass').value;
@@ -3187,10 +3222,10 @@ async function submitAuth(){
   const msg = document.getElementById('authMsg');
   msg.style.color = 'var(--berry)';
   if(!pass){ msg.textContent = '请输入密码'; return; }
-  if(authMode === 'register' || authMode === 'reset'){
+  if(authMode === 'reset'){
     const passwordIssue = passwordSafetyMessage(pass);
-    if(passwordIssue){ msg.textContent = passwordIssue; return; }
-    if(pass !== passConfirm){ msg.textContent = '两次输入的密码不一致'; return; }
+    if(passwordIssue){ showAuthValidation(passwordIssue); return; }
+    if(pass !== passConfirm){ showAuthValidation('两次输入的密码不一致'); return; }
   }
   if(authMode !== 'reset' && (!email || !email.includes('@'))){ msg.textContent = '请输入有效邮箱'; return; }
   msg.textContent = '处理中…';
@@ -3221,27 +3256,7 @@ async function submitAuth(){
   };
 
   try {
-    if(authMode === 'register'){
-      const reg = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-        method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-        body: JSON.stringify({ email, password:pass, data:{ name } })
-      });
-      const rd = await reg.json();
-      if(!reg.ok){ msg.textContent = '注册失败：' + (rd.msg || rd.error_description || reg.status); return; }
-      if(rd.user && Array.isArray(rd.user.identities) && rd.user.identities.length === 0){
-        msg.textContent = '该邮箱已经注册，请返回登入或找回密码。'; return;
-      }
-      if(rd.access_token){
-        session = { access_token:rd.access_token, refresh_token:rd.refresh_token, user:rd.user };
-        localStorage.setItem('wanba_session', JSON.stringify(session));
-        updateAuthUI(); closeAuth(); fetchProfileFromDb(); fetchMerchantProfile(); showToast('🎉 注册成功，已登入');
-      } else {
-        pushVerifyLog(email); msg.style.color = 'var(--sage-dark)'; msg.textContent = '验证邮件已发送，请点击邮件中的链接完成注册。';
-      }
-      return;
-    }
-
-    /* 登录账号：失败不再自动进入注册流程，避免已注册用户被误导。 */
+    /* 先登录；仅当该邮箱不是现有账号时才自动创建账号。 */
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
@@ -3276,9 +3291,9 @@ async function submitAuth(){
       return;
     }
 
-    /* 已注册邮箱输入错误密码时，给出明确提示。 */
+    /* 无法登录时尝试注册。Supabase 对已存在邮箱返回无 identities 的保护响应。 */
     if(em.includes('invalid login')){
-      msg.textContent = '邮箱或密码错误。忘记密码可点击下方“忘记密码”。';
+      await createAccountFromAuth(email, pass, name, msg);
       return;
     }
 
@@ -13098,7 +13113,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Public Beta Readiness】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Unified Account Access】`);
 </script>
 </body>
 </html>
