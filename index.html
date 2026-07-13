@@ -2637,7 +2637,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.132';
+const APP_VERSION = '5.133';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -12250,6 +12250,7 @@ function loadPosts(){
 const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
 const POSTS_REFRESH_COOLDOWN_MS = 12000;
+const POSTS_NETWORK_BACKOFF_MS = 45000;
 
 async function fetchPostFeed(url, options, timeoutMs = 6500){
   const controller = new AbortController();
@@ -12270,6 +12271,10 @@ async function loadPostsFromSupabase(options = {}){
   }
   if(!force && window._postsLastFetchedAt && Date.now() - window._postsLastFetchedAt < POSTS_REFRESH_COOLDOWN_MS){
     console.log('✓ 帖子刚刚更新，暂不重复读取');
+    return posts;
+  }
+  if(!force && window._postsNextRetryAt && Date.now() < window._postsNextRetryAt){
+    console.log('✓ 网络恢复等待中，继续显示已加载内容');
     return posts;
   }
   const shouldShowLoading = posts.length === 0;
@@ -12307,7 +12312,15 @@ async function loadPostsFromSupabase(options = {}){
     } catch(fetchError){
       console.warn('⚠️ 帖子加载连接中断，正在重试一次:', fetchError.message);
       await new Promise(resolve => setTimeout(resolve, 800));
-      response = await fetchPostFeed(url, requestOptions, 5000);
+      try {
+        response = await fetchPostFeed(url, requestOptions, 5000);
+      } catch(retryError) {
+        window._postsNextRetryAt = Date.now() + POSTS_NETWORK_BACKOFF_MS;
+        console.warn('⚠️ 帖子服务暂时不可达，稍后自动恢复:', retryError.message);
+        feedIsLoading = false;
+        renderFeed();
+        return;
+      }
     }
     
     console.log('📡 HTTP状态:', response.status, response.statusText);
@@ -12359,6 +12372,7 @@ async function loadPostsFromSupabase(options = {}){
         comments: []
       }));
       window._postsLastFetchedAt = Date.now();
+      window._postsNextRetryAt = 0;
       feedIsLoading = false;
       renderChips();
       renderQuicklinks();
@@ -12597,7 +12611,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log('✓ 页面初始化完成 【版本 5.132 - Post Share Cards】');
+console.log('✓ 页面初始化完成 【版本 5.133 - Automated Delivery】');
 </script>
 </body>
 </html>

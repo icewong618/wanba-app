@@ -1,0 +1,58 @@
+name: Deploy Share Card Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - '404.html'
+      - 'app.html'
+      - 'version.json'
+      - 'workers/share-card/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: share-card-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Pin Worker source to this commit
+        run: |
+          sed -i "s|^CONTENT_ORIGIN = .*|CONTENT_ORIGIN = \"https://cdn.jsdelivr.net/gh/icewong618/wanba-app@${GITHUB_SHA}\"|" workers/share-card/wrangler.toml
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 9b02d2b28bee33e4fa5cc64bf9ab262c
+        run: npx --yes wrangler@4 deploy --config workers/share-card/wrangler.toml
+
+      - name: Purge jsDelivr branch cache
+        run: |
+          for file in index.html 404.html app.html version.json; do
+            curl --fail --silent --show-error --retry 3 "https://purge.jsdelivr.net/gh/icewong618/wanba-app@main/${file}"
+          done
+
+      - name: Verify live version
+        run: |
+          for attempt in 1 2 3 4 5; do
+            version=$(curl --fail --silent --show-error "https://escoopcity.com/version.json?commit=${GITHUB_SHA}" | tr -d '\n')
+            echo "$version"
+            echo "$version" | grep -q '"version"' && exit 0
+            sleep 5
+          done
+          exit 1
