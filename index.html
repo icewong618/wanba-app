@@ -176,6 +176,11 @@
     background:var(--sage);border-color:var(--sage-dark);color:#fff;
   }
   .chip .dot-emoji{font-size:14px;}
+  .subcategory-filter-row{display:none;gap:8px;overflow-x:auto;max-width:var(--container-w);margin:8px auto 0;padding:0 20px;scrollbar-width:none;}
+  .subcategory-filter-row.show{display:flex;}
+  .subcategory-filter-row::-webkit-scrollbar{display:none;}
+  .subcategory-filter-chip{flex-shrink:0;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink-soft);padding:6px 11px;font:800 12px inherit;}
+  .subcategory-filter-chip.active{background:var(--sage-light);border-color:var(--sage);color:var(--sage-dark);}
   .feed-mode-row{
     display:flex;align-items:center;gap:8px;max-width:var(--container-w);margin:10px auto 0;padding:0 20px;
   }
@@ -1112,6 +1117,11 @@
   .subcategory-pick{border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-soft);padding:7px 11px;font:700 12px inherit;}
   .subcategory-pick.selected{border-color:var(--sage);background:var(--sage-light);color:var(--sage-dark);}
   .subcategory-clear{border:0;background:transparent;color:var(--ink-faint);padding:7px 4px;font:700 12px inherit;}
+  .community-post-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .community-post-fields .form-field{margin-bottom:0;}
+  .community-post-safety{margin-top:10px;padding:10px 11px;border-radius:10px;background:var(--bg-alt);font-size:11.5px;line-height:1.55;color:var(--ink-soft);}
+  .post-community-meta{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 2px;}
+  .post-community-meta span{padding:6px 9px;border-radius:8px;background:var(--bg-alt);font-size:12px;color:var(--ink-soft);}
   .compose-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:2px;padding-right:48px;}
   .compose-title-row .modal-title{margin:0;}
   .compose-draft-entry{border:0;background:var(--bg-alt);color:var(--sage-dark);border-radius:999px;padding:7px 10px;font:800 12px inherit;white-space:nowrap;}
@@ -1780,6 +1790,7 @@
       </div>
     </div>
     <div class="chip-row" id="chipRow"></div>
+    <div class="subcategory-filter-row" id="feedSubcategoryRow"></div>
     <div class="feed-mode-row" id="feedModeRow"></div>
   </div>
 </header>
@@ -2170,6 +2181,8 @@
         <label>细分分类 <span style="font-weight:400;color:var(--ink-faint);">（可选，帮助附近的人更快找到内容）</span></label>
         <div class="subcategory-picker" id="subcategoryPicker"></div>
       </div>
+
+      <div class="form-field" id="communityPostField" style="display:none;"></div>
 
       <div class="form-field">
         <label>标题 <span class="char-count"><span id="titleCount">0</span>/20</span></label>
@@ -2576,6 +2589,11 @@ const POST_SUBCATEGORIES = {
   '生活':['本地服务','健康运动','学习成长','办事指南','邻里求助','生活分享'],
   '社区':['二手交易','房屋出租','求职招聘','拼车搭子','失物招领','邻里互助']
 };
+const COMMUNITY_POST_CONFIG = {
+  '二手交易': { title:'交易信息', hint:'请如实填写价格与成色；不要在公开内容中留下银行卡、证件等敏感信息。', fields:[['price','价格','如 $20'],['condition','成色','如 九成新'],['area','交易区域','如 Alhambra']] },
+  '房屋出租': { title:'房源信息', hint:'请勿公开精确门牌号或身份证明；看房、签约和付款请自行核实。', fields:[['rent','月租','如 $1,800'],['layout','户型','如 2B1B'],['area','区域','如 Pasadena']] },
+  '求职招聘': { title:'招聘信息', hint:'请如实说明岗位与薪资；乐生活不支持向求职者收取任何费用。', fields:[['role','岗位','如 前台兼职'],['company','公司/店铺','如 乐生活咖啡'],['pay','薪资范围','如 $18-22/小时'],['area','工作区域','如 洛杉矶市中心']] }
+};
 const CAT_ALIASES = {
   '吃喝':'美食',
   '喝喝':'美食',
@@ -2808,7 +2826,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.161';
+const APP_VERSION = '5.162';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7975,6 +7993,7 @@ let posts = [
 ];
 
 let currentFilter = '全部';
+let currentSubcategory = '全部';
 let currentTag = null;
 let feedMode = localStorage.getItem('leshenghuo_feed_mode') || 'recommend';
 let mutedFeedCategories = new Set();
@@ -7984,6 +8003,7 @@ let feedLoadFailed = false;
 let activePostId = null;
 let selectedCat = null;
 let selectedSubcategory = null;
+let communityPostMeta = {};
 let eventOn = false;
 let uploadedImages = [];
 let customTags = []; // 自定义标签（最多10个）
@@ -8054,8 +8074,19 @@ function renderChips(){
       ${c.icon ? catIcon(c.key, 18) + ' ' : ''}${c.key}
     </button>
   `).join('');
+  renderFeedSubcategoryFilter();
 }
-function setFilter(cat){ currentFilter = cat; currentTag = null; renderChips(); renderQuicklinks(); renderFeed(); }
+function renderFeedSubcategoryFilter(){
+  const row = document.getElementById('feedSubcategoryRow');
+  if(!row) return;
+  const options = currentTag ? [] : postSubcategoryOptions(currentFilter);
+  if(!options.length){ row.classList.remove('show'); row.innerHTML = ''; return; }
+  if(!options.includes(currentSubcategory)) currentSubcategory = '全部';
+  row.classList.add('show');
+  row.innerHTML = ['全部', ...options].map(item => `<button class="subcategory-filter-chip ${currentSubcategory===item?'active':''}" onclick="setSubcategoryFilter('${item}')">${item}</button>`).join('');
+}
+function setFilter(cat){ currentFilter = cat; currentSubcategory = '全部'; currentTag = null; renderChips(); renderQuicklinks(); renderFeed(); }
+function setSubcategoryFilter(item){ currentSubcategory = item; renderFeedSubcategoryFilter(); renderFeed(); }
 
 function renderFeedModes(){
   const row = document.getElementById('feedModeRow');
@@ -8223,6 +8254,7 @@ function renderFeed(){
     list = posts.filter(p=>p.tags && p.tags.includes(currentTag));
   } else {
     list = currentFilter==='全部' ? posts : posts.filter(p=>normalizeCategory(p.category)===currentFilter);
+    if(currentSubcategory !== '全部') list = list.filter(p => p.subcategory === currentSubcategory);
   }
   list = orderedFeedPosts(list);
   if(list.length===0){
@@ -9100,6 +9132,7 @@ async function openDealReviewQueue(){
 let adminTab = 'users';
 let adminUsers = [];
 let adminPosts = [];
+let adminPostSubcategoryFilter = '全部';
 let adminComments = [];
 let adminBanned = [];
 let adminDealPrices = [];
@@ -9168,7 +9201,7 @@ async function loadAdminCenter(force){
     console.warn('管理员 RPC 不可用，回退旧查询:', await rpcRes.text());
     const [uRes, pRes, cRes, bRes] = await Promise.all([
       authedFetch(`${SUPABASE_URL}/rest/v1/profiles?select=user_id,name,avatar,updated_at&order=updated_at.desc&limit=120`, { method:'GET' }),
-      authedFetch(`${SUPABASE_URL}/rest/v1/posts?select=id,user_id,author,title,content,category,created_at,likes&order=created_at.desc&limit=80`, { method:'GET' }),
+      authedFetch(`${SUPABASE_URL}/rest/v1/posts?select=id,user_id,author,title,content,category,subcategory,community_meta,created_at,likes&order=created_at.desc&limit=80`, { method:'GET' }),
       authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=id,post_id,user_id,name,text,created_at,parent_id,reply_to_name&order=created_at.desc&limit=120`, { method:'GET' }),
       authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses?select=user_id,status,reason,created_at,created_by&order=created_at.desc&limit=120`, { method:'GET' })
     ]);
@@ -9318,14 +9351,17 @@ function renderAdminUsers(body){
   `).join('')}</div>` : '<div class="admin-empty">没有找到注册用户。请确认已执行 4.60 管理后台数据读取 SQL。</div>';
 }
 function renderAdminPosts(body){
-  const rows = adminFiltered(adminPosts, ['title','author','content','user_id']);
-  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(p => `
+  const options = [...new Set(adminPosts.map(p => p.subcategory).filter(Boolean))];
+  if(!options.includes(adminPostSubcategoryFilter)) adminPostSubcategoryFilter = '全部';
+  const rows = adminFiltered(adminPosts, ['title','author','content','user_id','subcategory']).filter(p => adminPostSubcategoryFilter === '全部' || p.subcategory === adminPostSubcategoryFilter);
+  const filterHtml = `<div class="search-filter-row" style="margin:0 0 14px;padding:0;">${['全部', ...options].map(item => `<button class="search-filter-chip ${adminPostSubcategoryFilter===item?'active':''}" onclick="setAdminPostSubcategoryFilter('${item}')">${item}</button>`).join('')}</div>`;
+  body.innerHTML = filterHtml + (rows.length ? `<div class="admin-list">${rows.map(p => `
     <div class="admin-row">
       <div class="admin-row-top">
         ${avatarCircleSizedHtml(p.author || '用户', p.user_id, 38)}
         <div class="admin-row-main">
           <div class="admin-row-title">${escHtml(p.title || '无标题')}</div>
-          <div class="admin-row-meta">${escHtml(p.author || '用户')} · ${escHtml(normalizeCategory(p.category))} · ${adminTimeText(p.created_at) || escHtml(p.time || '')}<br>post_id: ${escHtml(p.id)}</div>
+          <div class="admin-row-meta">${escHtml(p.author || '用户')} · ${escHtml(postCategoryPath(p.category, p.subcategory))} · ${adminTimeText(p.created_at) || escHtml(p.time || '')}<br>post_id: ${escHtml(p.id)}</div>
           <div class="admin-row-text">${escHtml(p.content || '')}</div>
         </div>
       </div>
@@ -9335,8 +9371,9 @@ function renderAdminPosts(body){
         <button class="danger" onclick="adminDeletePost(${JSON.stringify(p.id)})">删除帖子</button>
       </div>
     </div>
-  `).join('')}</div>` : '<div class="admin-empty">没有找到近期帖子。</div>';
+  `).join('')}</div>` : '<div class="admin-empty">没有找到近期帖子。</div>');
 }
+function setAdminPostSubcategoryFilter(item){ adminPostSubcategoryFilter = item; const body = document.getElementById('adminBody'); if(body) renderAdminPosts(body); }
 function renderAdminComments(body){
   const postTitle = id => (adminPosts.find(p => String(p.id) === String(id)) || {}).title || '';
   const rows = adminFiltered(adminComments, ['name','text','user_id','post_id']);
@@ -10083,6 +10120,7 @@ const HOT_SEARCHES = [
   { text: '搬家清单' },
 ];
 let searchCatFilter = '全部';
+let searchSubcategoryFilter = '全部';
 let searchTypeFilter = '全部';
 let searchKeyword = '';
 
@@ -10147,7 +10185,8 @@ function renderSearchHome(){
     </div>
   `;
 }
-function setSearchCatFilter(cat){ searchCatFilter = cat; renderSearchResults(); }
+function setSearchCatFilter(cat){ searchCatFilter = cat; searchSubcategoryFilter = '全部'; renderSearchResults(); }
+function setSearchSubcategoryFilter(item){ searchSubcategoryFilter = item; renderSearchResults(); }
 function setSearchTypeFilter(type){ searchTypeFilter = type; renderSearchResults(); }
 async function performSearch(kw){
   kw = (kw || '').trim();
@@ -10157,6 +10196,7 @@ async function performSearch(kw){
   if(input) input.value = kw;
   addSearchHistory(kw);
   searchCatFilter = '全部';
+  searchSubcategoryFilter = '全部';
   searchTypeFilter = '全部';
   await renderSearchResults();
 }
@@ -10165,25 +10205,27 @@ async function renderSearchResults(){
   const body = document.getElementById('searchBody');
   if(!body) return;
   if(!searchKeyword){ renderSearchHome(); return; }
-  const catOptions = ['全部', ...CATS.filter(c => c.code).map(c => c.key)];
+  const catOptions = ['全部', ...CATS.filter(c => c.key !== '全部').map(c => c.key)];
+  const subcategoryOptions = postSubcategoryOptions(searchCatFilter);
   const typeOptions = ['全部', '用户', '笔记', '地点', '群聊'];
   body.innerHTML = `
     <div class="search-filter-row">
       ${catOptions.map(c => `<button class="search-filter-chip ${searchCatFilter===c?'active':''}" onclick="setSearchCatFilter('${c}')">${c}</button>`).join('')}
     </div>
+    ${subcategoryOptions.length ? `<div class="search-filter-row type-row">${['全部', ...subcategoryOptions].map(item => `<button class="search-filter-chip ${searchSubcategoryFilter===item?'active':''}" onclick="setSearchSubcategoryFilter('${item}')">${item}</button>`).join('')}</div>` : ''}
     <div class="search-filter-row type-row">
       ${typeOptions.map(t => `<button class="search-filter-chip ${searchTypeFilter===t?'active':''}" onclick="setSearchTypeFilter('${t}')">${t}</button>`).join('')}
     </div>
     <div id="searchResultsBox"><div class="search-empty">搜索中...</div></div>
   `;
   const kwAtRequestTime = searchKeyword;
-  const results = await runSearch(searchKeyword, searchCatFilter, searchTypeFilter);
+  const results = await runSearch(searchKeyword, searchCatFilter, searchSubcategoryFilter, searchTypeFilter);
   if(kwAtRequestTime !== searchKeyword) return; // 搜索期间关键词已变化，结果作废
   const box = document.getElementById('searchResultsBox');
   if(box) box.innerHTML = renderSearchResultsHtml(results);
 }
 /* 真正执行搜索：笔记本地过滤；用户/地点(认证商家)走数据库真实查询；群聊功能暂未上线 */
-async function runSearch(kw, cat, type){
+async function runSearch(kw, cat, subcategory, type){
   const kwLower = kw.toLowerCase();
   const result = { users: [], posts: [], places: [] };
 
@@ -10193,7 +10235,8 @@ async function runSearch(kw, cat, type){
         || (p.content||'').toLowerCase().includes(kwLower)
         || (p.tags||[]).some(t => (t||'').toLowerCase().includes(kwLower));
       const matchCat = (cat === '全部') || normalizeCategory(p.category) === cat;
-      return matchKw && matchCat && (p.visibility === 'public' || !p.visibility);
+      const matchSubcategory = (subcategory === '全部') || p.subcategory === subcategory;
+      return matchKw && matchCat && matchSubcategory && (p.visibility === 'public' || !p.visibility);
     }).slice(0, 30);
   }
 
@@ -10422,6 +10465,7 @@ function renderPostModal(){
         <h2 class="modal-title display">${p.title}</h2>
         <div class="modal-content">${visibleContent}</div>
         <div class="xhs-tags">${catIcon(p.category, 18)} ${escHtml(postCategoryPath(p.category, p.subcategory))}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
+        ${communityMetaHtml(p)}
         ${p.location ? `<div style="font-size:13px;color:var(--ink-faint);margin:-6px 0 10px;display:flex;align-items:center;gap:4px;">${uiIcon('map',13)} ${p.location}</div>` : ''}
         <div class="xhs-time">编辑于 ${p.time} · 洛杉矶</div>
         ${eventBlock}
@@ -11544,7 +11588,7 @@ function composeDraftSnapshot(){
     id: composeDraftId || `draft_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     owner: composeDraftOwner(),
     title: value('fTitle').trim(), content: value('fContent').trim(), location: value('fLocation').trim(), youtube: value('fYoutube').trim(),
-    capacity: value('fCapacity'), deadline: value('fDeadline').trim(), customTags:[...customTags], selectedCat, selectedSubcategory, eventOn,
+    capacity: value('fCapacity'), deadline: value('fDeadline').trim(), customTags:[...customTags], selectedCat, selectedSubcategory, communityPostMeta:{...communityPostMeta}, eventOn,
     uploadedImages:[...uploadedImages], coverImageIndex, textCardCover: textCardCover ? {...textCardCover} : null,
     createdAt: Date.now(), updatedAt: Date.now(), videoNeedsReselect: selectedVideos.length > 0
   };
@@ -11584,12 +11628,13 @@ async function removeComposeDraft(id = composeDraftId){
   if(id === composeDraftId) composeDraftId = null;
 }
 function resetComposeForm(){
-  selectedCat = null; selectedSubcategory = null; eventOn = false; editingPostId = null; composeDraftId = null;
+  selectedCat = null; selectedSubcategory = null; communityPostMeta = {}; eventOn = false; editingPostId = null; composeDraftId = null;
   document.getElementById('fTitle').value=''; document.getElementById('fContent').value=''; document.getElementById('fYoutube').value='';
   updateYoutubePreview(); document.getElementById('fCapacity').value=''; document.getElementById('fDeadline').value='';
   document.getElementById('eventSwitch').classList.remove('on'); document.getElementById('eventFields').classList.remove('open');
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.remove('sel'));
   renderPostSubcategoryPicker();
+  renderCommunityPostFields();
   uploadedImages = []; textCardCover = null; textCoverDraftImage = '';
   selectedVideos.forEach(v => URL.revokeObjectURL(v.url)); selectedVideos = []; customTags = []; renderCustomTags();
   const tagIn = document.getElementById('fCustomTag'); if(tagIn) tagIn.value = '';
@@ -11624,8 +11669,8 @@ async function resumeComposeDraft(id){
     closeComposeDrafts(); resetComposeForm(); composeDraftId = draft.id;
     document.getElementById('fTitle').value = draft.title || ''; document.getElementById('fContent').value = draft.content || ''; document.getElementById('fYoutube').value = draft.youtube || ''; document.getElementById('fLocation').value = draft.location || '';
     document.getElementById('fCapacity').value = draft.capacity || ''; document.getElementById('fDeadline').value = draft.deadline || '';
-    selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null;
-    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); renderPostSubcategoryPicker(); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn);
+    selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; communityPostMeta = draft.communityPostMeta && typeof draft.communityPostMeta === 'object' ? {...draft.communityPostMeta} : {}; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null;
+    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); renderPostSubcategoryPicker(); renderCommunityPostFields(); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn);
     document.getElementById('titleCount').textContent = (draft.title || '').length; document.getElementById('contentCount').textContent = (draft.content || '').length; renderCustomTags(); renderImageGrid(); updateYoutubePreview();
     document.getElementById('composeOverlay').classList.add('open'); updateComposeDraftStatus(draft.videoNeedsReselect ? '草稿已恢复，视频文件需重新选择' : '已恢复本机草稿');
   } catch(error){ showToast('草稿恢复失败，请稍后重试'); }
@@ -11642,8 +11687,10 @@ function closeCompose(saveDraft=true){
 function pickCat(c){
   selectedCat = c;
   selectedSubcategory = null;
+  communityPostMeta = {};
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c===c));
   renderPostSubcategoryPicker();
+  renderCommunityPostFields();
   scheduleComposeDraftSave();
 }
 function renderPostSubcategoryPicker(){
@@ -11657,8 +11704,35 @@ function renderPostSubcategoryPicker(){
 }
 function pickPostSubcategory(item){
   selectedSubcategory = isValidPostSubcategory(selectedCat, item) ? item : null;
+  communityPostMeta = {};
   renderPostSubcategoryPicker();
+  renderCommunityPostFields();
   scheduleComposeDraftSave();
+}
+function renderCommunityPostFields(){
+  const field = document.getElementById('communityPostField');
+  if(!field) return;
+  const config = selectedCat === '社区' ? COMMUNITY_POST_CONFIG[selectedSubcategory] : null;
+  if(!config){ field.style.display = 'none'; field.innerHTML = ''; return; }
+  field.style.display = 'block';
+  field.innerHTML = `<label>${config.title} <span class="hint">（可选）</span></label><div class="community-post-fields">${config.fields.map(([key,label,placeholder]) => `<div class="form-field"><label>${label}</label><input type="text" id="communityMeta_${key}" value="${escAttr(communityPostMeta[key] || '')}" placeholder="${escAttr(placeholder)}" maxlength="60" oninput="syncCommunityPostMeta()"></div>`).join('')}</div><div class="community-post-safety">${escHtml(config.hint)} 交易、租赁和招聘由发布者与参与者自行判断，遇到可疑内容可在笔记详情中举报。</div>`;
+}
+function syncCommunityPostMeta(){
+  const config = selectedCat === '社区' ? COMMUNITY_POST_CONFIG[selectedSubcategory] : null;
+  if(!config){ communityPostMeta = {}; return; }
+  communityPostMeta = config.fields.reduce((result, [key]) => {
+    const value = document.getElementById(`communityMeta_${key}`)?.value.trim() || '';
+    if(value) result[key] = value;
+    return result;
+  }, {});
+  scheduleComposeDraftSave();
+}
+function communityMetaHtml(post){
+  const config = post && normalizeCategory(post.category) === '社区' ? COMMUNITY_POST_CONFIG[post.subcategory] : null;
+  const meta = post && post.community_meta && typeof post.community_meta === 'object' ? post.community_meta : null;
+  if(!config || !meta || !Object.keys(meta).length) return '';
+  const rows = config.fields.filter(([key]) => meta[key]).map(([key,label]) => `<span><b>${escHtml(label)}：</b>${escHtml(meta[key])}</span>`);
+  return rows.length ? `<div class="post-community-meta">${rows.join('')}</div>` : '';
 }
 /* ====== 标记地点：自建地点库（不依赖Google Maps），输入时先搜本地已有地点，没有就直接用新地点 ====== */
 let locationSearchTimer = null;
@@ -12835,11 +12909,13 @@ function editPost(id){
   document.getElementById('contentCount').textContent = (p.content || '').length;
   selectedCat = p.category;
   selectedSubcategory = isValidPostSubcategory(selectedCat, p.subcategory) ? p.subcategory : null;
+  communityPostMeta = p.community_meta && typeof p.community_meta === 'object' ? {...p.community_meta} : {};
   // 高亮对应分类按钮
   document.querySelectorAll('.cat-pick').forEach(b => {
     b.classList.toggle('sel', b.dataset.c === p.category);
   });
   renderPostSubcategoryPicker();
+  renderCommunityPostFields();
   // 加载已有图片到编辑器（可继续追加/删除/换封面）
   const isDefaultImg = p.image && p.image.startsWith('https://images.unsplash.com');
   if(p.images && p.images.length > 0){
@@ -12914,6 +12990,8 @@ async function submitPost(){
 
   const cat = selectedCat; // 关键修复：在 closeCompose 清空前捕获分类值
   const subcategory = isValidPostSubcategory(cat, selectedSubcategory) ? selectedSubcategory : null;
+  syncCommunityPostMeta();
+  const communityMeta = cat === '社区' && COMMUNITY_POST_CONFIG[subcategory] ? {...communityPostMeta} : null;
   // 收纳输入框中未确认的标签，并捕获标签数组（closeCompose 会清空）
   const pendingTag = document.getElementById('fCustomTag');
   if(pendingTag && pendingTag.value.trim()) addCustomTag(pendingTag.value);
@@ -12943,7 +13021,7 @@ async function submitPost(){
     const p = posts.find(x => x.id === editingPostId);
     if(p){
       p.title = title; p.content = contentToSave; p.excerpt = excerpt;
-      p.category = cat; p.subcategory = subcategory; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
+      p.category = cat; p.subcategory = subcategory; p.community_meta = communityMeta; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
       p.tiktok_url = tiktokInfo ? tiktokInfo.url : null;
       p.location = location || null;
       if(uploadedImages.length > 0){ p.image = image; p.images = images; }
@@ -12956,7 +13034,7 @@ async function submitPost(){
     showToast('✓ 已更新');
     if(location) upsertLocation(location);
     try {
-      const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, youtube:ytId, event, tags: tagsArr, location: location || null };
+      const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, community_meta:communityMeta, youtube:ytId, event, tags: tagsArr, location: location || null };
       if(uploadedImages.length > 0){ fields.image = image; fields.images = images; }
       await supabaseUpdatePost(idToUpdate, fields);
       console.log('✓ 数据库已同步更新 id=', idToUpdate);
@@ -12971,7 +13049,7 @@ async function submitPost(){
   const localPost = {
     id: nextPostId++, category:cat, title, excerpt,
     user_id: session.user.id,
-    content: contentToSave, image, images, tags: tagsArr, location: location || null, subcategory,
+    content: contentToSave, image, images, tags: tagsArr, location: location || null, subcategory, community_meta:communityMeta,
     youtube: ytId, youtube_vertical: ytVertical, author: authorName, time:'刚刚', likes:0, liked:false,
     tiktok_url: tiktokInfo ? tiktokInfo.url : null, event, comments:[]
   };
@@ -12990,7 +13068,7 @@ async function submitPost(){
   try {
     const saved = await supabaseInsertPost({
       title, content: contentToSave, excerpt, category:cat,
-      author: authorName, image, images, youtube: ytId, subcategory,
+      author: authorName, image, images, youtube: ytId, subcategory, community_meta:communityMeta,
       likes: 0, event, tags: tagsArr, location: location || null,
       user_id: session.user.id, visibility: 'public', pinned: false
     });
@@ -13619,7 +13697,7 @@ async function loadPostsFromSupabase(options = {}){
     
     // 只读取页面需要的字段，避免 select=* 在数据量增长后触发 Supabase statement timeout。
     const basePostSelect = [
-      'id','title','content','excerpt','category','subcategory','author','image','images',
+      'id','title','content','excerpt','category','subcategory','community_meta','author','image','images',
       'youtube','likes','event','tags','user_id','visibility','pinned','created_at','location'
     ].join(',');
     // 首页一直使用公开帖子。此前没有此限制时，RLS 会对全表评估互相关注条件，数据增长后可能超时。
@@ -13686,6 +13764,7 @@ async function loadPostsFromSupabase(options = {}){
         excerpt: p.excerpt || '',
         category: p.category || '',
         subcategory: isValidPostSubcategory(p.category, p.subcategory) ? p.subcategory : null,
+        community_meta: p.community_meta && typeof p.community_meta === 'object' ? p.community_meta : null,
         author: p.author || '游客',
         image: p.image,
         images: p.images,
@@ -13948,7 +14027,7 @@ setInterval(() => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Category Tag and Text Cover Fixes】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Community Categories and Safety】`);
 </script>
 </body>
 </html>
