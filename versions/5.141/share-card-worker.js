@@ -184,6 +184,19 @@ function withShareMeta(response, meta, htmlPage) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === 'GET' && url.pathname === '/version.json' && env.APP_VERSION) {
+      return new Response(JSON.stringify({
+        version: env.APP_VERSION,
+        updated_at: env.APP_UPDATED_AT || '',
+        message: '正在进入乐生活'
+      }), {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'public, max-age=60',
+          'X-Content-Type-Options': 'nosniff'
+        }
+      });
+    }
     const imageSlug = shareImageSlugFromPath(url.pathname);
     const postImageId = sharePostImageIdFromPath(url.pathname);
     if (postImageId != null) {
