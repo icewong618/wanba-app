@@ -334,6 +334,7 @@
   .admin-badge.good{background:rgba(89,167,113,.14);color:var(--sage-dark);}
   .admin-badge.muted{background:var(--bg-alt);color:var(--ink-faint);border:1px solid var(--line);}
   .admin-badge.hot{background:linear-gradient(135deg,#ff6a3d,#d83f7f);color:#fff;}
+  .feedback-overlay{position:fixed;inset:0;z-index:930;display:none;background:#fff;}.feedback-overlay.open{display:flex;flex-direction:column;}.feedback-head{height:calc(58px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);flex-shrink:0;}.feedback-head button{width:38px;height:38px;border-radius:999px;border:0;background:var(--bg-alt);font-size:24px;color:var(--ink);}.feedback-head h3{margin:0;flex:1;text-align:center;font-size:17px;font-weight:900;padding-right:38px;}.feedback-body{flex:1;overflow-y:auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom));}.feedback-field{margin-bottom:16px;}.feedback-field label{display:block;font-size:13px;font-weight:900;margin-bottom:8px;color:var(--ink);}.feedback-field input,.feedback-field textarea,.feedback-field select{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:#fff;font:14px inherit;color:var(--ink);}.feedback-field textarea{min-height:150px;resize:vertical;line-height:1.55;}.feedback-meta{border-radius:10px;background:var(--bg-alt);padding:11px;font-size:11px;color:var(--ink-faint);line-height:1.6;}.feedback-submit{width:100%;height:46px;border:0;border-radius:999px;background:var(--berry);color:#fff;font-size:15px;font-weight:900;margin-top:18px;}
   .admin-price-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:7px;}
   .admin-price-line b{font-size:17px;color:var(--ink);}
   .admin-price-line del{font-size:12px;color:var(--ink-faint);}
@@ -1990,6 +1991,16 @@
   <div class="share-sheet" id="shareSheet"></div>
 </div>
 
+<div class="feedback-overlay" id="feedbackOverlay">
+  <div class="feedback-head"><button onclick="closeFeedback()" aria-label="返回">‹</button><h3>公测反馈</h3></div>
+  <div class="feedback-body">
+    <div class="feedback-field"><label>反馈类型</label><select id="feedbackType"><option value="bug">遇到问题</option><option value="suggestion">功能建议</option><option value="experience">体验建议</option></select></div>
+    <div class="feedback-field"><label>一句话说明</label><input id="feedbackTitle" maxlength="80" placeholder="例如：发布页关闭按钮点不到"></div>
+    <div class="feedback-field"><label>具体情况</label><textarea id="feedbackBody" maxlength="1200" placeholder="请描述发生步骤、预期结果和实际结果。"></textarea></div>
+    <div class="feedback-meta" id="feedbackMeta"></div><button class="feedback-submit" onclick="submitFeedback()">提交反馈</button>
+  </div>
+</div>
+
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
 <div class="overlay" id="merchantPublicOverlay" onclick="if(event.target.id==='merchantPublicOverlay')closeMerchantPublicPage()">
   <div class="modal" id="merchantPublicModal">
@@ -2215,6 +2226,7 @@
             <button class="profile-cover-menu-btn" onclick="toggleProfileMenu(event)" aria-label="菜单"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg></span></button>
             <div class="profile-menu" id="profileMenu">
               <button id="authLoginBtn" onclick="event.stopPropagation();openProfileLogin()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
+              <button onclick="closeProfileMenu();openFeedback()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path><path d="M8 9h8M8 13h5"></path></svg></span>公测反馈</button>
               <button id="merchantApplyTopBtn" class="merchant-apply-top-btn" onclick="closeProfileMenu();openMerchantApplySheet()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M4 10h16"></path><path d="M5 10l1-5h12l1 5"></path><path d="M6 10v10h12V10"></path><path d="M9 20v-6h6v6"></path></svg></span>成为商家</button>
               <button id="profileAdminBtn" onclick="closeProfileMenu();switchTab('admin')" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6V20a2 2 0 0 1-4 0v-.08a1.8 1.8 0 0 0-1-.6 1.8 1.8 0 0 0-1.98.36l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-.6-1H4a2 2 0 0 1 0-4h.08a1.8 1.8 0 0 0 .6-1 1.8 1.8 0 0 0-.36-1.98l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05A1.8 1.8 0 0 0 9 4.6a1.8 1.8 0 0 0 1-.6V4a2 2 0 0 1 4 0v.08a1.8 1.8 0 0 0 1 .6 1.8 1.8 0 0 0 1.98-.36l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05A1.8 1.8 0 0 0 19.4 9c.2.34.4.66.6 1H20a2 2 0 0 1 0 4h-.08a1.8 1.8 0 0 0-.52 1z"></path></svg></span>管理后台</button>
               <button id="authOutBtn" onclick="closeProfileMenu();switchAccount()" style="display:none;"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M14 5h5v14h-5"></path></svg></span>切换账号</button>
@@ -2332,6 +2344,7 @@
       <button class="admin-tab" data-admin-tab="posts" onclick="switchAdminTab('posts')">近期发帖</button>
       <button class="admin-tab" data-admin-tab="comments" onclick="switchAdminTab('comments')">评论回复</button>
       <button class="admin-tab" data-admin-tab="deals" onclick="switchAdminTab('deals')">省钱运营</button>
+      <button class="admin-tab" data-admin-tab="feedback" onclick="switchAdminTab('feedback')">公测反馈</button>
       <button class="admin-tab" data-admin-tab="banned" onclick="switchAdminTab('banned')">封禁记录</button>
     </div>
     <div class="admin-stats" id="adminStats"></div>
@@ -2637,7 +2650,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.135';
+const APP_VERSION = '5.136';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8587,6 +8600,7 @@ let adminPosts = [];
 let adminComments = [];
 let adminBanned = [];
 let adminDealPrices = [];
+let adminFeedback = [];
 let adminDealOpsReady = true;
 let adminEditingDealId = '';
 
@@ -8617,6 +8631,7 @@ function switchAdminTab(tab){
       if(adminTab === 'deals') renderAdminPanel();
     });
   }
+  if(tab === 'feedback' && !adminFeedback.length){ loadAdminFeedback().then(() => { if(adminTab === 'feedback') renderAdminPanel(); }); }
   renderAdminPanel();
 }
 async function loadAdminCenter(force){
@@ -8638,6 +8653,7 @@ async function loadAdminCenter(force){
       adminComments = Array.isArray(snap.comments) ? snap.comments : [];
       adminBanned = Array.isArray(snap.banned) ? snap.banned : [];
       await loadAdminDealPrices(false);
+      await loadAdminFeedback();
       renderAdminPanel();
       return;
     }
@@ -8656,6 +8672,7 @@ async function loadAdminCenter(force){
     adminComments = await cRes.json();
     adminBanned = bRes.ok ? await bRes.json() : [];
     await loadAdminDealPrices(false);
+    await loadAdminFeedback();
     renderAdminPanel();
   } catch(e){
     console.warn('管理后台读取失败:', e.message);
@@ -8674,6 +8691,7 @@ function adminStatsHtml(){
     <div class="admin-stat"><b>${adminComments.length}</b><span>近期评论</span></div>
     <div class="admin-stat"><b>${adminDealPrices.length}</b><span>省钱数据</span></div>
     <div class="admin-stat"><b>${adminBanned.length}</b><span>封禁记录</span></div>
+    <div class="admin-stat"><b>${adminFeedback.filter(x => x.status !== 'resolved').length}</b><span>待处理反馈</span></div>
   `;
 }
 function renderAdminPanel(){
@@ -8689,7 +8707,23 @@ function renderAdminPanel(){
   if(adminTab === 'posts') return renderAdminPosts(body);
   if(adminTab === 'comments') return renderAdminComments(body);
   if(adminTab === 'deals') return renderAdminDeals(body);
+  if(adminTab === 'feedback') return renderAdminFeedback(body);
   renderAdminBanned(body);
+}
+async function loadAdminFeedback(){
+  if(!adminHasAccess(true)) return [];
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback?select=*&order=created_at.desc&limit=120`, { method:'GET' });
+    adminFeedback = res.ok ? await res.json() : [];
+  } catch(e){ console.warn('公测反馈读取失败:', e.message); adminFeedback = []; }
+  return adminFeedback;
+}
+function renderAdminFeedback(body){
+  const rows = adminFiltered(adminFeedback, ['title','body','user_name','type','status']);
+  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(row => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(row.title || '未命名反馈')} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已解决' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">${escHtml(row.user_name || '用户')} · ${escHtml(row.type || '')} · v${escHtml(row.app_version || '')}<br>${adminTimeText(row.created_at)} · ${escHtml(row.page_path || '')}</div><div class="admin-row-text">${escHtml(row.body || '')}</div></div></div><div class="admin-actions"><button class="primary" onclick="adminUpdateFeedback(${row.id},'reviewing')">处理中</button><button onclick="adminUpdateFeedback(${row.id},'resolved')">标记已解决</button></div></div>`).join('')}</div>` : '<div class="admin-empty">暂时没有公测反馈。</div>';
+}
+async function adminUpdateFeedback(id, status){
+  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback?id=eq.${id}`, { method:'PATCH', body:JSON.stringify({ status, resolved_at:status === 'resolved' ? new Date().toISOString() : null, handled_by:session.user.id }) }); if(!res.ok) throw new Error(await res.text()); await loadAdminFeedback(); renderAdminPanel(); showToast(status === 'resolved' ? '已标记为解决' : '已标记处理中'); } catch(e){ showToast('更新失败，请检查管理员权限'); }
 }
 function renderAdminUsers(body){
   const counts = {};
@@ -12084,6 +12118,27 @@ function showToast(msg){
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+function openFeedback(){
+  if(!(session && session.user)){ showToast('登录后即可提交公测反馈'); openAuth('login'); return; }
+  document.getElementById('feedbackTitle').value = '';
+  document.getElementById('feedbackBody').value = '';
+  document.getElementById('feedbackMeta').textContent = `将附带：v${APP_VERSION} · ${window.location.pathname} · ${navigator.userAgent.slice(0, 120)}`;
+  document.getElementById('feedbackOverlay').classList.add('open');
+}
+function closeFeedback(){ document.getElementById('feedbackOverlay')?.classList.remove('open'); }
+async function submitFeedback(){
+  if(!(session && session.user)) return;
+  const title = document.getElementById('feedbackTitle').value.trim();
+  const body = document.getElementById('feedbackBody').value.trim();
+  const type = document.getElementById('feedbackType').value;
+  if(!title || !body){ showToast('请填写问题说明和具体情况'); return; }
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback`, { method:'POST', body:JSON.stringify({ user_id:session.user.id, user_name:myNick(), type, title, body, app_version:APP_VERSION, page_path:window.location.pathname + window.location.search, device_info:navigator.userAgent }) });
+    if(!res.ok) throw new Error(await res.text());
+    closeFeedback(); showToast('反馈已提交，谢谢你帮助乐生活变得更好');
+  } catch(e){ console.warn('反馈提交失败:', e.message); showToast('提交失败，请稍后重试'); }
 }
 
 /* close overlays on background click */
