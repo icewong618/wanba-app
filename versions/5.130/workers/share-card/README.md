@@ -1,6 +1,6 @@
 # 乐生活动态分享卡 Worker
 
-这个 Worker 让 `https://escoopcity.com/商家名` 在服务端返回商家分享信息，同时继续加载现有 GitHub Pages 的网页。
+这个 Worker 让 `https://escoopcity.com/商家名` 在服务端返回商家分享信息，同时继续加载现有乐生活网页。
 
 ## 它解决的问题
 
@@ -12,7 +12,7 @@
 
 1. `escoopcity.com` 的 DNS 必须托管在 Cloudflare。
 2. Cloudflare 账户已开通 Workers。
-3. 现有 GitHub Pages 源站保持为 `https://icewong618.github.io/wanba-app`。
+3. GitHub 仓库保持公开；Worker 会从仓库的原始文件读取网页资源。
 
 ## 部署步骤
 
@@ -22,13 +22,15 @@
 npx wrangler@4 deploy
 ```
 
-首次部署会要求登录 Cloudflare。部署成功后，在 Cloudflare Workers 的“设置 - 域和路由”添加：
+首次部署会要求登录 Cloudflare。部署成功后，在 Cloudflare Workers 的“设置 - 域和路由”选择“添加 - 自定义域”，填写：
 
 ```text
-escoopcity.com/*
+escoopcity.com
 ```
 
-Worker 会把首页、资源文件、`app.html` 等继续代理到 GitHub Pages；已认证商家的根路径会额外注入动态分享卡。
+不要再添加 `escoopcity.com/*` 路由。这个 Worker 会主动代理 GitHub Pages，因此应作为根域名的自定义域；Cloudflare 会自动创建对应 DNS 记录和证书。若提示根域名已有 CNAME 冲突，先确认 Worker 已部署成功，再在 Cloudflare 的 DNS 记录中删除旧的根域名 GitHub Pages 记录，然后重新添加自定义域。
+
+Worker 会直接读取 GitHub 仓库的原始网页文件，避免 GitHub Pages 自定义域自动跳转形成循环；已认证商家的根路径会额外注入动态分享卡。
 
 ## 验收
 

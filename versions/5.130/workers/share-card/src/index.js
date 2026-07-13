@@ -21,7 +21,7 @@ function merchantSlugFromPath(pathname) {
 function absoluteImage(value, env) {
   const image = String(value || '').trim();
   if (/^https?:\/\//i.test(image)) return image;
-  return `${env.SITE_ORIGIN}/assets/leshenghuo-logo.png`;
+  return `${env.GITHUB_RAW_ORIGIN}/assets/leshenghuo-logo.png`;
 }
 
 function shareMeta({ title, description, image, canonical }) {
@@ -57,16 +57,41 @@ async function readMerchant(slug, env) {
   return rows && rows[0] ? rows[0] : null;
 }
 
-function githubOriginRequest(request, url, env, merchantPage) {
-  const upstream = new URL(env.GITHUB_PAGES_ORIGIN);
-  upstream.pathname = merchantPage ? '/index.html' : (url.pathname === '/' ? '/index.html' : url.pathname);
-  upstream.search = url.search;
+function githubRawRequest(request, url, env, merchantPage) {
+  const upstream = new URL(env.GITHUB_RAW_ORIGIN);
+  const repositoryPath = upstream.pathname.replace(/\/$/, '');
+  const requestedPath = merchantPage ? '/index.html' : (url.pathname === '/' ? '/index.html' : url.pathname);
+  upstream.pathname = `${repositoryPath}${requestedPath}`;
+  // GitHub Raw does not need the browser cache-busting query parameters.
+  upstream.search = '';
   return new Request(upstream.toString(), request);
 }
 
-function withShareMeta(response, meta) {
-  if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) return response;
+function contentTypeForPath(pathname) {
+  const extension = pathname.split('.').pop().toLowerCase();
+  return ({
+    html: 'text/html; charset=utf-8', js: 'application/javascript; charset=utf-8',
+    css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
+    svg: 'image/svg+xml', ico: 'image/x-icon'
+  })[extension] || 'application/octet-stream';
+}
+
+function withShareMeta(response, meta, htmlPage) {
+  if (!response.ok) return response;
   const headers = new Headers(response.headers);
+
+  // raw.githubusercontent.com returns a restrictive CSP intended for file viewing.
+  // Remove those source-only headers before serving the SPA as a real website.
+  headers.delete('content-security-policy');
+  headers.delete('content-security-policy-report-only');
+  headers.delete('x-frame-options');
+  headers.delete('content-disposition');
+  headers.delete('etag');
+  headers.delete('content-length');
+  headers.set('Content-Type', contentTypeForPath(htmlPage ? '/index.html' : new URL(meta.canonical).pathname));
+  headers.set('X-Content-Type-Options', 'nosniff');
+  if (!htmlPage) return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   headers.set('Cache-Control', 'public, max-age=300');
   return new HTMLRewriter()
     .on('head', { element(head) { head.append(shareMeta(meta), { html: true }); } })
@@ -90,7 +115,7 @@ export default {
     const defaultMeta = {
       title: '乐生活 Scoop City - 发现身边的精彩生活',
       description: '北美华人本地生活社区，发现附近美食、活动、优惠和商家服务。',
-      image: `${env.SITE_ORIGIN}/assets/leshenghuo-logo.png`,
+      image: `${env.GITHUB_RAW_ORIGIN}/assets/leshenghuo-logo.png`,
       canonical: `${env.SITE_ORIGIN}${url.pathname}`
     };
     const merchantMeta = merchant ? {
@@ -100,7 +125,8 @@ export default {
       canonical: `${env.SITE_ORIGIN}/${encodeURIComponent(merchant.slug)}`
     } : defaultMeta;
 
-    const originResponse = await fetch(githubOriginRequest(request, url, env, Boolean(merchant)));
-    return withShareMeta(originResponse, merchantMeta);
+    const htmlPage = Boolean(merchant) || url.pathname === '/' || /\.html$/i.test(url.pathname);
+    const originResponse = await fetch(githubRawRequest(request, url, env, Boolean(merchant)));
+    return withShareMeta(originResponse, merchantMeta, htmlPage);
   }
 };
