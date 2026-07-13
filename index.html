@@ -1108,6 +1108,10 @@
   }
   .form-field textarea{min-height:90px;resize:vertical;}
   .form-field input:focus, .form-field textarea:focus{outline:2px solid var(--sage-light);border-color:var(--sage);}
+  .subcategory-picker{display:flex;flex-wrap:wrap;gap:8px;}
+  .subcategory-pick{border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-soft);padding:7px 11px;font:700 12px inherit;}
+  .subcategory-pick.selected{border-color:var(--sage);background:var(--sage-light);color:var(--sage-dark);}
+  .subcategory-clear{border:0;background:transparent;color:var(--ink-faint);padding:7px 4px;font:700 12px inherit;}
   .compose-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:2px;padding-right:48px;}
   .compose-title-row .modal-title{margin:0;}
   .compose-draft-entry{border:0;background:var(--bg-alt);color:var(--sage-dark);border-radius:999px;padding:7px 10px;font:800 12px inherit;white-space:nowrap;}
@@ -2162,6 +2166,11 @@
         </div>
       </div>
 
+      <div class="form-field" id="subcategoryField" style="display:none;">
+        <label>细分分类 <span style="font-weight:400;color:var(--ink-faint);">（可选，帮助附近的人更快找到内容）</span></label>
+        <div class="subcategory-picker" id="subcategoryPicker"></div>
+      </div>
+
       <div class="form-field">
         <label>标题 <span class="char-count"><span id="titleCount">0</span>/20</span></label>
         <input type="text" id="fTitle" placeholder="比如:巷口那家新开的手作豆花" maxlength="20" oninput="updateTitleCount()">
@@ -2560,6 +2569,13 @@ const CATS = [
   {key:'生活', icon:'home'},
   {key:'社区', icon:'message'},
 ];
+const POST_SUBCATEGORIES = {
+  '美食':['探店','家常菜','饮品咖啡','烘焙甜品','优惠套餐','外卖推荐'],
+  '玩乐':['亲子遛娃','周末活动','户外运动','展览演出','旅行攻略','兴趣社群'],
+  '好物':['日用好物','美妆穿搭','数码家电','家居用品','母婴宠物','优惠折扣'],
+  '生活':['本地服务','健康运动','学习成长','办事指南','邻里求助','生活分享'],
+  '社区':['二手交易','房屋出租','求职招聘','拼车搭子','失物招领','邻里互助']
+};
 const CAT_ALIASES = {
   '吃喝':'美食',
   '喝喝':'美食',
@@ -2637,8 +2653,14 @@ function catLabel(cat){
   const c = CATS.find(x => x.key === normalizeCategory(cat));
   return (c && c.label) || c?.key || '生活';
 }
-function cardCategoryTag(cat){
-  return `<span class="cat-tag">${catIcon(cat, 13)}<span>${catLabel(cat)}</span></span>`;
+function postSubcategoryOptions(category){ return POST_SUBCATEGORIES[normalizeCategory(category)] || []; }
+function isValidPostSubcategory(category, subcategory){ return !!subcategory && postSubcategoryOptions(category).includes(subcategory); }
+function postCategoryPath(category, subcategory){
+  const main = catLabel(category);
+  return isValidPostSubcategory(category, subcategory) ? `${main} · ${subcategory}` : main;
+}
+function cardCategoryTag(cat, subcategory=''){
+  return `<span class="cat-tag">${catIcon(cat, 13)}<span>${escHtml(postCategoryPath(cat, subcategory))}</span></span>`;
 }
 const QUICKLINKS = [
   {key:'遛娃', icon:'home'},
@@ -2785,7 +2807,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.159';
+const APP_VERSION = '5.160';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7960,6 +7982,7 @@ let feedIsLoading = false;
 let feedLoadFailed = false;
 let activePostId = null;
 let selectedCat = null;
+let selectedSubcategory = null;
 let eventOn = false;
 let uploadedImages = [];
 let customTags = []; // 自定义标签（最多10个）
@@ -8226,7 +8249,7 @@ function renderFeed(){
     <div class="card" onclick="openPost(${p.id})">
       <div class="card-media">
         ${media}
-        ${cardCategoryTag(p.category)}
+        ${cardCategoryTag(p.category, p.subcategory)}
         ${mediaWatermarkHtml(p.author)}
         ${stub}
       </div>
@@ -8474,7 +8497,7 @@ function renderWeekFeed(){
         <div class="card" onclick="openPost(${p.id})">
           <div class="card-media">
             ${p.image ? `<img src="${p.image}" alt="">` : '<div style="width:100%;height:100%;background:var(--bg-alt);"></div>'}
-            ${cardCategoryTag(p.category)}
+            ${cardCategoryTag(p.category, p.subcategory)}
             ${mediaWatermarkHtml(p.author)}
           </div>
           <div class="card-body">
@@ -10216,7 +10239,7 @@ function renderSearchResultsHtml(r){
         ${p.image ? `<img src="${p.image}" alt="">` : ''}
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${p.title}</div>
-          <div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">${catIcon(p.category,14)} ${p.author} · ${p.time || ''}</div>
+          <div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">${catIcon(p.category,14)} ${escHtml(postCategoryPath(p.category, p.subcategory))} · ${p.author} · ${p.time || ''}</div>
         </div>
       </div>
     `).join('');
@@ -10397,7 +10420,7 @@ function renderPostModal(){
       <div class="modal-body">
         <h2 class="modal-title display">${p.title}</h2>
         <div class="modal-content">${visibleContent}</div>
-        <div class="xhs-tags">${catIcon(p.category, 18)}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
+        <div class="xhs-tags">${catIcon(p.category, 18)} ${escHtml(postCategoryPath(p.category, p.subcategory))}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
         ${p.location ? `<div style="font-size:13px;color:var(--ink-faint);margin:-6px 0 10px;display:flex;align-items:center;gap:4px;">${uiIcon('map',13)} ${p.location}</div>` : ''}
         <div class="xhs-time">编辑于 ${p.time} · 洛杉矶</div>
         ${eventBlock}
@@ -11520,7 +11543,7 @@ function composeDraftSnapshot(){
     id: composeDraftId || `draft_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     owner: composeDraftOwner(),
     title: value('fTitle').trim(), content: value('fContent').trim(), location: value('fLocation').trim(), youtube: value('fYoutube').trim(),
-    capacity: value('fCapacity'), deadline: value('fDeadline').trim(), customTags:[...customTags], selectedCat, eventOn,
+    capacity: value('fCapacity'), deadline: value('fDeadline').trim(), customTags:[...customTags], selectedCat, selectedSubcategory, eventOn,
     uploadedImages:[...uploadedImages], coverImageIndex, textCardCover: textCardCover ? {...textCardCover} : null,
     createdAt: Date.now(), updatedAt: Date.now(), videoNeedsReselect: selectedVideos.length > 0
   };
@@ -11560,11 +11583,12 @@ async function removeComposeDraft(id = composeDraftId){
   if(id === composeDraftId) composeDraftId = null;
 }
 function resetComposeForm(){
-  selectedCat = null; eventOn = false; editingPostId = null; composeDraftId = null;
+  selectedCat = null; selectedSubcategory = null; eventOn = false; editingPostId = null; composeDraftId = null;
   document.getElementById('fTitle').value=''; document.getElementById('fContent').value=''; document.getElementById('fYoutube').value='';
   updateYoutubePreview(); document.getElementById('fCapacity').value=''; document.getElementById('fDeadline').value='';
   document.getElementById('eventSwitch').classList.remove('on'); document.getElementById('eventFields').classList.remove('open');
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.remove('sel'));
+  renderPostSubcategoryPicker();
   uploadedImages = []; textCardCover = null; textCoverDraftImage = '';
   selectedVideos.forEach(v => URL.revokeObjectURL(v.url)); selectedVideos = []; customTags = []; renderCustomTags();
   const tagIn = document.getElementById('fCustomTag'); if(tagIn) tagIn.value = '';
@@ -11599,8 +11623,8 @@ async function resumeComposeDraft(id){
     closeComposeDrafts(); resetComposeForm(); composeDraftId = draft.id;
     document.getElementById('fTitle').value = draft.title || ''; document.getElementById('fContent').value = draft.content || ''; document.getElementById('fYoutube').value = draft.youtube || ''; document.getElementById('fLocation').value = draft.location || '';
     document.getElementById('fCapacity').value = draft.capacity || ''; document.getElementById('fDeadline').value = draft.deadline || '';
-    selectedCat = draft.selectedCat || null; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null;
-    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn);
+    selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null;
+    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); renderPostSubcategoryPicker(); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn);
     document.getElementById('titleCount').textContent = (draft.title || '').length; document.getElementById('contentCount').textContent = (draft.content || '').length; renderCustomTags(); renderImageGrid(); updateYoutubePreview();
     document.getElementById('composeOverlay').classList.add('open'); updateComposeDraftStatus(draft.videoNeedsReselect ? '草稿已恢复，视频文件需重新选择' : '已恢复本机草稿');
   } catch(error){ showToast('草稿恢复失败，请稍后重试'); }
@@ -11616,7 +11640,23 @@ function closeCompose(saveDraft=true){
 }
 function pickCat(c){
   selectedCat = c;
+  selectedSubcategory = null;
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c===c));
+  renderPostSubcategoryPicker();
+  scheduleComposeDraftSave();
+}
+function renderPostSubcategoryPicker(){
+  const field = document.getElementById('subcategoryField');
+  const picker = document.getElementById('subcategoryPicker');
+  if(!field || !picker) return;
+  const options = postSubcategoryOptions(selectedCat);
+  if(!options.length){ field.style.display = 'none'; picker.innerHTML = ''; return; }
+  field.style.display = 'block';
+  picker.innerHTML = options.map(item => `<button type="button" class="subcategory-pick ${selectedSubcategory === item ? 'selected' : ''}" onclick="pickPostSubcategory('${item}')">${item}</button>`).join('') + (selectedSubcategory ? '<button type="button" class="subcategory-clear" onclick="pickPostSubcategory(\'\')">不设置</button>' : '');
+}
+function pickPostSubcategory(item){
+  selectedSubcategory = isValidPostSubcategory(selectedCat, item) ? item : null;
+  renderPostSubcategoryPicker();
   scheduleComposeDraftSave();
 }
 /* ====== 标记地点：自建地点库（不依赖Google Maps），输入时先搜本地已有地点，没有就直接用新地点 ====== */
@@ -12793,10 +12833,12 @@ function editPost(id){
   document.getElementById('titleCount').textContent = (p.title || '').length;
   document.getElementById('contentCount').textContent = (p.content || '').length;
   selectedCat = p.category;
+  selectedSubcategory = isValidPostSubcategory(selectedCat, p.subcategory) ? p.subcategory : null;
   // 高亮对应分类按钮
   document.querySelectorAll('.cat-pick').forEach(b => {
     b.classList.toggle('sel', b.dataset.c === p.category);
   });
+  renderPostSubcategoryPicker();
   // 加载已有图片到编辑器（可继续追加/删除/换封面）
   const isDefaultImg = p.image && p.image.startsWith('https://images.unsplash.com');
   if(p.images && p.images.length > 0){
@@ -12870,6 +12912,7 @@ async function submitPost(){
   }
 
   const cat = selectedCat; // 关键修复：在 closeCompose 清空前捕获分类值
+  const subcategory = isValidPostSubcategory(cat, selectedSubcategory) ? selectedSubcategory : null;
   // 收纳输入框中未确认的标签，并捕获标签数组（closeCompose 会清空）
   const pendingTag = document.getElementById('fCustomTag');
   if(pendingTag && pendingTag.value.trim()) addCustomTag(pendingTag.value);
@@ -12897,7 +12940,7 @@ async function submitPost(){
     const p = posts.find(x => x.id === editingPostId);
     if(p){
       p.title = title; p.content = contentToSave; p.excerpt = excerpt;
-      p.category = cat; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
+      p.category = cat; p.subcategory = subcategory; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
       p.tiktok_url = tiktokInfo ? tiktokInfo.url : null;
       p.location = location || null;
       if(uploadedImages.length > 0){ p.image = image; p.images = images; }
@@ -12910,7 +12953,7 @@ async function submitPost(){
     showToast('✓ 已更新');
     if(location) upsertLocation(location);
     try {
-      const fields = { title, content: contentToSave, excerpt, category:cat, youtube:ytId, event, tags: tagsArr, location: location || null };
+      const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, youtube:ytId, event, tags: tagsArr, location: location || null };
       if(uploadedImages.length > 0){ fields.image = image; fields.images = images; }
       await supabaseUpdatePost(idToUpdate, fields);
       console.log('✓ 数据库已同步更新 id=', idToUpdate);
@@ -12925,7 +12968,7 @@ async function submitPost(){
   const localPost = {
     id: nextPostId++, category:cat, title, excerpt,
     user_id: session.user.id,
-    content: contentToSave, image, images, tags: tagsArr, location: location || null,
+    content: contentToSave, image, images, tags: tagsArr, location: location || null, subcategory,
     youtube: ytId, youtube_vertical: ytVertical, author: authorName, time:'刚刚', likes:0, liked:false,
     tiktok_url: tiktokInfo ? tiktokInfo.url : null, event, comments:[]
   };
@@ -12944,7 +12987,7 @@ async function submitPost(){
   try {
     const saved = await supabaseInsertPost({
       title, content: contentToSave, excerpt, category:cat,
-      author: authorName, image, images, youtube: ytId,
+      author: authorName, image, images, youtube: ytId, subcategory,
       likes: 0, event, tags: tagsArr, location: location || null,
       user_id: session.user.id, visibility: 'public', pinned: false
     });
@@ -13397,6 +13440,7 @@ function importXhsPost(idx){
   
   // Fill in the compose form
   selectedCat = post.category;
+  selectedSubcategory = null;
   document.getElementById('fTitle').value = post.title.replace('小红书: ', '');
   document.getElementById('fContent').value = post.content;
   document.getElementById('fYoutube').value = '';
@@ -13419,6 +13463,7 @@ function importXhsPost(idx){
     b.classList.remove('sel');
     if(b.dataset.c === post.category) b.classList.add('sel');
   });
+  renderPostSubcategoryPicker();
   
   // Update char counts
   document.getElementById('titleCount').textContent = document.getElementById('fTitle').value.length;
@@ -13571,7 +13616,7 @@ async function loadPostsFromSupabase(options = {}){
     
     // 只读取页面需要的字段，避免 select=* 在数据量增长后触发 Supabase statement timeout。
     const basePostSelect = [
-      'id','title','content','excerpt','category','author','image','images',
+      'id','title','content','excerpt','category','subcategory','author','image','images',
       'youtube','likes','event','tags','user_id','visibility','pinned','created_at','location'
     ].join(',');
     // 首页一直使用公开帖子。此前没有此限制时，RLS 会对全表评估互相关注条件，数据增长后可能超时。
@@ -13637,6 +13682,7 @@ async function loadPostsFromSupabase(options = {}){
         content: p.content || '',
         excerpt: p.excerpt || '',
         category: p.category || '',
+        subcategory: isValidPostSubcategory(p.category, p.subcategory) ? p.subcategory : null,
         author: p.author || '游客',
         image: p.image,
         images: p.images,
@@ -13887,19 +13933,19 @@ async function bootApp(){
 
 bootApp();
 
-// 定时自动刷新（每30秒）
+// 定时刷新仅在首页可见时执行，减少后台页面的无效网络请求。
 setInterval(() => {
   const activeTab = document.querySelector('.nav-btn.active');
-  if(activeTab && activeTab.dataset.tab === 'home'){
+  if(document.visibilityState === 'visible' && navigator.onLine && activeTab && activeTab.dataset.tab === 'home'){
     console.log('⏰ 自动刷新主页数据...');
     loadPostsFromSupabase();
   }
-}, 30000);
+}, 60000);
 
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Analytics and Local Drafts】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Post Subcategories】`);
 </script>
 </body>
 </html>
