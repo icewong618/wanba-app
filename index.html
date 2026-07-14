@@ -1145,6 +1145,13 @@
   .compose-draft-main span{display:block;margin-top:6px;font-size:10.5px;color:var(--ink-faint);}
   .compose-draft-delete{align-self:center;border:0;background:transparent;color:var(--ink-faint);padding:9px;font-size:19px;}
   .compose-draft-local-note{margin:14px 0 0;padding:11px;border-radius:10px;background:var(--bg-alt);font-size:11.5px;line-height:1.6;color:var(--ink-soft);}
+  .publish-time-picker{display:flex;gap:8px;margin-top:7px;}
+  .publish-time-picker button{flex:1;min-height:42px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink-soft);font:800 13px inherit;cursor:pointer;}
+  .publish-time-picker button.active{border-color:var(--sage-dark);background:var(--sage-light);color:var(--sage-dark);}
+  .schedule-publish-fields{display:none;margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-alt);}
+  .schedule-publish-fields.show{display:block;}
+  .schedule-publish-fields input{width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font:600 14px inherit;}
+  .schedule-publish-fields p{margin:8px 0 0;font-size:11.5px;line-height:1.55;color:var(--ink-faint);}
   .upload-box{
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
     border:1.5px dashed var(--line-strong);border-radius:12px;
@@ -2275,6 +2282,19 @@
         <div id="locationSuggestions" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;max-height:180px;overflow-y:auto;z-index:20;box-shadow:var(--shadow);"></div>
       </div>
 
+      <div class="form-field">
+        <label>发布时间</label>
+        <div class="publish-time-picker" id="publishTimePicker">
+          <button type="button" class="active" data-mode="now" onclick="setPostPublishMode('now')">立即发布</button>
+          <button type="button" data-mode="scheduled" onclick="setPostPublishMode('scheduled')">定时发布</button>
+        </div>
+        <div class="schedule-publish-fields" id="schedulePublishFields">
+          <b style="font-size:13px;color:var(--ink);">选择发布时间</b>
+          <input type="datetime-local" id="fScheduledAt" step="60" onchange="scheduleComposeDraftSave()">
+          <p id="schedulePublishHint">所有定时发布均按美国西部洛杉矶时间执行，会在设定时间后的约 1 分钟内公开。</p>
+        </div>
+      </div>
+
       <div class="form-row">
         <label>自定义标签 <span style="font-weight:400;color:var(--ink-faint);">（最多10个，回车或逗号添加，显示在笔记末尾，不占正文字数）</span></label>
         <div id="customTagChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
@@ -2919,7 +2939,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.171';
+const APP_VERSION = '5.172';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -11984,6 +12004,73 @@ const COMPOSE_DRAFT_LIMIT = 12;
 let composeDraftId = null;
 let composeDraftSaveTimer = null;
 let composeDraftDbPromise = null;
+let postPublishMode = 'now';
+
+function laDateTimeParts(date = new Date()){
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone:'America/Los_Angeles', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hourCycle:'h23'
+  }).formatToParts(date).reduce((result, part) => {
+    if(part.type !== 'literal') result[part.type] = part.value;
+    return result;
+  }, {});
+  return parts;
+}
+function laDateTimeLocalValue(date = new Date()){
+  const parts = laDateTimeParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+function laOffsetMinutes(at){
+  const zone = new Intl.DateTimeFormat('en-US', {
+    timeZone:'America/Los_Angeles', timeZoneName:'longOffset'
+  }).formatToParts(at).find(part => part.type === 'timeZoneName')?.value || 'GMT-08:00';
+  const match = zone.match(/^GMT([+-])(\d{2}):(\d{2})$/);
+  if(!match) return -480;
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return match[1] === '+' ? minutes : -minutes;
+}
+function laLocalDateTimeToIso(value){
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if(!match) return null;
+  const [, year, month, day, hour, minute] = match;
+  const wallClockUtc = Date.UTC(Number(year), Number(month)-1, Number(day), Number(hour), Number(minute));
+  let instant = wallClockUtc - laOffsetMinutes(new Date(wallClockUtc)) * 60000;
+  instant = wallClockUtc - laOffsetMinutes(new Date(instant)) * 60000;
+  const roundTrip = laDateTimeLocalValue(new Date(instant));
+  return roundTrip === value ? new Date(instant).toISOString() : null;
+}
+function formatLaDateTime(iso){
+  if(!iso) return '';
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone:'America/Los_Angeles', year:'numeric', month:'long', day:'numeric',
+    weekday:'short', hour:'2-digit', minute:'2-digit', hourCycle:'h23'
+  }).format(new Date(iso)) + '（洛杉矶时间）';
+}
+function updateSchedulePublishUi(){
+  const scheduled = postPublishMode === 'scheduled';
+  document.querySelectorAll('#publishTimePicker [data-mode]').forEach(button => button.classList.toggle('active', button.dataset.mode === postPublishMode));
+  document.getElementById('schedulePublishFields')?.classList.toggle('show', scheduled);
+  if(scheduled){
+    const input = document.getElementById('fScheduledAt');
+    if(input){
+      input.min = laDateTimeLocalValue(new Date(Date.now() + 60000));
+      if(!input.value) input.value = laDateTimeLocalValue(new Date(Date.now() + 10 * 60000));
+    }
+  }
+}
+function setPostPublishMode(mode){
+  postPublishMode = mode === 'scheduled' ? 'scheduled' : 'now';
+  updateSchedulePublishUi();
+  scheduleComposeDraftSave();
+}
+function selectedScheduledPublishAt(){
+  if(postPublishMode !== 'scheduled') return null;
+  const value = document.getElementById('fScheduledAt')?.value || '';
+  const scheduledAt = laLocalDateTimeToIso(value);
+  if(!scheduledAt) return { error:'请选择有效的洛杉矶发布时间' };
+  if(new Date(scheduledAt).getTime() < Date.now() + 30000) return { error:'定时时间需晚于当前洛杉矶时间至少 1 分钟' };
+  return { value:scheduledAt };
+}
 
 function composeDraftOwner(){ return session && session.user ? session.user.id : 'guest'; }
 function composeDraftOpenDb(){
@@ -12023,6 +12110,7 @@ function composeDraftSnapshot(){
     owner: composeDraftOwner(),
     title: value('fTitle').trim(), content: value('fContent').trim(), location: value('fLocation').trim(), youtube: value('fYoutube').trim(),
     capacity: value('fCapacity'), deadline: value('fDeadline').trim(), customTags:[...customTags], selectedCat, selectedSubcategory, communityPostMeta:{...communityPostMeta}, eventOn,
+    postPublishMode, scheduledAt: value('fScheduledAt'),
     uploadedImages:[...uploadedImages], coverImageIndex, textCardCover: textCardCover ? {...textCardCover} : null,
     createdAt: Date.now(), updatedAt: Date.now(), videoNeedsReselect: selectedVideos.length > 0
   };
@@ -12062,7 +12150,7 @@ async function removeComposeDraft(id = composeDraftId){
   if(id === composeDraftId) composeDraftId = null;
 }
 function resetComposeForm(){
-  selectedCat = null; selectedSubcategory = null; communityPostMeta = {}; eventOn = false; editingPostId = null; composeDraftId = null;
+  selectedCat = null; selectedSubcategory = null; communityPostMeta = {}; eventOn = false; editingPostId = null; composeDraftId = null; postPublishMode = 'now';
   document.getElementById('fTitle').value=''; document.getElementById('fContent').value=''; document.getElementById('fYoutube').value='';
   updateYoutubePreview(); document.getElementById('fCapacity').value=''; document.getElementById('fDeadline').value='';
   document.getElementById('eventSwitch').classList.remove('on'); document.getElementById('eventFields').classList.remove('open');
@@ -12076,6 +12164,8 @@ function resetComposeForm(){
   document.getElementById('titleCount').textContent = '0'; document.getElementById('contentCount').textContent = '0';
   const locInput = document.getElementById('fLocation'); if(locInput) locInput.value = '';
   const locBox = document.getElementById('locationSuggestions'); if(locBox){ locBox.style.display = 'none'; locBox.innerHTML = ''; }
+  const scheduleInput = document.getElementById('fScheduledAt'); if(scheduleInput) scheduleInput.value = '';
+  updateSchedulePublishUi();
   updateComposeDraftStatus();
 }
 async function openComposeDrafts(){
@@ -12103,8 +12193,9 @@ async function resumeComposeDraft(id){
     closeComposeDrafts(); resetComposeForm(); composeDraftId = draft.id;
     document.getElementById('fTitle').value = draft.title || ''; document.getElementById('fContent').value = draft.content || ''; document.getElementById('fYoutube').value = draft.youtube || ''; document.getElementById('fLocation').value = draft.location || '';
     document.getElementById('fCapacity').value = draft.capacity || ''; document.getElementById('fDeadline').value = draft.deadline || '';
-    selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; communityPostMeta = draft.communityPostMeta && typeof draft.communityPostMeta === 'object' ? {...draft.communityPostMeta} : {}; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null;
-    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); renderPostSubcategoryPicker(); renderCommunityPostFields(); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn);
+    selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; communityPostMeta = draft.communityPostMeta && typeof draft.communityPostMeta === 'object' ? {...draft.communityPostMeta} : {}; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null; postPublishMode = draft.postPublishMode === 'scheduled' ? 'scheduled' : 'now';
+    const scheduleInput = document.getElementById('fScheduledAt'); if(scheduleInput) scheduleInput.value = draft.scheduledAt || '';
+    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); renderPostSubcategoryPicker(); renderCommunityPostFields(); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn); updateSchedulePublishUi();
     document.getElementById('titleCount').textContent = (draft.title || '').length; document.getElementById('contentCount').textContent = (draft.content || '').length; renderCustomTags(); renderImageGrid(); updateYoutubePreview();
     document.getElementById('composeOverlay').classList.add('open'); updateComposeDraftStatus(draft.videoNeedsReselect ? '草稿已恢复，视频文件需重新选择' : '已恢复本机草稿');
   } catch(error){ showToast('草稿恢复失败，请稍后重试'); }
@@ -13460,6 +13551,10 @@ async function submitPost(){
     const dl = document.getElementById('fDeadline').value.trim() || '尽快报名';
     event = {capacity:cap, registered:0, deadline:dl, userJoined:false};
   }
+  const scheduleSelection = selectedScheduledPublishAt();
+  if(scheduleSelection && scheduleSelection.error){ showToast(scheduleSelection.error); return; }
+  const scheduledAt = scheduleSelection && scheduleSelection.value ? scheduleSelection.value : null;
+  const isScheduledPost = !!scheduledAt;
 
   const cat = selectedCat; // 关键修复：在 closeCompose 清空前捕获分类值
   const subcategory = isValidPostSubcategory(cat, selectedSubcategory) ? selectedSubcategory : null;
@@ -13506,6 +13601,7 @@ async function submitPost(){
       : '我';
 
   if(editingPostId !== null){
+    if(isScheduledPost){ showToast('已发布笔记暂不支持改为定时发布，请新建一篇内容'); return; }
     /* ---- 编辑模式：更新已有帖子 ---- */
     const p = posts.find(x => x.id === editingPostId);
     if(p){
@@ -13540,18 +13636,20 @@ async function submitPost(){
     user_id: session.user.id,
     content: contentToSave, image, images, tags: tagsArr, location: location || null, subcategory, community_meta:communityMeta,
     youtube: ytId, youtube_vertical: ytVertical, author: authorName, time:'刚刚', likes:0, liked:false,
-    tiktok_url: tiktokInfo ? tiktokInfo.url : null, event, comments:[]
+    tiktok_url: tiktokInfo ? tiktokInfo.url : null, event, comments:[], visibility: isScheduledPost ? 'scheduled' : 'public', scheduled_at: scheduledAt
   };
-  posts.unshift(localPost);
+  if(!isScheduledPost) posts.unshift(localPost);
 
-  await removeComposeDraft();
-  closeCompose(false);
-  currentFilter = '全部';
-  renderChips();
-  renderFeed();
-  savePosts();
-  showToast(selectedVideos.length ? '发布成功 🎉（视频未保存，等待YouTube接口上线）' : '发布成功 🎉');
-  if(location) upsertLocation(location);
+  if(!isScheduledPost){
+    await removeComposeDraft();
+    closeCompose(false);
+    currentFilter = '全部';
+    renderChips();
+    renderFeed();
+    savePosts();
+    showToast(selectedVideos.length ? '发布成功 🎉（视频未保存，等待YouTube接口上线）' : '发布成功 🎉');
+    if(location) upsertLocation(location);
+  }
 
   // 同步保存到 Supabase 数据库
   try {
@@ -13559,14 +13657,24 @@ async function submitPost(){
       title, content: contentToSave, excerpt, category:cat,
       author: authorName, image, images, youtube: ytId, subcategory, community_meta:communityMeta,
       likes: 0, event, tags: tagsArr, location: location || null,
-      user_id: session.user.id, visibility: 'public', pinned: false
+      user_id: session.user.id, visibility: isScheduledPost ? 'scheduled' : 'public', scheduled_at: scheduledAt, pinned: false
     });
     if(saved && saved.id){
-      localPost.id = saved.id; // 使用数据库生成的 id，保证后续编辑/删除一致
-      savePosts();
+      if(!isScheduledPost){
+        localPost.id = saved.id; // 使用数据库生成的 id，保证后续编辑/删除一致
+        savePosts();
+      } else {
+        await removeComposeDraft();
+        closeCompose(false);
+        showToast(`已定时：${formatLaDateTime(scheduledAt)}`);
+      }
       console.log('✓ 已保存到数据库, id=', saved.id);
     }
   } catch(e){
+    if(isScheduledPost){
+      showToast('⚠️ 定时保存失败，内容仍保留在当前页面');
+      return;
+    }
     console.warn('⚠️ 保存到数据库失败（刷新后帖子会消失）:', e.message);
     showToast('⚠️ 云端保存失败，请检查数据库权限');
   }
