@@ -2138,7 +2138,7 @@
 
 <div class="feedback-overlay" id="feedOnboardingOverlay">
   <div class="feedback-head"><span style="width:38px;height:38px;"></span><h3>欢迎来到乐生活</h3></div>
-  <div class="feedback-body"><div class="feed-onboarding-card"><h3>先选几个你关心的内容</h3><p>选择后，“推荐”会优先展示相关的本地生活信息。之后可以随时在首页的“偏好”里修改。</p><div class="feed-interest-picker" id="feedOnboardingPicker"></div><div class="feed-onboarding-actions"><button onclick="saveFeedOnboarding()">开始浏览</button><button class="secondary" onclick="skipFeedOnboarding()">暂时跳过</button></div></div></div>
+  <div class="feedback-body"><div class="feed-onboarding-card"><h3>选几个你关心的生活方式</h3><p>可多选。乐生活会优先推荐相关笔记，之后可随时在首页“偏好”中修改。</p><div class="feed-interest-picker" id="feedOnboardingPicker"></div><div class="feed-onboarding-actions"><button onclick="saveFeedOnboarding()">开始浏览</button><button class="secondary" onclick="skipFeedOnboarding()">暂时跳过</button></div></div></div>
 </div>
 
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
@@ -2383,6 +2383,7 @@
             <button class="profile-cover-menu-btn" onclick="toggleProfileMenu(event)" aria-label="菜单"><span class="ui-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg></span></button>
             <div class="profile-menu" id="profileMenu">
               <button id="authLoginBtn" onclick="event.stopPropagation();openProfileLogin()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>登录 / 注册</button>
+              <button onclick="closeProfileMenu();shareMyProfile()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"></path><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path></svg></span>分享我的主页</button>
               <button onclick="closeProfileMenu();openBetaInfo()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M5 7a7 7 0 0 1 14 0c0 5-7 14-7 14S5 12 5 7z"></path><circle cx="12" cy="8" r="1"></circle></svg></span>关于本次公测</button>
               <button onclick="closeProfileMenu();openPolicy()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>隐私与社区规则</button>
               <button onclick="closeProfileMenu();exportMyData()"><span class="ui-icon" style="width:15px;height:15px;"><svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 21h16"></path></svg></span>导出我的数据</button>
@@ -2597,6 +2598,24 @@ const POST_SUBCATEGORIES = {
   '生活':['本地服务','健康运动','学习成长','办事指南','邻里求助','生活分享'],
   '社区':['二手交易','房屋出租','求职招聘','拼车搭子','失物招领','邻里互助']
 };
+const FEED_INTEREST_OPTIONS = [
+  {key:'food',label:'美食探店',icon:'food',categories:['美食'],subcategories:['探店','家常菜','烘焙甜品'],keywords:['餐厅','美食','探店','吃饭']},
+  {key:'coffee',label:'咖啡饮品',icon:'food',categories:['美食'],subcategories:['饮品咖啡'],keywords:['咖啡','奶茶','饮品','茶饮']},
+  {key:'parenting',label:'遛娃亲子',icon:'user',categories:['玩乐','好物'],subcategories:['亲子遛娃','母婴宠物'],keywords:['遛娃','亲子','宝宝','儿童']},
+  {key:'weekend',label:'周末活动',icon:'calendar',categories:['玩乐'],subcategories:['周末活动','展览演出'],keywords:['活动','展览','演出','市集']},
+  {key:'outdoor',label:'户外运动',icon:'map',categories:['玩乐','生活'],subcategories:['户外运动','健康运动'],keywords:['徒步','露营','运动','滑雪']},
+  {key:'travel',label:'旅行攻略',icon:'map',categories:['玩乐'],subcategories:['旅行攻略'],keywords:['旅行','旅游','自驾','攻略']},
+  {key:'photography',label:'摄影记录',icon:'edit',categories:['生活','玩乐'],keywords:['摄影','拍照','相机','照片']},
+  {key:'anime',label:'漫画二次元',icon:'spark',categories:['玩乐'],subcategories:['兴趣社群'],keywords:['漫画','二次元','动漫','cosplay']},
+  {key:'secondhand',label:'二手好物',icon:'bag',categories:['社区','好物'],subcategories:['二手交易','日用好物'],keywords:['二手','转让','闲置','出闲置']},
+  {key:'rental',label:'租房找室友',icon:'home',categories:['社区'],subcategories:['房屋出租'],keywords:['租房','房屋','室友','转租']},
+  {key:'friends',label:'交友搭子',icon:'message',categories:['社区','玩乐'],subcategories:['拼车搭子','兴趣社群'],keywords:['交友','搭子','拼车','同城']},
+  {key:'jobs',label:'求职招聘',icon:'store',categories:['社区'],subcategories:['求职招聘'],keywords:['招聘','求职','工作','兼职']},
+  {key:'deals',label:'省钱优惠',icon:'bag',categories:['好物','美食'],subcategories:['优惠折扣','优惠套餐'],keywords:['折扣','优惠','省钱','deal']},
+  {key:'tech',label:'数码家电',icon:'bag',categories:['好物'],subcategories:['数码家电'],keywords:['数码','手机','电脑','家电']},
+  {key:'home',label:'家居生活',icon:'home',categories:['好物','生活'],subcategories:['家居用品','生活分享'],keywords:['家居','收纳','装修','日常']},
+  {key:'wellness',label:'健康运动',icon:'heart',categories:['生活','玩乐'],subcategories:['健康运动','户外运动'],keywords:['健康','健身','瑜伽','跑步']}
+];
 const COMMUNITY_POST_CONFIG = {
   '二手交易': { title:'交易信息', hint:'请如实填写价格与成色；不要在公开内容中留下银行卡、证件等敏感信息。', fields:[['price','价格','如 $20'],['condition','成色','如 九成新'],['area','交易区域','如 Alhambra']] },
   '房屋出租': { title:'房源信息', hint:'请勿公开精确门牌号或身份证明；看房、签约和付款请自行核实。', fields:[['rent','月租','如 $1,800'],['layout','户型','如 2B1B'],['area','区域','如 Pasadena']] },
@@ -2834,7 +2853,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.165';
+const APP_VERSION = '5.166';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4990,7 +5009,27 @@ function copyMerchantSiteLink(userId){
 }
 function shareMerchantSiteLink(userId){
   const m = (currentMerchant && currentMerchant.user_id === userId) ? currentMerchant : window._merchantIdentityCache[userId];
-  openShareSheet({ type:'merchant', title:(m && m.business_name) || '乐生活商家主页', text:(m && (m.intro || m.address)) || '发现身边的精彩生活', url:merchantSiteUrl(m || { user_id:userId, slug:userId }), image:m && (m.cover_image || m.logo) });
+  openShareSheet({ type:'merchant', title:(m && m.business_name) || '乐生活商家主页', text:(m && (m.intro || m.address)) || '发现身边的精彩生活', url:merchantSiteUrl(m || { user_id:userId, slug:userId }), image:m && (m.logo || m.cover_image) });
+}
+function userProfileShareUrl(userId){
+  return `${window.location.origin}/?user=${encodeURIComponent(userId)}`;
+}
+function sharePublicUserPage(userId, fallbackName){
+  if(!userId){ showToast('用户主页链接暂时不可用'); return; }
+  const profile = cachedProfile(userId, fallbackName || '乐生活用户');
+  const name = profile.name || fallbackName || '乐生活用户';
+  closePublicProfileMenu();
+  openShareSheet({
+    type:'user',
+    title:name,
+    text:profile.bio || '这个用户正在乐生活分享身边的精彩生活。',
+    url:userProfileShareUrl(userId),
+    image:profile.avatar || resolveAvatarUrl(userId)
+  });
+}
+function shareMyProfile(){
+  if(!(session && session.user)){ showToast('登录后即可分享个人主页'); openAuth('login'); return; }
+  sharePublicUserPage(session.user.id, currentUser && currentUser.name);
 }
 function shareCurrentMerchantPublicPage(){
   const userId = document.getElementById('merchantPublicOverlay')?.dataset.userId || '';
@@ -6541,6 +6580,12 @@ function routePostIdFromLocation(){
     return raw && /^\d+$/.test(raw) ? Number(raw) : null;
   } catch(e){ return null; }
 }
+function routeUserIdFromLocation(){
+  try {
+    const raw = String(new URL(window.location.href).searchParams.get('user') || '').trim();
+    return /^[0-9a-f-]{8,64}$/i.test(raw) ? raw : '';
+  } catch(e){ return ''; }
+}
 async function openMerchantPublicPageBySlug(slug){
   slug = merchantSlugify(slug);
   if(!slug) return false;
@@ -6620,6 +6665,7 @@ function userPublicContentHtml(userId, profile){
         <div class="profile-cover-bg public-profile-cover${profile.cover ? ' has-image' : ''}"${coverStyle}>
           <button class="profile-cover-menu-btn" onclick="togglePublicProfileMenu(event)" aria-label="菜单">${uiIcon('menu',19)}</button>
           <div class="profile-menu public-profile-menu" id="publicProfileMenu">
+            <button onclick="event.stopPropagation();sharePublicUserPage('${String(userId).replace(/'/g,'')}','${String(name).replace(/'/g,'')}')">${uiIcon('share',15)}转发主页</button>
             <button onclick="event.stopPropagation();openPublicUserDm('${String(userId).replace(/'/g,'')}','${String(name).replace(/'/g,'')}')">${uiIcon('message',15)}发私信</button>
           </div>
           <button class="public-profile-close" onclick="closeUserPublicPage()" aria-label="关闭">×</button>
@@ -8007,7 +8053,7 @@ let currentSubcategory = '全部';
 let currentTag = null;
 let feedMode = localStorage.getItem('leshenghuo_feed_mode') || 'recommend';
 let mutedFeedCategories = new Set();
-let preferredFeedCategories = new Set();
+let preferredFeedInterests = new Set();
 let feedInterestDraft = new Set();
 let feedPreferencesLoadedFor = null;
 let feedIsLoading = false;
@@ -8147,7 +8193,14 @@ function feedScore(post, signals){
   const recency = Math.max(0, 18 - ageDays * 1.25);
   const quality = Math.min(12, Math.log2(1 + Number(post.likes || 0)) * 2) + Math.min(6, Number(post.commentCount || 0) * 0.75) + Math.min(6, Number(post.favs || 0) * 0.9);
   let score = recency + quality;
-  if(preferredFeedCategories.has(category)) score += 14;
+  const postSubcategory = String(post.subcategory || '').trim();
+  const postText = `${post.title || ''} ${post.excerpt || ''} ${post.content || ''} ${(post.tags || []).join(' ')}`.toLowerCase();
+  FEED_INTEREST_OPTIONS.forEach(interest => {
+    if(!preferredFeedInterests.has(interest.key)) return;
+    if(interest.categories.includes(category)) score += 4;
+    if(interest.subcategories && interest.subcategories.includes(postSubcategory)) score += 11;
+    if((interest.keywords || []).some(keyword => postText.includes(String(keyword).toLowerCase()))) score += 7;
+  });
   score += Math.min(20, (signals.categories[category] || 0) * 2.5);
   if(post.user_id) score += Math.min(16, (signals.authors[post.user_id] || 0) * 2);
   const me = session && session.user && session.user.id;
@@ -8190,35 +8243,36 @@ function feedOnboardingKey(){ return `leshenghuo_feed_onboarding_done_${session 
 function readLocalFeedInterests(){
   try {
     const saved = JSON.parse(localStorage.getItem(localFeedInterestKey()) || '[]');
-    preferredFeedCategories = new Set(Array.isArray(saved) ? saved.map(normalizeCategory).filter(category => category !== '全部') : []);
-  } catch(e){ preferredFeedCategories = new Set(); }
+    const legacyMap = { 美食:'food', 玩乐:'weekend', 好物:'deals', 生活:'home', 社区:'friends' };
+    preferredFeedInterests = new Set(Array.isArray(saved) ? saved.map(value => legacyMap[normalizeCategory(value)] || String(value || '')).filter(value => FEED_INTEREST_OPTIONS.some(option => option.key === value)) : []);
+  } catch(e){ preferredFeedInterests = new Set(); }
 }
-function saveLocalFeedInterests(){ localStorage.setItem(localFeedInterestKey(), JSON.stringify([...preferredFeedCategories])); }
-function feedInterestOptions(){ return CATS.filter(category => category.key !== '全部').map(category => category.key); }
+function saveLocalFeedInterests(){ localStorage.setItem(localFeedInterestKey(), JSON.stringify([...preferredFeedInterests])); }
+function feedInterestOptions(){ return FEED_INTEREST_OPTIONS; }
 function renderFeedInterestPicker(targetId, selected){
   const target = document.getElementById(targetId);
   if(!target) return;
-  target.innerHTML = feedInterestOptions().map(category => `<button class="${selected.has(category) ? 'selected' : ''}" onclick="toggleFeedInterest('${category}','${targetId}')">${catIcon(category,15)}${category}</button>`).join('');
+  target.innerHTML = feedInterestOptions().map(interest => `<button class="${selected.has(interest.key) ? 'selected' : ''}" onclick="toggleFeedInterest('${interest.key}','${targetId}')">${uiIcon(interest.icon,15)}${interest.label}</button>`).join('');
 }
 function toggleFeedInterest(category, targetId){
   if(feedInterestDraft.has(category)) feedInterestDraft.delete(category); else feedInterestDraft.add(category);
   renderFeedInterestPicker(targetId, feedInterestDraft);
 }
 function maybeOpenFeedOnboarding(){
-  if(!(session && session.user) || localStorage.getItem(feedOnboardingKey())) return;
+  if(localStorage.getItem(feedOnboardingKey())) return;
   const overlay = document.getElementById('feedOnboardingOverlay');
   if(!overlay) return;
-  feedInterestDraft = new Set(preferredFeedCategories);
+  feedInterestDraft = new Set(preferredFeedInterests);
   renderFeedInterestPicker('feedOnboardingPicker', feedInterestDraft);
   overlay.classList.add('open');
 }
 function saveFeedOnboarding(){
-  preferredFeedCategories = new Set(feedInterestDraft);
+  preferredFeedInterests = new Set(feedInterestDraft);
   saveLocalFeedInterests();
   localStorage.setItem(feedOnboardingKey(), '1');
   document.getElementById('feedOnboardingOverlay')?.classList.remove('open');
   renderFeedModes(); renderFeed();
-  showToast(preferredFeedCategories.size ? '已按你的兴趣调整推荐' : '已进入推荐内容');
+  showToast(preferredFeedInterests.size ? '已按你的兴趣调整推荐' : '已进入推荐内容');
 }
 function skipFeedOnboarding(){
   localStorage.setItem(feedOnboardingKey(), '1');
@@ -8289,12 +8343,12 @@ function openFeedPreferences(){
   const body = document.getElementById('feedPreferenceBody');
   if(!overlay || !body) return;
   const muted = [...mutedFeedCategories];
-  feedInterestDraft = new Set(preferredFeedCategories);
-  body.innerHTML = `<div class="feed-preference-help">推荐会参考你关注的人、互动、兴趣分类和发布时间；“最新”始终按时间排列。</div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">我关心的内容</label><div class="feed-interest-picker" id="feedPreferenceInterestPicker"></div><button class="feedback-submit" style="margin-top:12px;" onclick="saveFeedPreferenceInterests()">保存兴趣选择</button></div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">已减少的内容</label><div class="feed-preference-list">${muted.length ? muted.map(category => `<span class="feed-preference-tag">${escHtml(category)}<button onclick="restoreFeedCategory('${String(category).replace(/'/g, '')}')" aria-label="恢复 ${escAttr(category)}">×</button></span>`).join('') : '<span style="font-size:13px;color:var(--ink-faint);">目前没有减少任何分类。</span>'}</div></div><div class="feedback-meta">兴趣选择保存在当前设备；登录账号的“减少内容”会同步保存。</div>`;
+  feedInterestDraft = new Set(preferredFeedInterests);
+  body.innerHTML = `<div class="feed-preference-help">推荐会参考你关注的人、互动、兴趣标签和发布时间；“最新”始终按时间排列。</div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">我关心的内容</label><div class="feed-interest-picker" id="feedPreferenceInterestPicker"></div><button class="feedback-submit" style="margin-top:12px;" onclick="saveFeedPreferenceInterests()">保存兴趣选择</button></div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">已减少的内容</label><div class="feed-preference-list">${muted.length ? muted.map(category => `<span class="feed-preference-tag">${escHtml(category)}<button onclick="restoreFeedCategory('${String(category).replace(/'/g, '')}')" aria-label="恢复 ${escAttr(category)}">×</button></span>`).join('') : '<span style="font-size:13px;color:var(--ink-faint);">目前没有减少任何分类。</span>'}</div></div><div class="feedback-meta">兴趣选择保存在当前设备；登录账号的“减少内容”会同步保存。</div>`;
   renderFeedInterestPicker('feedPreferenceInterestPicker', feedInterestDraft);
   overlay.classList.add('open');
 }
-function saveFeedPreferenceInterests(){ preferredFeedCategories = new Set(feedInterestDraft); saveLocalFeedInterests(); renderFeedModes(); renderFeed(); closeFeedPreferences(); showToast('兴趣偏好已保存'); }
+function saveFeedPreferenceInterests(){ preferredFeedInterests = new Set(feedInterestDraft); saveLocalFeedInterests(); renderFeedModes(); renderFeed(); closeFeedPreferences(); showToast('兴趣偏好已保存'); }
 function closeFeedPreferences(){ document.getElementById('feedPreferenceOverlay')?.classList.remove('open'); }
 function restoreFeedCategory(category){
   mutedFeedCategories.delete(normalizeCategory(category));
@@ -14172,8 +14226,10 @@ async function bootApp(){
     updateFixedTopLayout();
     const merchantRouteSlug = routeMerchantSlugFromLocation();
     const postRouteId = routePostIdFromLocation();
+    const userRouteId = routeUserIdFromLocation();
     if(postRouteId != null) setTimeout(() => openPost(postRouteId), 120);
     else if(merchantRouteSlug) setTimeout(() => openMerchantPublicPageBySlug(merchantRouteSlug), 120);
+    else if(userRouteId) setTimeout(() => openUserPublicPage(userRouteId), 120);
 
     setLaunchStatus('内容很快就到…');
     notifyAppReady();
@@ -14185,8 +14241,10 @@ async function bootApp(){
     updateFixedTopLayout();
     const merchantRouteSlug = routeMerchantSlugFromLocation();
     const postRouteId = routePostIdFromLocation();
+    const userRouteId = routeUserIdFromLocation();
     if(postRouteId != null) setTimeout(() => openPost(postRouteId), 120);
     else if(merchantRouteSlug) setTimeout(() => openMerchantPublicPageBySlug(merchantRouteSlug), 120);
+    else if(userRouteId) setTimeout(() => openUserPublicPage(userRouteId), 120);
     notifyAppReady();
   } finally {
     const elapsed = Date.now() - startedAt;
@@ -14194,7 +14252,7 @@ async function bootApp(){
       await new Promise(resolve => setTimeout(resolve, minSplashMs - elapsed));
     }
     hideLaunchScreen();
-    if(!routeMerchantSlugFromLocation() && routePostIdFromLocation() == null){
+    if(!routeMerchantSlugFromLocation() && routePostIdFromLocation() == null && !routeUserIdFromLocation()){
       setTimeout(maybeOpenFeedOnboarding, 500);
     }
   }
@@ -14225,7 +14283,7 @@ document.addEventListener('visibilitychange', () => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Unified Text Cover Assets】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Share Cards and Interest Onboarding】`);
 </script>
 </body>
 </html>
