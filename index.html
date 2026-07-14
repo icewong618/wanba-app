@@ -1168,6 +1168,9 @@
     border:2px solid var(--line);cursor:pointer;transition:all .15s ease;
   }
   .image-item:hover{border-color:var(--sage);transform:scale(1.02);}
+  .image-item[draggable="true"]{touch-action:none;}
+  .image-item.dragging{opacity:.45;transform:scale(.96);}
+  .image-item.drag-over{border-color:var(--berry);border-style:dashed;}
   .image-item img{width:100%;height:100%;object-fit:cover;display:block;}
   .image-item.cover{border-color:var(--berry);border-width:3px;}
   .image-item .cover-label{
@@ -1216,6 +1219,7 @@
   .event-fields{display:none;grid-template-columns:1fr 1fr;gap:12px;background:var(--sky-light);padding:14px;border-radius:10px;margin-top:6px;}
   .event-fields.open{display:grid;}
   .submit-row{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;}
+  .btn-preview{padding:10px 20px;border:1px solid var(--sage);border-radius:999px;background:#fff;color:var(--sage-dark);font-weight:800;font-size:13.5px;}
   .btn-cancel{padding:10px 20px;border-radius:999px;color:var(--ink-soft);font-weight:600;font-size:13.5px;}
   .btn-submit{padding:10px 24px;border-radius:999px;background:var(--berry);color:#fff;font-weight:700;font-size:13.5px;}
   .btn-submit:hover{box-shadow:0 4px 12px rgba(194,65,107,0.32);}
@@ -1226,6 +1230,16 @@
     font-size:13.5px;opacity:0;pointer-events:none;transition:all .25s ease;z-index:200;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .publish-progress{
+    position:fixed;top:calc(8px + env(safe-area-inset-top));left:50%;z-index:10050;
+    width:min(440px,calc(100vw - 32px));padding:10px 12px 11px;transform:translateX(-50%) translateY(-18px);
+    opacity:0;pointer-events:none;background:rgba(32,43,39,.96);color:#fff;border-radius:12px;
+    box-shadow:0 8px 24px rgba(25,35,28,.2);transition:opacity .2s,transform .2s;
+  }
+  .publish-progress.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .publish-progress-head{display:flex;justify-content:space-between;gap:10px;font-size:12px;font-weight:800;line-height:1.2;}
+  .publish-progress-track{height:5px;margin-top:8px;border-radius:999px;background:rgba(255,255,255,.24);overflow:hidden;}
+  .publish-progress-bar{width:0;height:100%;border-radius:inherit;background:#f3b447;transition:width .25s ease;}
 
   /* ---- bottom navigation ---- */
   .bottom-nav{
@@ -2296,31 +2310,6 @@
         </div>
       </div>
 
-      <div class="form-row">
-        <label>自定义标签 <span style="font-weight:400;color:var(--ink-faint);">（最多10个，回车或逗号添加，显示在笔记末尾，不占正文字数）</span></label>
-        <div id="customTagChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
-        <input type="text" id="fCustomTag" placeholder="输入标签后按回车，如：探店"
-          style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;"
-          onkeydown="handleTagInput(event)">
-      </div>
-
-      <div class="form-field">
-        <label>配图 <span class="hint">(最多9张,点击设为封面)</span></label>
-        <input type="file" id="fImages" accept="image/*,video/*" multiple style="display:none" onchange="handleMultiImageUpload(event)">
-        <div class="upload-box" id="uploadBox" onclick="document.getElementById('fImages').click()">
-          <span class="upload-icon ui-icon"><svg viewBox="0 0 24 24"><path d="M4 8h4l2-3h4l2 3h4v11H4z"></path><circle cx="12" cy="13.5" r="3.5"></circle></svg></span>
-          <span class="upload-text">点击上传 照片/视频（照片最多9张，视频1个）</span>
-        </div>
-        <div class="text-cover-create"><span>纯文字内容可自动生成文字封面<br>也可以先挑选喜欢的版式</span><button type="button" onclick="openTextCoverMaker()">制作文字配图</button></div>
-        <div class="images-grid" id="imagesGrid" style="display:none;"></div>
-      </div>
-
-      <div class="form-field">
-        <label>视频链接 <span class="hint">(选填,支持 YouTube / TikTok 自动识别)</span></label>
-        <input type="url" id="fYoutube" placeholder="粘贴 YouTube 或 TikTok 视频链接" oninput="updateYoutubePreview()">
-        <div class="youtube-preview" id="youtubePreview"></div>
-      </div>
-
       <div class="form-field" id="activityPeriodField" style="display:none;">
         <label>活动时效 <span style="font-weight:400;color:var(--ink-faint);">（玩乐内容可选，填写后会自动进入活动入口）</span></label>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;">
@@ -2331,6 +2320,31 @@
           <div><span style="display:block;margin:0 0 5px;font-size:12px;color:var(--ink-soft);font-weight:700;">开始日期</span><input type="date" id="fActivityStartDate" onchange="scheduleComposeDraftSave()"></div>
           <div><span style="display:block;margin:0 0 5px;font-size:12px;color:var(--ink-soft);font-weight:700;">截止日期</span><input type="date" id="fActivityEndDate" onchange="scheduleComposeDraftSave()"></div>
         </div>
+      </div>
+
+      <div class="form-row">
+        <label>自定义标签 <span style="font-weight:400;color:var(--ink-faint);">（最多10个，回车或逗号添加，显示在笔记末尾，不占正文字数）</span></label>
+        <div id="customTagChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+        <input type="text" id="fCustomTag" placeholder="输入标签后按回车，如：探店"
+          style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;"
+          onkeydown="handleTagInput(event)">
+      </div>
+
+      <div class="form-field">
+        <label>配图 <span class="hint">(最多15张,点击设为封面)</span></label>
+        <input type="file" id="fImages" accept="image/*,video/*" multiple style="display:none" onchange="handleMultiImageUpload(event)">
+        <div class="upload-box" id="uploadBox" onclick="document.getElementById('fImages').click()">
+          <span class="upload-icon ui-icon"><svg viewBox="0 0 24 24"><path d="M4 8h4l2-3h4l2 3h4v11H4z"></path><circle cx="12" cy="13.5" r="3.5"></circle></svg></span>
+          <span class="upload-text">点击上传 照片/视频（照片最多15张，视频1个）</span>
+        </div>
+        <div class="text-cover-create"><span>纯文字内容可自动生成文字封面<br>也可以先挑选喜欢的版式</span><button type="button" onclick="openTextCoverMaker()">制作文字配图</button></div>
+        <div class="images-grid" id="imagesGrid" style="display:none;"></div>
+      </div>
+
+      <div class="form-field">
+        <label>视频链接 <span class="hint">(选填,支持 YouTube / TikTok 自动识别)</span></label>
+        <input type="url" id="fYoutube" placeholder="粘贴 YouTube 或 TikTok 视频链接" oninput="updateYoutubePreview()">
+        <div class="youtube-preview" id="youtubePreview"></div>
       </div>
 
       <div class="toggle-row">
@@ -2350,6 +2364,7 @@
 
       <div class="submit-row">
         <button class="btn-cancel" onclick="closeCompose()">取消</button>
+        <button class="btn-preview" onclick="openComposePreview()">预览</button>
         <button class="btn-submit" onclick="submitPost()">发布</button>
       </div>
     </div>
@@ -2359,6 +2374,11 @@
 <div class="feedback-overlay" id="composeDraftOverlay">
   <div class="feedback-head"><button onclick="closeComposeDrafts()" aria-label="返回">‹</button><h3>草稿箱</h3></div>
   <div class="feedback-body" id="composeDraftBody"></div>
+</div>
+
+<div class="feedback-overlay" id="composePreviewOverlay">
+  <div class="feedback-head"><button onclick="closeComposePreview()" aria-label="返回编辑">‹</button><h3>笔记预览</h3><span style="width:38px;"></span></div>
+  <div class="feedback-body" id="composePreviewBody"></div>
 </div>
 
 <div class="feedback-overlay" id="adminUserProfileOverlay">
@@ -2690,6 +2710,10 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="publish-progress" id="publishProgress" aria-live="polite">
+  <div class="publish-progress-head"><span id="publishProgressText">正在发布</span><span id="publishProgressPercent">0%</span></div>
+  <div class="publish-progress-track"><div class="publish-progress-bar" id="publishProgressBar"></div></div>
+</div>
 
 <script>
 /* ---------------- state ---------------- */
@@ -2863,6 +2887,13 @@ function refreshAvatarDisplays(userId){
   const weekPage = document.getElementById('page-week');
   if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
   if(activePostId) renderPostModal();
+  if(currentTab === 'profile') initProfilePage();
+  if(document.getElementById('followDirectoryOverlay')?.classList.contains('open')) renderFollowDirectory();
+}
+function cacheUserAvatar(userId, avatar){
+  if(!userId) return;
+  window._avatarCache[userId] = avatar || null;
+  setProfileCache(Object.assign({}, window._profileCache[userId] || {}, { user_id:userId, avatar:avatar || null, updated_at:new Date().toISOString() }));
 }
 function syncCurrentUserAuthorName(name){
   if(!(session && session.user) || !name) return;
@@ -2965,7 +2996,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.175';
+const APP_VERSION = '5.176';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3872,7 +3903,7 @@ function confirmAvatarCrop(){
     return;
   }
   currentUser.avatar = dataUrl;
-  if(session && session.user) window._avatarCache[session.user.id] = dataUrl;
+  if(session && session.user) cacheUserAvatar(session.user.id, dataUrl);
   saveUserProfileToStorage();
   updateProfileDisplay();
   if(session && session.user) refreshAvatarDisplays(session.user.id);
@@ -8244,6 +8275,10 @@ let eventOn = false;
 let uploadedImages = [];
 let customTags = []; // 自定义标签（最多10个）
 let selectedVideos = []; // 已选视频（仅本地预览占位，不上传数据库；后续通过YouTube API上传）
+let imageProcessingCount = 0;
+let imageProcessingTotal = 0;
+let imageProcessingDone = 0;
+let imageProcessingWaiters = [];
 let textCardCover = null;
 let textCoverDraftTheme = 'garden';
 let textCoverDraftImage = '';
@@ -10859,7 +10894,10 @@ function updateTitleCount(){
   const titleInput = document.getElementById('fTitle');
   const count = titleInput.value.length;
   document.getElementById('titleCount').textContent = count;
-  if(count > 20) titleInput.value = titleInput.value.substring(0, 20);
+  if(count > 30){
+    titleInput.value = titleInput.value.substring(0, 30);
+    document.getElementById('titleCount').textContent = 30;
+  }
 }
 function updateContentCount(){
   const contentInput = document.getElementById('fContent');
@@ -12303,6 +12341,34 @@ function closeCompose(saveDraft=true){
   document.getElementById('composeOverlay').classList.remove('open');
   resetComposeForm();
 }
+function closeComposePreview(){ document.getElementById('composePreviewOverlay')?.classList.remove('open'); }
+function composePreviewMediaHtml(){
+  const videoUrl = document.getElementById('fYoutube')?.value.trim() || '';
+  const videoInfo = extractVideoInfo(videoUrl);
+  if(videoInfo?.provider === 'youtube'){
+    return `<div style="position:relative;aspect-ratio:16/9;background:#161816;overflow:hidden;border-radius:12px;"><img src="${escAttr(youtubeThumbUrl(videoInfo.id))}" alt="视频预览" style="width:100%;height:100%;object-fit:cover;"><span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.62);color:#fff;display:grid;place-items:center;font-size:22px;">▶</span></div>`;
+  }
+  if(videoInfo?.provider === 'tiktok') return `<div style="aspect-ratio:9/12;background:#151515;color:#fff;border-radius:12px;display:grid;place-items:center;font-weight:800;">TikTok 视频预览</div>`;
+  const image = uploadedImages[coverImageIndex] || textCardCover?.dataUrl || createTextCoverDataUrl((document.getElementById('fTitle')?.value || '').trim(), (document.getElementById('fContent')?.value || '').trim(), selectedCat, textCoverDraftTheme || 'garden');
+  return image ? `<img src="${escAttr(image)}" alt="笔记封面" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;display:block;background:var(--bg-alt);">` : `<div style="aspect-ratio:3/4;border-radius:12px;background:var(--bg-alt);display:grid;place-items:center;color:var(--ink-faint);">封面预览</div>`;
+}
+function openComposePreview(){
+  const title = document.getElementById('fTitle')?.value.trim() || '';
+  const content = document.getElementById('fContent')?.value.trim() || '';
+  if(!selectedCat){ showToast('请先选择分类'); return; }
+  if(!title){ showToast('请先填写标题'); document.getElementById('fTitle')?.focus(); return; }
+  if(!content){ showToast('请先填写内容'); document.getElementById('fContent')?.focus(); return; }
+  const pendingTag = customPostTagLabel(document.getElementById('fCustomTag')?.value || '');
+  const previewTags = [...customTags, ...(pendingTag && !customTags.includes(pendingTag) ? [pendingTag] : [])];
+  const start = document.getElementById('fActivityStartDate')?.value || '';
+  const end = document.getElementById('fActivityEndDate')?.value || '';
+  const activity = activityLongTerm ? '长期活动' : (start && end ? (start === end ? start : `${start} 至 ${end}`) : '');
+  const body = document.getElementById('composePreviewBody');
+  if(!body) return;
+  const author = (currentUser?.name || (session?.user?.email || '乐生活用户').split('@')[0]);
+  body.innerHTML = `<article style="max-width:680px;margin:0 auto;"><div style="margin-bottom:14px;">${composePreviewMediaHtml()}</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;"><span class="cat-tag">${catIcon(selectedCat,13)}<span>${escHtml(selectedSubcategory || catLabel(selectedCat))}</span></span>${activity ? `<span style="font-size:12px;color:var(--sage-dark);font-weight:800;">${uiIcon('calendar',14)}${escHtml(activity)}</span>` : ''}</div><h2 style="font-size:20px;line-height:1.4;margin:0 0 12px;color:var(--ink);">${escHtml(title)}</h2><div style="font-size:15px;line-height:1.8;white-space:pre-wrap;color:var(--ink);">${escHtml(content)}</div>${previewTags.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;">${previewTags.map(tag => `<span style="font-size:13px;color:var(--berry);">#${escHtml(tag)}</span>`).join('')}</div>` : ''}<div style="display:flex;align-items:center;gap:8px;margin-top:22px;padding-top:14px;border-top:1px solid var(--line);">${avatarHomeLinkHtml(session?.user?.id, author, 30)}<span style="font-size:13px;color:var(--ink-soft);font-weight:700;">${escHtml(author)}</span><span style="font-size:12px;color:var(--ink-faint);">发布后将显示在首页</span></div></article>`;
+  document.getElementById('composePreviewOverlay')?.classList.add('open');
+}
 function pickCat(c){
   selectedCat = c;
   selectedSubcategory = null;
@@ -12440,22 +12506,39 @@ async function upsertLocation(name){
   } catch(e){ console.warn('地点保存失败:', e.message); }
 }
 /* ---- image compression ---- */
-function compressImage(dataUrl, callback, quality=0.7, maxWidth=800){
+function compressImage(dataUrl, callback, onError=()=>{}, quality=0.76, maxEdge=1440){
+  // 兼容旧调用形式 compressImage(dataUrl, callback, quality, maxEdge)。
+  if(typeof onError === 'number'){
+    maxEdge = Number(quality) || maxEdge;
+    quality = onError;
+    onError = ()=>{};
+  }
   const img = new Image();
   img.onload = ()=>{
     const canvas = document.createElement('canvas');
     let w = img.width, h = img.height;
-    if(w > maxWidth){
-      h = (h * maxWidth) / w;
-      w = maxWidth;
+    const longest = Math.max(w, h);
+    if(longest > maxEdge){
+      const scale = maxEdge / longest;
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
     }
     canvas.width = w;
     canvas.height = h;
     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    callback(canvas.toDataURL('image/jpeg', quality));
+    let nextQuality = quality;
+    let output = canvas.toDataURL('image/jpeg', nextQuality);
+    // 约 700KB 以内通常已足够清晰；超出时逐步降低质量，控制多图发布的存储占用。
+    while(output.length > 940000 && nextQuality > 0.56){
+      nextQuality -= 0.06;
+      output = canvas.toDataURL('image/jpeg', nextQuality);
+    }
+    callback(output);
   };
+  img.onerror = () => onError();
   img.src = dataUrl;
 }
+function isTextCoverAssetUrl(value){ return /\/text-covers\//i.test(String(value || '')); }
 function textCoverTheme(themeId){
   return TEXT_COVER_THEMES.find(theme => theme.id === themeId) || TEXT_COVER_THEMES[0];
 }
@@ -12662,10 +12745,51 @@ function removeTextCardCover(event){
   renderImageGrid();
   scheduleComposeDraftSave();
 }
+function setPublishProgress(text, percent){
+  const panel = document.getElementById('publishProgress');
+  const label = document.getElementById('publishProgressText');
+  const value = document.getElementById('publishProgressPercent');
+  const bar = document.getElementById('publishProgressBar');
+  const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  if(label) label.textContent = text || '正在发布';
+  if(value) value.textContent = `${safePercent}%`;
+  if(bar) bar.style.width = `${safePercent}%`;
+  if(panel) panel.classList.add('show');
+}
+function hidePublishProgress(delay=650){
+  window.setTimeout(() => document.getElementById('publishProgress')?.classList.remove('show'), delay);
+}
+function beginImageProcessing(count){
+  if(imageProcessingCount === 0){ imageProcessingTotal = 0; imageProcessingDone = 0; }
+  imageProcessingCount += count;
+  imageProcessingTotal += count;
+}
+function finishImageProcessing(){
+  imageProcessingCount = Math.max(0, imageProcessingCount - 1);
+  imageProcessingDone += 1;
+  const progressPanel = document.getElementById('publishProgress');
+  if(progressPanel?.classList.contains('show') && imageProcessingTotal > 0){
+    const percent = 18 + Math.round((imageProcessingDone / imageProcessingTotal) * 32);
+    setPublishProgress(imageProcessingCount ? `正在处理图片（${imageProcessingDone}/${imageProcessingTotal}）` : '图片已准备完成，正在发布…', percent);
+  }
+  if(imageProcessingCount === 0){
+    const waiters = imageProcessingWaiters.splice(0);
+    waiters.forEach(resolve => resolve());
+  }
+}
+function waitForImageProcessing(){
+  if(imageProcessingCount === 0) return Promise.resolve();
+  return new Promise(resolve => imageProcessingWaiters.push(resolve));
+}
 function handleMultiImageUpload(e){
   const all = Array.from(e.target.files);
   const videos = all.filter(f => f.type.startsWith('video/'));
   let files = all.filter(f => f.type.startsWith('image/'));
+  // 编辑文字配图笔记时，上传真实照片即视为替换原文字封面，而不是在后面追加。
+  if(files.length && editingPostId !== null && uploadedImages.length && uploadedImages.every(isTextCoverAssetUrl)){
+    uploadedImages = [];
+    coverImageIndex = 0;
+  }
   if(videos.length || files.length) textCardCover = null;
   const videoMode = selectedVideos.length > 0;
 
@@ -12709,22 +12833,45 @@ function handleMultiImageUpload(e){
     return;
   }
 
-  if(uploadedImages.length + files.length > 9){
-    showToast('照片最多9张');
-    return;
-  }
+  const available = Math.max(0, 15 - uploadedImages.length);
+  if(!available){ showToast('照片最多15张'); e.target.value=''; return; }
+  if(files.length > available){ showToast(`照片最多15张，已选择前${available}张`); files = files.slice(0, available); }
+  const validFiles = files.filter(file => {
+    if(file.size <= 10*1024*1024) return true;
+    showToast('单张图片不超过10MB');
+    return false;
+  });
+  if(!validFiles.length){ e.target.value=''; return; }
+  const shouldPromoteNewImage = editingPostId !== null;
+  const compressedImages = new Array(validFiles.length);
   let processed = 0;
-  files.forEach(file=>{
-    if(file.size > 10*1024*1024){ showToast('单张图片不超过10MB'); return; }
+  beginImageProcessing(validFiles.length);
+  const completeOne = () => {
+    processed += 1;
+    if(processed === validFiles.length){
+      const readyImages = compressedImages.filter(Boolean);
+      if(readyImages.length){
+        // 编辑既有笔记时，新选的第一张图会移到第一位，第一位永远是封面。
+        uploadedImages = shouldPromoteNewImage ? [...readyImages, ...uploadedImages] : [...uploadedImages, ...readyImages];
+        coverImageIndex = 0;
+        renderImageGrid();
+        scheduleComposeDraftSave();
+      }
+    }
+    finishImageProcessing();
+  };
+  validFiles.forEach((file, index)=>{
     const reader = new FileReader();
     reader.onload = ev=>{
       compressImage(ev.target.result, compressedData=>{
-        uploadedImages.push(compressedData);
-        if(uploadedImages.length === 1) coverImageIndex = 0;
-        processed++;
-        if(processed === files.length){ renderImageGrid(); scheduleComposeDraftSave(); }
+        compressedImages[index] = compressedData;
+        completeOne();
+      }, () => {
+        showToast('有图片处理失败，请换一张后重试');
+        completeOne();
       });
     };
+    reader.onerror = () => { showToast('图片读取失败，请重试'); completeOne(); };
     reader.readAsDataURL(file);
   });
   e.target.value = ''; // 允许再次选择相同文件
@@ -12745,9 +12892,11 @@ function renderImageGrid(){
   document.getElementById('uploadBox').style.display = 'none';
   grid.style.display = 'grid';
   grid.innerHTML = selectedVideos.length > 0 ? '' : uploadedImages.map((img,idx)=>`
-    <div class="image-item ${idx===coverImageIndex?'cover':''}" onclick="setCover(${idx})">
+    <div class="image-item ${idx===0?'cover':''}" draggable="true" data-image-index="${idx}"
+      onclick="setCover(${idx})" ondragstart="startImageDrag(event,${idx})" ondragover="dragOverImage(event,${idx})" ondragleave="leaveImageDrag(event)" ondrop="dropImageDrag(event,${idx})" ondragend="endImageDrag()"
+      ontouchstart="startImageTouchDrag(event,${idx})" ontouchend="endImageTouchDrag(event)">
       <img src="${img}" alt="">
-      ${idx===coverImageIndex?'<span class="cover-label">封面</span>':''}
+      ${idx===0?'<span class="cover-label">封面</span>':''}
       <button type="button" class="remove-btn" onclick="removeImage(event,${idx})">✕</button>
     </div>
   `).join('');
@@ -12797,10 +12946,10 @@ function renderImageGrid(){
   }
 
   /* 照片模式：追加＋号 */
-  grid.innerHTML += (uploadedImages.length < 9 ? `
+  grid.innerHTML += (uploadedImages.length < 15 ? `
     <div class="image-item add-more" onclick="document.getElementById('fImages').click()" title="继续添加照片或视频">
       <span class="add-plus">＋</span>
-      <span class="add-hint">${uploadedImages.length}/9</span>
+      <span class="add-hint">${uploadedImages.length}/15</span>
     </div>
   ` : '');
 }
@@ -13390,16 +13539,56 @@ function removeVideo(e, i){
   scheduleComposeDraftSave();
   showToast('已移除视频');
 }
-function setCover(idx){
-  coverImageIndex = idx;
+let draggedImageIndex = null;
+function moveImageToIndex(fromIndex, toIndex){
+  if(!Number.isInteger(fromIndex) || !Number.isInteger(toIndex) || fromIndex === toIndex) return;
+  const [image] = uploadedImages.splice(fromIndex, 1);
+  uploadedImages.splice(toIndex, 0, image);
+  coverImageIndex = 0;
   renderImageGrid();
   scheduleComposeDraftSave();
-  showToast('已设置为封面');
+}
+function startImageDrag(event, index){
+  draggedImageIndex = index;
+  event.currentTarget?.classList.add('dragging');
+  if(event.dataTransfer){ event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); }
+}
+function dragOverImage(event, index){
+  event.preventDefault();
+  if(draggedImageIndex !== null && draggedImageIndex !== index) event.currentTarget?.classList.add('drag-over');
+}
+function leaveImageDrag(event){ event.currentTarget?.classList.remove('drag-over'); }
+function dropImageDrag(event, index){
+  event.preventDefault();
+  const from = draggedImageIndex !== null ? draggedImageIndex : Number(event.dataTransfer?.getData('text/plain'));
+  endImageDrag();
+  moveImageToIndex(from, index);
+}
+function endImageDrag(){
+  document.querySelectorAll('.image-item.dragging,.image-item.drag-over').forEach(item => item.classList.remove('dragging','drag-over'));
+  draggedImageIndex = null;
+}
+function startImageTouchDrag(event, index){
+  draggedImageIndex = index;
+  event.currentTarget?.classList.add('dragging');
+}
+function endImageTouchDrag(event){
+  const touch = event.changedTouches && event.changedTouches[0];
+  const target = touch ? document.elementFromPoint(touch.clientX, touch.clientY)?.closest('[data-image-index]') : null;
+  const from = draggedImageIndex;
+  const to = target ? Number(target.dataset.imageIndex) : from;
+  endImageDrag();
+  if(Number.isInteger(from) && Number.isInteger(to)) moveImageToIndex(from, to);
+}
+function setCover(idx){
+  if(idx === 0) return;
+  moveImageToIndex(idx, 0);
+  showToast('已移到第一张，作为封面');
 }
 function removeImage(e, idx){
   e.stopPropagation();
   uploadedImages.splice(idx, 1);
-  if(coverImageIndex >= uploadedImages.length) coverImageIndex = Math.max(0, uploadedImages.length-1);
+  coverImageIndex = 0;
   renderImageGrid();
   scheduleComposeDraftSave();
 }
@@ -13632,7 +13821,8 @@ function editPost(id){
   if(p.images && p.images.length > 0){
     uploadedImages = [...p.images];
     const ci = p.image ? p.images.indexOf(p.image) : 0;
-    coverImageIndex = ci >= 0 ? ci : 0;
+    if(ci > 0){ const [cover] = uploadedImages.splice(ci, 1); uploadedImages.unshift(cover); }
+    coverImageIndex = 0;
   } else if(p.image && !isDefaultImg){
     uploadedImages = [p.image];
     coverImageIndex = 0;
@@ -13724,6 +13914,11 @@ async function submitPost(){
   const pendingTag = document.getElementById('fCustomTag');
   if(pendingTag && pendingTag.value.trim()) addCustomTag(pendingTag.value);
   const tagsArr = [...customTags];
+  if(imageProcessingCount > 0){
+    setPublishProgress(`正在处理图片（${imageProcessingDone}/${imageProcessingTotal}）`, 18);
+    await waitForImageProcessing();
+  }
+  setPublishProgress('正在发布笔记…', 52);
   const ytVertical = videoInfo && videoInfo.provider === 'youtube' && isYoutubeVerticalSource(videoInfo.url);
   const contentToSave = content
     + (tiktokInfo ? `\n\n${tiktokMarker(tiktokInfo.url)}` : '')
@@ -13737,20 +13932,21 @@ async function submitPost(){
   const rawTextCoverImage = automaticTextCover || (editingPostId === null ? textCardCover?.dataUrl : '') || '';
   let textCoverImage = '';
   if(rawTextCoverImage){
-    if(textCoverAssetUploadBusy){ showToast('文字配图正在上传，请稍候'); return; }
+    if(textCoverAssetUploadBusy){ showToast('文字配图正在上传，请稍候'); hidePublishProgress(); return; }
     textCoverAssetUploadBusy = true;
-    showToast('正在保存文字配图…');
+    setPublishProgress('正在保存文字配图…', 68);
     try {
       textCoverImage = await uploadTextCoverAsset(rawTextCoverImage);
     } catch(error){
       console.warn('文字配图资产上传失败:', error.message);
       showToast(error.message || '文字配图上传失败，请重试');
+      hidePublishProgress();
       return;
     } finally {
       textCoverAssetUploadBusy = false;
     }
   }
-  const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[coverImageIndex] : (textCoverImage || null));
+  const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[0] : (textCoverImage || null));
   const images = uploadedImages.length > 0 ? uploadedImages : (textCoverImage ? [textCoverImage] : null);
   // 2.93：优先取"我的"页可编辑的昵称
   const authorName = (typeof currentUser !== 'undefined' && currentUser.name && currentUser.name !== '未登录用户')
@@ -13760,7 +13956,7 @@ async function submitPost(){
       : '我';
 
   if(editingPostId !== null){
-    if(isScheduledPost){ showToast('已发布笔记暂不支持改为定时发布，请新建一篇内容'); return; }
+    if(isScheduledPost){ showToast('已发布笔记暂不支持改为定时发布，请新建一篇内容'); hidePublishProgress(); return; }
     /* ---- 编辑模式：更新已有帖子 ---- */
     const p = posts.find(x => x.id === editingPostId);
     if(p){
@@ -13778,13 +13974,17 @@ async function submitPost(){
     showToast('✓ 已更新');
     if(location) upsertLocation(location);
     try {
+      setPublishProgress('正在同步更新…', 84);
       const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, community_meta:communityMeta, youtube:ytId, event, tags: tagsArr, location: location || null };
       if(uploadedImages.length > 0){ fields.image = image; fields.images = images; }
       await supabaseUpdatePost(idToUpdate, fields);
       console.log('✓ 数据库已同步更新 id=', idToUpdate);
+      setPublishProgress('发布完成', 100);
+      hidePublishProgress();
     } catch(e){
       console.warn('⚠️ 数据库更新失败:', e.message);
       showToast('⚠️ 云端保存失败，请检查数据库权限');
+      hidePublishProgress();
     }
     return;
   }
@@ -13812,6 +14012,7 @@ async function submitPost(){
 
   // 同步保存到 Supabase 数据库
   try {
+    setPublishProgress('正在同步到乐生活…', 84);
     const saved = await supabaseInsertPost({
       title, content: contentToSave, excerpt, category:cat,
       author: authorName, image, images, youtube: ytId, subcategory, community_meta:communityMeta,
@@ -13828,14 +14029,18 @@ async function submitPost(){
         showToast(`已定时：${formatLaDateTime(scheduledAt)}`);
       }
       console.log('✓ 已保存到数据库, id=', saved.id);
+      setPublishProgress('发布完成', 100);
+      hidePublishProgress();
     }
   } catch(e){
     if(isScheduledPost){
       showToast('⚠️ 定时保存失败，内容仍保留在当前页面');
+      hidePublishProgress();
       return;
     }
     console.warn('⚠️ 保存到数据库失败（刷新后帖子会消失）:', e.message);
     showToast('⚠️ 云端保存失败，请检查数据库权限');
+    hidePublishProgress();
   }
 }
 
