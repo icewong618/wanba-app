@@ -899,6 +899,13 @@
     display:flex;flex-direction:column;
     max-height:92vh;
   }
+  /* 笔记详情单独使用全屏滚动容器：避免桌面浏览器沿用普通弹窗高度，图片撑满后正文和评论无法滑到。 */
+  #postOverlay{padding:0;background:#fff;align-items:stretch;overflow:hidden;z-index:520;}
+  #postModal{
+    width:100%;max-width:var(--container-w);height:100vh;height:100dvh;max-height:none;
+    border-radius:0;box-shadow:none;animation:none;display:flex;flex-direction:column;min-height:0;
+  }
+  #postModal .xhs-scroll{min-height:0;}
   @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
   .sheet-item{display:flex;align-items:center;gap:12px;width:100%;padding:14px 8px;border:none;background:none;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--line);text-align:left;}
   .sheet-item:last-child{border-bottom:none;}
@@ -2921,6 +2928,17 @@ function resolveAvatarUrl(user_id){
   if(session && session.user && user_id === session.user.id && currentUser.avatar) return currentUser.avatar;
   return window._avatarCache[user_id] || null;
 }
+function avatarImageSrc(userId, url){
+  const source = String(url || '');
+  if(!source || source.startsWith('data:') || source.startsWith('blob:')) return source;
+  const updatedAt = window._profileCache[userId]?.updated_at || (session?.user?.id === userId ? currentUser?.avatarUpdatedAt : '');
+  if(!updatedAt) return source;
+  try {
+    const parsed = new URL(source, window.location.href);
+    parsed.searchParams.set('avatar_v', String(new Date(updatedAt).getTime() || updatedAt));
+    return parsed.toString();
+  } catch(error){ return source; }
+}
 function setProfileCache(profile){
   if(!profile || !profile.user_id) return;
   window._profileCache[profile.user_id] = Object.assign({}, window._profileCache[profile.user_id] || {}, profile);
@@ -2949,10 +2967,10 @@ async function ensureAvatarsFor(userIds){
   if(!needProfiles.length && !needMerchants.length) return false;
   try {
     if(needProfiles.length){
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${needProfiles.join(',')})&select=user_id,avatar`);
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${needProfiles.join(',')})&select=user_id,avatar,updated_at`);
       if(res.ok){
         const rows = await res.json();
-        rows.forEach(r => { window._avatarCache[r.user_id] = r.avatar || null; });
+        rows.forEach(setProfileCache);
       }
       needProfiles.forEach(uid => { if(!(uid in window._avatarCache)) window._avatarCache[uid] = null; });
     }
@@ -2971,13 +2989,13 @@ async function ensureAvatarsFor(userIds){
 function avatarCircleHtml(name, user_id){
   const url = resolveAvatarUrl(user_id);
   const merchantRing = isVerifiedMerchantUser(user_id) ? 'box-shadow:0 0 0 2px var(--sage-light);' : '';
-  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;${merchantRing}"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
+  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;${merchantRing}"><img src="${escAttr(avatarImageSrc(user_id, url))}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
   return `<span class="avatar" style="background:${avatarColor(name||'友')};${merchantRing}">${initials(name||'友')}</span>`;
 }
 function avatarCircleSizedHtml(name, userId, size){
   const url = resolveAvatarUrl(userId);
   const merchantRing = isVerifiedMerchantUser(userId) ? 'box-shadow:0 0 0 2px var(--sage-light);' : '';
-  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;width:${size}px;height:${size}px;${merchantRing}"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
+  if(url) return `<span class="avatar" style="overflow:hidden;padding:0;width:${size}px;height:${size}px;${merchantRing}"><img src="${escAttr(avatarImageSrc(userId, url))}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>`;
   return `<span class="avatar" style="background:${avatarColor(name||'友')};width:${size}px;height:${size}px;font-size:${Math.max(10, Math.round(size * 0.38))}px;${merchantRing}">${initials(name||'友')}</span>`;
 }
 function avatarHomeLinkHtml(userId, name, size){
@@ -2996,7 +3014,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.176';
+const APP_VERSION = '5.177';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3903,6 +3921,7 @@ function confirmAvatarCrop(){
     return;
   }
   currentUser.avatar = dataUrl;
+  currentUser.avatarUpdatedAt = new Date().toISOString();
   if(session && session.user) cacheUserAvatar(session.user.id, dataUrl);
   saveUserProfileToStorage();
   updateProfileDisplay();
@@ -4122,7 +4141,7 @@ async function syncProfileToDb(){
 async function fetchProfileFromDb(){
   if(!(session && session.user)) return;
   try {
-    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar,bio,tags,gender,birth,cover,ip_location`);
+    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar,bio,tags,gender,birth,cover,ip_location,updated_at`);
     if(!res.ok){
       res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar`);
     }
@@ -4139,12 +4158,14 @@ async function fetchProfileFromDb(){
         gender: row.gender || local.gender,
         birth: row.birth || local.birth,
         cover: row.cover || local.cover,
-        location: row.ip_location || local.location
+        location: row.ip_location || local.location,
+        avatarUpdatedAt: row.updated_at || local.avatarUpdatedAt
       }));
       if(row.ip_location && !window._ipLocation) window._ipLocation = row.ip_location;
       setProfileCache(Object.assign({ user_id:session.user.id }, row));
       saveUserProfileToStorage();
       updateProfileDisplay();
+      refreshAvatarDisplays(session.user.id);
     }
   } catch(e){ console.warn('资料拉取失败:', e.message); }
 }
@@ -8871,11 +8892,13 @@ async function hydratePostDetail(postId){
 }
 async function loadCommentsFromDb(postId){
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${postId}&order=created_at.asc`, { method:'GET' });
-    if(!res.ok) return;
+    const select = 'id,post_id,user_id,name,text,created_at,parent_id,reply_to_user_id,reply_to_name';
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${encodeURIComponent(postId)}&select=${select}&order=created_at.asc`, { method:'GET' });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const rows = await res.json();
     const p = getPost();
-    if(!p || p.id !== postId) return;
+    // URL、卡片和数据库的 id 类型可能分别是字符串/数字，统一转字符串比较，避免成功读到评论却不渲染。
+    if(!p || String(p.id) !== String(postId)) return;
     p.comments = rows.map(r => ({
       id: r.id, name: r.name, text: r.text, user_id: r.user_id,
       parent_id: r.parent_id || null, reply_to_name: r.reply_to_name || null,
@@ -8990,6 +9013,7 @@ function initProfilePage(){
     notesContent.innerHTML = userPosts.map(p => `
       <div onclick="openPost(${p.id})" style="position:relative;border-radius:12px;overflow:hidden;background:var(--bg-alt);cursor:pointer;">
         ${p.pinned ? '<span style="position:absolute;top:6px;left:6px;z-index:3;background:var(--berry);color:#fff;font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600;">置顶</span>' : ''}
+        <button onclick="event.stopPropagation();togglePinById(${p.id})" style="position:absolute;top:6px;right:6px;z-index:4;border:0;border-radius:999px;background:rgba(255,255,255,.94);color:${p.pinned ? 'var(--berry)' : 'var(--ink-soft)'};padding:5px 8px;font-size:10px;font-weight:900;box-shadow:0 1px 5px rgba(42,39,33,.14);">${p.pinned ? '取消置顶' : '置顶'}</button>
         <div style="position:relative;aspect-ratio:3/4;background:var(--bg-alt);overflow:hidden;">${postCardMediaHtml(p, 38)}</div>
         <div style="position:absolute;inset:0;background:rgba(0,0,0,0);opacity:0;transition:opacity 0.3s;display:flex;align-items:flex-end;justify-content:space-around;padding:12px;gap:8px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.7));" class="post-overlay-${p.id}">
           <button onclick="event.stopPropagation();editPost(${p.id})" style="flex:1;padding:8px 12px;background:var(--sage);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;">编辑</button>
@@ -11211,7 +11235,7 @@ function renderCommentThread(t){
   return `${renderComment(t.root, false)}${repliesHtml ? `<div class="replies">${repliesHtml}</div>` : ''}`;
 }
 function renderComment(c, isReply){
-  const mine = session && session.user && c.user_id === session.user.id;
+  const mine = !!(session && session.user && String(c.user_id || '') === String(session.user.id));
   const replyPrefix = (isReply && c.reply_to_name) ? `<span style="color:var(--sage-dark);font-weight:600;">回复 @${c.reply_to_name}：</span>` : '';
   const uid = String(c.user_id || '').replace(/'/g, '');
   const safeName = String(c.name || '乐生活用户').replace(/'/g, '');
@@ -11229,7 +11253,7 @@ function renderComment(c, isReply){
           <button class="send-btn small" onclick="submitReply(${c.id})">发送</button>
         </div>
       </div>
-      ${mine ? `<button onclick="deleteComment(${c.id})" title="删除" style="border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:13px;padding:4px;">✕</button>` : ''}
+      ${mine ? `<button onclick="deleteComment(${c.id})" title="删除这条评论" style="border:1px solid var(--line);background:#fff;color:var(--berry);cursor:pointer;font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;align-self:flex-start;">删除</button>` : ''}
     </div>
   `;
 }
@@ -13507,13 +13531,27 @@ async function setVisibility(v){
 async function togglePin(){
   const p = getPost();
   if(!p) return;
+  return togglePinById(p.id);
+}
+async function togglePinById(postId){
+  const p = posts.find(item => String(item.id) === String(postId));
+  if(!p) return;
+  if(!(session && session.user) || p.user_id !== session.user.id){ showToast('只能置顶自己的笔记'); return; }
   try {
     const np = !p.pinned;
+    if(np){
+      const pinnedCount = posts.filter(item => item.user_id === session.user.id && item.pinned && String(item.id) !== String(p.id)).length;
+      if(pinnedCount >= 2){
+        showToast('已有两篇置顶，请取消一篇后再尝试');
+        return;
+      }
+    }
     await supabaseUpdatePost(p.id, { pinned: np });
     p.pinned = np;
     closeOwnerSheet();
     showToast(np ? '已置顶' : '已取消置顶');
     savePosts();
+    renderFeed();
     initProfilePage();
   } catch(e){ showToast('操作失败：' + e.message); }
 }
