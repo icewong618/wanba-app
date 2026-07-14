@@ -1249,6 +1249,12 @@
     overflow-x:hidden;
   }
   .page.active{display:block;}
+  .pull-refresh-indicator{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:920;display:flex;align-items:center;gap:7px;min-width:116px;justify-content:center;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,252,.96);box-shadow:0 5px 16px rgba(42,39,33,.14);color:var(--sage-dark);font-size:12px;font-weight:900;pointer-events:none;opacity:0;transform:translate(-50%,-18px);transition:opacity .16s ease,transform .16s ease;}
+  .pull-refresh-indicator.show{opacity:1;transform:translate(-50%,0);}
+  .pull-refresh-indicator.ready{color:var(--berry-dark);border-color:rgba(194,65,107,.28);}
+  .pull-refresh-spinner{width:14px;height:14px;border:2px solid rgba(95,133,103,.24);border-top-color:currentColor;border-radius:50%;}
+  .pull-refresh-indicator.loading .pull-refresh-spinner{animation:pullRefreshSpin .7s linear infinite;}
+  @keyframes pullRefreshSpin{to{transform:rotate(360deg)}}
   #page-home,#page-week,#page-message,#page-admin{padding-left:20px;padding-right:20px;}
   .page:not(#page-profile){padding-top:calc(12px + env(safe-area-inset-top));}
   #page-home{padding-top:0;}
@@ -1798,6 +1804,8 @@
     <div class="launch-foot">内容很快就到</div>
   </div>
 </div>
+
+<div class="pull-refresh-indicator" id="pullRefreshIndicator" aria-live="polite"><span class="pull-refresh-spinner"></span><span id="pullRefreshLabel">下拉刷新</span></div>
 
 <header class="top">
   <div class="quick-bar">
@@ -2911,7 +2919,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.170';
+const APP_VERSION = '5.171';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14388,6 +14396,98 @@ function updateFixedTopLayout(){
 }
 window.addEventListener('resize', updateFixedTopLayout);
 window.addEventListener('orientationchange', () => setTimeout(updateFixedTopLayout, 250));
+
+/* ---------- App 下拉刷新：仅在各页面顶部触发 ---------- */
+let pullRefreshStartY = 0;
+let pullRefreshDistance = 0;
+let pullRefreshTracking = false;
+let pullRefreshBusy = false;
+const PULL_REFRESH_THRESHOLD = 72;
+function pullRefreshIndicator(state='hidden', label='下拉刷新'){
+  const el = document.getElementById('pullRefreshIndicator');
+  const text = document.getElementById('pullRefreshLabel');
+  if(!el || !text) return;
+  text.textContent = label;
+  el.classList.toggle('show', state !== 'hidden');
+  el.classList.toggle('ready', state === 'ready');
+  el.classList.toggle('loading', state === 'loading');
+}
+function pullRefreshBlockedTarget(target){
+  if(!target || !target.closest) return false;
+  return !!target.closest('input,textarea,select,button,a,iframe,video,.image-carousel,.yt-wrap,.tiktok-wrap,.share-sheet,.overlay.open,.feedback-overlay.open,.content-report-overlay.open,.my-feedback-overlay.open,.beta-info-overlay.open,.policy-overlay.open');
+}
+function pageAtTopForPullRefresh(target){
+  if((window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 3) return false;
+  let node = target && target.nodeType === 1 ? target : null;
+  while(node && node !== document.body){
+    const style = window.getComputedStyle(node);
+    if(/auto|scroll/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2 && node.scrollTop > 3) return false;
+    node = node.parentElement;
+  }
+  return true;
+}
+async function refreshActiveAppPage(){
+  const tab = currentTab || 'home';
+  if(tab === 'home'){
+    await loadPostsFromSupabase({force:true});
+    await loadEngagement();
+  } else if(tab === 'week'){
+    await loadPostsFromSupabase({force:true});
+    renderWeekFeed();
+  } else if(tab === 'deals'){
+    await loadDailyPriceCache(true);
+    refreshDealsIfNeeded();
+    renderDealsPage();
+  } else if(tab === 'message'){
+    await Promise.all([loadDms(), loadMemberActivityNotifications()]);
+    initMessagePage();
+  } else if(tab === 'profile'){
+    await Promise.all([fetchProfileFromDb(), fetchMerchantProfile()]);
+    initProfilePage();
+  } else if(tab === 'admin'){
+    await checkDealAdmin();
+    if(isDealAdmin) await loadAdminCenter(true);
+    else renderAdminPanel();
+  }
+}
+function initAppPullToRefresh(){
+  document.addEventListener('touchstart', event => {
+    if(!isEmbeddedAppEntry() || pullRefreshBusy || event.touches.length !== 1 || pullRefreshBlockedTarget(event.target) || !pageAtTopForPullRefresh(event.target)) return;
+    pullRefreshTracking = true;
+    pullRefreshStartY = event.touches[0].clientY;
+    pullRefreshDistance = 0;
+  }, {passive:true});
+  document.addEventListener('touchmove', event => {
+    if(!pullRefreshTracking || pullRefreshBusy || event.touches.length !== 1) return;
+    const distance = Math.max(0, event.touches[0].clientY - pullRefreshStartY);
+    if(distance <= 0){ pullRefreshTracking = false; pullRefreshIndicator(); return; }
+    pullRefreshDistance = Math.min(distance, PULL_REFRESH_THRESHOLD + 34);
+    if(distance > 8 && event.cancelable) event.preventDefault();
+    pullRefreshIndicator(pullRefreshDistance >= PULL_REFRESH_THRESHOLD ? 'ready' : 'pulling', pullRefreshDistance >= PULL_REFRESH_THRESHOLD ? '松开刷新' : '下拉刷新');
+  }, {passive:false});
+  document.addEventListener('touchend', async () => {
+    if(!pullRefreshTracking) return;
+    const shouldRefresh = pullRefreshDistance >= PULL_REFRESH_THRESHOLD;
+    pullRefreshTracking = false;
+    pullRefreshDistance = 0;
+    if(!shouldRefresh){ pullRefreshIndicator(); return; }
+    pullRefreshBusy = true;
+    pullRefreshIndicator('loading', '正在刷新');
+    try {
+      await refreshActiveAppPage();
+      pullRefreshIndicator('loading', '刷新完成');
+      setTimeout(() => pullRefreshIndicator(), 500);
+    } catch(e){
+      console.warn('下拉刷新失败:', e.message);
+      pullRefreshIndicator('loading', '刷新失败，请重试');
+      setTimeout(() => pullRefreshIndicator(), 900);
+    } finally {
+      pullRefreshBusy = false;
+    }
+  }, {passive:true});
+  document.addEventListener('touchcancel', () => { pullRefreshTracking = false; pullRefreshDistance = 0; if(!pullRefreshBusy) pullRefreshIndicator(); }, {passive:true});
+}
+initAppPullToRefresh();
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
