@@ -2320,6 +2320,18 @@
         <div class="youtube-preview" id="youtubePreview"></div>
       </div>
 
+      <div class="form-field" id="activityPeriodField" style="display:none;">
+        <label>活动时效 <span style="font-weight:400;color:var(--ink-faint);">（玩乐内容可选，填写后会自动进入活动入口）</span></label>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;">
+          <span style="font-size:12px;color:var(--ink-soft);line-height:1.45;">本月活动会按日期归类；本周末活动展示未来 7 天内的活动。</span>
+          <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;font-weight:800;color:var(--sage-dark);cursor:pointer;"><input type="checkbox" id="fActivityLongTerm" onchange="toggleActivityLongTerm()">长期</label>
+        </div>
+        <div id="activityDateInputs" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><span style="display:block;margin:0 0 5px;font-size:12px;color:var(--ink-soft);font-weight:700;">开始日期</span><input type="date" id="fActivityStartDate" onchange="scheduleComposeDraftSave()"></div>
+          <div><span style="display:block;margin:0 0 5px;font-size:12px;color:var(--ink-soft);font-weight:700;">截止日期</span><input type="date" id="fActivityEndDate" onchange="scheduleComposeDraftSave()"></div>
+        </div>
+      </div>
+
       <div class="toggle-row">
         <div class="switch" id="eventSwitch" onclick="toggleEvent()"></div>
         <span style="font-size:13.5px;font-weight:600;">这是一个需要报名的活动</span>
@@ -2952,7 +2964,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.173';
+const APP_VERSION = '5.174';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8214,6 +8226,7 @@ let posts = [
 let currentFilter = '全部';
 let currentSubcategory = '全部';
 let currentTag = null;
+let activityLongTerm = false;
 let feedMode = localStorage.getItem('leshenghuo_feed_mode') || 'recommend';
 let mutedFeedCategories = new Set();
 let preferredFeedInterests = new Set();
@@ -8397,6 +8410,55 @@ function setTagFilter(tag){
   renderChips();
   renderQuicklinks();
   renderFeed();
+}
+
+function postQuickSearchText(post){
+  const tags = Array.isArray(post?.tags) ? post.tags.join(' ') : '';
+  return [post?.title, post?.content, post?.excerpt, post?.subcategory, tags].filter(Boolean).join(' ').toLowerCase();
+}
+function localDateFromYmd(value){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function activityPeriodForPost(post){
+  const event = post && post.event && typeof post.event === 'object' ? post.event : null;
+  const start = localDateFromYmd(event?.start_date);
+  const end = localDateFromYmd(event?.end_date);
+  return start && end && end >= start ? {start, end} : null;
+}
+function dateRangesOverlap(startA, endA, startB, endB){ return startA <= endB && endA >= startB; }
+function todayLocalDate(){ const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), now.getDate()); }
+function isActivityInCurrentMonth(post){
+  const period = activityPeriodForPost(post);
+  if(!period) return false;
+  const today = todayLocalDate();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  return dateRangesOverlap(period.start, period.end, monthStart, monthEnd);
+}
+function isActivityInNextSevenDays(post){
+  const period = activityPeriodForPost(post);
+  if(!period) return false;
+  const start = todayLocalDate();
+  const end = new Date(start); end.setDate(end.getDate() + 6);
+  return dateRangesOverlap(period.start, period.end, start, end);
+}
+function postHasExactTag(post, tag){ return Array.isArray(post?.tags) && post.tags.some(value => String(value || '').trim() === tag); }
+function postMatchesQuickLink(post, tag){
+  const text = postQuickSearchText(post);
+  if(tag === '遛娃') return text.includes('遛娃');
+  if(tag === '免费活动') return postHasExactTag(post, tag) || text.includes('免费活动') || text.includes('免费');
+  if(tag === '本月活动') return isActivityInCurrentMonth(post) || postHasExactTag(post, tag);
+  if(tag === '本周末活动') return isActivityInNextSevenDays(post) || postHasExactTag(post, tag);
+  return postHasExactTag(post, tag);
+}
+function isSignupEvent(event){ return !!(event && Number(event.capacity) > 0); }
+function activityPeriodLabel(post){
+  const period = activityPeriodForPost(post);
+  if(!period) return '';
+  const event = post.event || {};
+  return event.start_date === event.end_date ? event.start_date : `${event.start_date} 至 ${event.end_date}`;
 }
 
 function youtubeHubVideos(){
@@ -8637,7 +8699,7 @@ function renderFeed(){
   renderFeedModes();
   let list;
   if(currentTag){
-    list = posts.filter(p=>p.tags && p.tags.includes(currentTag));
+    list = posts.filter(p => postMatchesQuickLink(p, currentTag));
   } else {
     list = currentFilter==='全部' ? posts : posts.filter(p=>normalizeCategory(p.category)===currentFilter);
     if(currentSubcategory !== '全部') list = list.filter(p => p.subcategory === currentSubcategory);
@@ -8660,7 +8722,7 @@ function renderFeed(){
   }
   el.innerHTML = list.map(p=>{
     const media = postCardMediaHtml(p, 40);
-    const stub = p.event ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
+    const stub = isSignupEvent(p.event) ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
     return `
     <div class="card" onclick="openPost(${p.id})">
       <div class="card-media">
@@ -8692,7 +8754,7 @@ function customPostTagHtml(value){
 }
 function tagResultCardHtml(p){
   const media = postCardMediaHtml(p, 40);
-  const stub = p.event ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
+  const stub = isSignupEvent(p.event) ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
   const safeId = Number(p.id);
   return `<div class="card" onclick="openPost(${Number.isFinite(safeId) ? safeId : 0})"><div class="card-media">${media}${cardCategoryTag(p.category, p.subcategory)}${mediaWatermarkHtml(p.author)}${stub}</div><div class="card-body"><div class="card-title">${escHtml(p.title || '无标题')}</div><div class="card-meta"><div class="author">${avatarHomeLinkHtml(p.user_id, p.author, 20)}<span class="author-name" onclick="event.stopPropagation();openUserPublicPage('${String(p.user_id || '').replace(/'/g, '')}','${String(p.author || '乐生活用户').replace(/'/g, '')}')" style="display:flex;align-items:center;gap:5px;min-width:0;cursor:pointer;">${authorNameHtml(p.author, p.user_id)}</span></div><div class="stat-row"><span>${p.liked?'♥':'♡'} ${p.likes || 0}</span></div></div></div></div>`;
 }
@@ -8978,7 +9040,7 @@ function closeBrowsingHistory(){
 /* ---- page navigation ---- */
 function renderWeekFeed(){
   const weekFeed = document.getElementById('weekFeed');
-  const weekPosts = posts.filter(p=>p.event && (p.tags && p.tags.includes('本周末活动') || p.category));
+  const weekPosts = orderedFeedPosts(posts.filter(p => postMatchesQuickLink(p, '本周末活动')));
   weekFeed.innerHTML = weekPosts.length > 0 
     ? `<div class="feed">${weekPosts.map(p=>`
         <div class="card" onclick="openPost(${p.id})">
@@ -10913,7 +10975,8 @@ function renderPostModal(){
   }
   const mediaTools = '';
 
-  const eventBlock = p.event ? `
+  const activityPeriod = activityPeriodLabel(p);
+  const eventBlock = isSignupEvent(p.event) ? `
     <div class="event-box">
       <div class="row">
         <span class="label">${uiIcon('calendar',14)} 活动报名</span>
@@ -10924,7 +10987,7 @@ function renderPostModal(){
         <span class="event-nums">${p.event.registered} / ${p.event.capacity} 人已报名</span>
         <button class="btn-rsvp ${p.event.userJoined?'done':''}" onclick="rsvp()">${p.event.userJoined?'✓ 已报名':'我要报名'}</button>
       </div>
-    </div>` : '';
+    </div>` : (activityPeriod ? `<div class="event-box" style="padding:12px 14px;"><div class="row" style="margin:0;"><span class="label">${uiIcon('calendar',14)} 活动时间</span><span class="event-nums">${escHtml(activityPeriod)}</span></div></div>` : '');
 
   const commentThreads = buildCommentThreads(p.comments || []);
   const commentsHtml = commentThreads.map(t => renderCommentThread(t)).join('') || `<div style="font-size:13px;color:var(--ink-faint);padding:6px 0 12px;">还没有评论,来说第一句吧</div>`;
@@ -11278,7 +11341,7 @@ async function toggleLike(){
 function rsvp(){
   if(!session || !session.user){ showToast('请先登录后再报名'); openAuth(); return; }
   const p = getPost();
-  if(!p.event || p.event.userJoined) return;
+  if(!isSignupEvent(p.event) || p.event.userJoined) return;
   if(p.event.registered >= p.event.capacity){ showToast('名额已满'); return; }
   p.event.registered += 1;
   p.event.userJoined = true;
@@ -12129,7 +12192,7 @@ async function composeDraftStore(action, value){
   });
 }
 function composeDraftHasContent(draft){
-  return !!(draft && (draft.title || draft.content || draft.location || draft.youtube || (draft.customTags || []).length || (draft.uploadedImages || []).length || draft.textCardCover));
+  return !!(draft && (draft.title || draft.content || draft.location || draft.youtube || draft.activityStartDate || draft.activityEndDate || draft.activityLongTerm || (draft.customTags || []).length || (draft.uploadedImages || []).length || draft.textCardCover));
 }
 function composeDraftSnapshot(){
   const value = id => document.getElementById(id)?.value || '';
@@ -12137,7 +12200,7 @@ function composeDraftSnapshot(){
     id: composeDraftId || `draft_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     owner: composeDraftOwner(),
     title: value('fTitle').trim(), content: value('fContent').trim(), location: value('fLocation').trim(), youtube: value('fYoutube').trim(),
-    capacity: value('fCapacity'), deadline: value('fDeadline').trim(), customTags:[...customTags], selectedCat, selectedSubcategory, communityPostMeta:{...communityPostMeta}, eventOn,
+    capacity: value('fCapacity'), deadline: value('fDeadline').trim(), activityStartDate:value('fActivityStartDate'), activityEndDate:value('fActivityEndDate'), activityLongTerm, customTags:[...customTags], selectedCat, selectedSubcategory, communityPostMeta:{...communityPostMeta}, eventOn,
     postPublishMode, scheduledAt: value('fScheduledAt'),
     uploadedImages:[...uploadedImages], coverImageIndex, textCardCover: textCardCover ? {...textCardCover} : null,
     createdAt: Date.now(), updatedAt: Date.now(), videoNeedsReselect: selectedVideos.length > 0
@@ -12178,13 +12241,15 @@ async function removeComposeDraft(id = composeDraftId){
   if(id === composeDraftId) composeDraftId = null;
 }
 function resetComposeForm(){
-  selectedCat = null; selectedSubcategory = null; communityPostMeta = {}; eventOn = false; editingPostId = null; composeDraftId = null; postPublishMode = 'now';
+  selectedCat = null; selectedSubcategory = null; communityPostMeta = {}; eventOn = false; activityLongTerm = false; editingPostId = null; composeDraftId = null; postPublishMode = 'now';
   document.getElementById('fTitle').value=''; document.getElementById('fContent').value=''; document.getElementById('fYoutube').value='';
   updateYoutubePreview(); document.getElementById('fCapacity').value=''; document.getElementById('fDeadline').value='';
+  document.getElementById('fActivityStartDate').value=''; document.getElementById('fActivityEndDate').value=''; document.getElementById('fActivityLongTerm').checked=false;
   document.getElementById('eventSwitch').classList.remove('on'); document.getElementById('eventFields').classList.remove('open');
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.remove('sel'));
   renderPostSubcategoryPicker();
   renderCommunityPostFields();
+  renderActivityPeriodFields();
   uploadedImages = []; textCardCover = null; textCoverDraftImage = '';
   selectedVideos.forEach(v => URL.revokeObjectURL(v.url)); selectedVideos = []; customTags = []; renderCustomTags();
   const tagIn = document.getElementById('fCustomTag'); if(tagIn) tagIn.value = '';
@@ -12220,10 +12285,10 @@ async function resumeComposeDraft(id){
     if(!draft) throw new Error('草稿不存在');
     closeComposeDrafts(); resetComposeForm(); composeDraftId = draft.id;
     document.getElementById('fTitle').value = draft.title || ''; document.getElementById('fContent').value = draft.content || ''; document.getElementById('fYoutube').value = draft.youtube || ''; document.getElementById('fLocation').value = draft.location || '';
-    document.getElementById('fCapacity').value = draft.capacity || ''; document.getElementById('fDeadline').value = draft.deadline || '';
-    selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; communityPostMeta = draft.communityPostMeta && typeof draft.communityPostMeta === 'object' ? {...draft.communityPostMeta} : {}; eventOn = !!draft.eventOn; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null; postPublishMode = draft.postPublishMode === 'scheduled' ? 'scheduled' : 'now';
+    document.getElementById('fCapacity').value = draft.capacity || ''; document.getElementById('fDeadline').value = draft.deadline || ''; document.getElementById('fActivityStartDate').value = draft.activityStartDate || ''; document.getElementById('fActivityEndDate').value = draft.activityEndDate || '';
+    selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; communityPostMeta = draft.communityPostMeta && typeof draft.communityPostMeta === 'object' ? {...draft.communityPostMeta} : {}; eventOn = !!draft.eventOn; activityLongTerm = !!draft.activityLongTerm; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null; postPublishMode = draft.postPublishMode === 'scheduled' ? 'scheduled' : 'now';
     const scheduleInput = document.getElementById('fScheduledAt'); if(scheduleInput) scheduleInput.value = draft.scheduledAt || '';
-    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); renderPostSubcategoryPicker(); renderCommunityPostFields(); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn); updateSchedulePublishUi();
+    document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c === selectedCat)); renderPostSubcategoryPicker(); renderCommunityPostFields(); renderActivityPeriodFields(); document.getElementById('eventSwitch').classList.toggle('on', eventOn); document.getElementById('eventFields').classList.toggle('open', eventOn); updateSchedulePublishUi();
     document.getElementById('titleCount').textContent = (draft.title || '').length; document.getElementById('contentCount').textContent = (draft.content || '').length; renderCustomTags(); renderImageGrid(); updateYoutubePreview();
     document.getElementById('composeOverlay').classList.add('open'); updateComposeDraftStatus(draft.videoNeedsReselect ? '草稿已恢复，视频文件需重新选择' : '已恢复本机草稿');
   } catch(error){ showToast('草稿恢复失败，请稍后重试'); }
@@ -12244,6 +12309,27 @@ function pickCat(c){
   document.querySelectorAll('.cat-pick').forEach(b=>b.classList.toggle('sel', b.dataset.c===c));
   renderPostSubcategoryPicker();
   renderCommunityPostFields();
+  renderActivityPeriodFields();
+  scheduleComposeDraftSave();
+}
+function renderActivityPeriodFields(){
+  const field = document.getElementById('activityPeriodField');
+  const longTerm = document.getElementById('fActivityLongTerm');
+  const dates = document.getElementById('activityDateInputs');
+  const start = document.getElementById('fActivityStartDate');
+  const end = document.getElementById('fActivityEndDate');
+  if(!field || !longTerm || !dates || !start || !end) return;
+  const visible = normalizeCategory(selectedCat) === '玩乐';
+  field.style.display = visible ? 'block' : 'none';
+  longTerm.checked = activityLongTerm;
+  start.disabled = activityLongTerm;
+  end.disabled = activityLongTerm;
+  dates.style.opacity = activityLongTerm ? '.42' : '1';
+  dates.style.pointerEvents = activityLongTerm ? 'none' : 'auto';
+}
+function toggleActivityLongTerm(){
+  activityLongTerm = !!document.getElementById('fActivityLongTerm')?.checked;
+  renderActivityPeriodFields();
   scheduleComposeDraftSave();
 }
 function renderPostSubcategoryPicker(){
@@ -13525,12 +13611,21 @@ function editPost(id){
   selectedCat = p.category;
   selectedSubcategory = isValidPostSubcategory(selectedCat, p.subcategory) ? p.subcategory : null;
   communityPostMeta = p.community_meta && typeof p.community_meta === 'object' ? {...p.community_meta} : {};
+  eventOn = isSignupEvent(p.event);
+  activityLongTerm = !!(p.event && p.event.activity_long_term);
+  document.getElementById('fCapacity').value = eventOn ? (p.event.capacity || '') : '';
+  document.getElementById('fDeadline').value = eventOn ? (p.event.deadline || '') : '';
+  document.getElementById('fActivityStartDate').value = p.event?.start_date || '';
+  document.getElementById('fActivityEndDate').value = p.event?.end_date || '';
   // 高亮对应分类按钮
   document.querySelectorAll('.cat-pick').forEach(b => {
     b.classList.toggle('sel', b.dataset.c === p.category);
   });
   renderPostSubcategoryPicker();
   renderCommunityPostFields();
+  renderActivityPeriodFields();
+  document.getElementById('eventSwitch').classList.toggle('on', eventOn);
+  document.getElementById('eventFields').classList.toggle('open', eventOn);
   // 加载已有图片到编辑器（可继续追加/删除/换封面）
   const isDefaultImg = p.image && p.image.startsWith('https://images.unsplash.com');
   if(p.images && p.images.length > 0){
@@ -13596,18 +13691,30 @@ async function submitPost(){
     updateYoutubePreview();
     return;
   }
+  const cat = selectedCat; // 在关闭发布页前保留当前分类
+  const activityStartDate = document.getElementById('fActivityStartDate').value;
+  const activityEndDate = document.getElementById('fActivityEndDate').value;
+  const hasActivityDate = !!(activityStartDate || activityEndDate);
+  if(cat === '玩乐' && !activityLongTerm && hasActivityDate){
+    if(!activityStartDate || !activityEndDate){ showToast('请同时填写活动开始日期和截止日期'); return; }
+    if(activityEndDate < activityStartDate){ showToast('截止日期不能早于开始日期'); return; }
+  }
   let event = null;
   if(eventOn){
     const cap = parseInt(document.getElementById('fCapacity').value) || 10;
     const dl = document.getElementById('fDeadline').value.trim() || '尽快报名';
     event = {capacity:cap, registered:0, deadline:dl, userJoined:false};
   }
+  if(cat === '玩乐' && activityLongTerm){
+    event = {...(event || {}), activity_long_term:true};
+  } else if(cat === '玩乐' && hasActivityDate){
+    event = {...(event || {}), start_date:activityStartDate, end_date:activityEndDate};
+  }
   const scheduleSelection = selectedScheduledPublishAt();
   if(scheduleSelection && scheduleSelection.error){ showToast(scheduleSelection.error); return; }
   const scheduledAt = scheduleSelection && scheduleSelection.value ? scheduleSelection.value : null;
   const isScheduledPost = !!scheduledAt;
 
-  const cat = selectedCat; // 关键修复：在 closeCompose 清空前捕获分类值
   const subcategory = isValidPostSubcategory(cat, selectedSubcategory) ? selectedSubcategory : null;
   if(!validateCommunityPostSafety(title, content, cat, subcategory)) return;
   syncCommunityPostMeta();
