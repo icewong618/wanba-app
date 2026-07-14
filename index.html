@@ -3022,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.182';
+const APP_VERSION = '5.183';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8546,7 +8546,32 @@ function activityPeriodLabel(post){
 
 function youtubeHubVideos(){
   const seen = new Set();
-  return (posts || []).filter(p => p && p.youtube && !seen.has(p.youtube) && seen.add(p.youtube)).slice(0, 12);
+  return orderedFeedPosts([...(posts || []), ...(window._youtubeHubRemoteVideos || [])]
+    .filter(p => p && p.youtube && (p.visibility || 'public') === 'public' && !seen.has(p.youtube) && seen.add(p.youtube)));
+}
+async function loadYoutubeHubVideos(){
+  if(window._youtubeHubLoading) return window._youtubeHubLoading;
+  window._youtubeHubLoading = (async () => {
+    const select = ['id','title','youtube','category','subcategory','author','likes','event','tags','user_id','visibility','pinned','created_at','location'].join(',');
+    const url = `${SUPABASE_URL}/rest/v1/posts?youtube=not.is.null&or=(visibility.eq.public,visibility.is.null)&select=${select}&order=created_at.desc,id.desc&limit=300`;
+    const res = await fetchPostFeed(url, {
+      method:'GET',
+      headers:{'Content-Type':'application/json','Accept':'application/json','apikey':SUPABASE_KEY,'Authorization':`Bearer ${(session && session.access_token) || SUPABASE_KEY}`}
+    }, 8000);
+    if(!res.ok) throw new Error(`视频读取失败 ${res.status}`);
+    const rows = await res.json();
+    window._youtubeHubRemoteVideos = Array.isArray(rows) ? rows.map(compactFeedPost) : [];
+    await ensureAvatarsFor(window._youtubeHubRemoteVideos.map(p => p.user_id));
+    return window._youtubeHubRemoteVideos;
+  })();
+  try {
+    return await window._youtubeHubLoading;
+  } catch(error){
+    console.warn('视频页读取全部视频失败，继续显示已加载内容:', error.message);
+    return window._youtubeHubRemoteVideos || [];
+  } finally {
+    window._youtubeHubLoading = null;
+  }
 }
 function youtubeHubPlay(id, title='YouTube 视频'){
   const safeId = cleanYoutubeId(id);
@@ -8596,6 +8621,15 @@ function openYoutubeHub(){
   renderYoutubeHub();
   const first = youtubeHubVideos()[0];
   if(first) youtubeHubPlay(first.youtube, first.title || 'YouTube 视频');
+  loadYoutubeHubVideos().then(() => {
+    if(!overlay.classList.contains('open')) return;
+    renderYoutubeHub();
+    const player = document.getElementById('youtubeHubPlayer');
+    if(player && !player.innerHTML){
+      const preferred = youtubeHubVideos()[0];
+      if(preferred) youtubeHubPlay(preferred.youtube, preferred.title || 'YouTube 视频');
+    }
+  });
 }
 function closeYoutubeHub(){
   const overlay = document.getElementById('youtubeHubOverlay');
@@ -11193,8 +11227,8 @@ function renderPostModal(){
       </button>
     </div>
   `;
-  // App 保留左右滑图；浏览器端优先页面上下滚动，避免旧多图笔记抢走滚动手势。
-  if(isEmbeddedAppEntry()) setupCarouselTouch();
+  // 浏览器与封装 App 都支持水平翻图；只在明确水平滑动时阻止页面的上下滚动。
+  setupCarouselTouch();
   if(p.youtube){
     primeYoutubeSound(String(p.youtube || '').replace(/[^A-Za-z0-9_-]/g, ''));
   }
