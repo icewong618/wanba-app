@@ -3022,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.185';
+const APP_VERSION = '5.186';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -6105,6 +6105,7 @@ function findMerchantMemberByCode(){
 let merchantScannerStream = null;
 let merchantScannerTimer = null;
 let merchantQrFallbackLoader = null;
+let merchantScannerTorchOn = false;
 function loadMerchantQrFallback(){
   if(window.jsQR) return Promise.resolve(window.jsQR);
   if(merchantQrFallbackLoader) return merchantQrFallbackLoader;
@@ -6128,7 +6129,7 @@ async function startMerchantQrFallbackScanner(video, status){
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d', { willReadFrequently:true });
   let detecting = false;
-  if(status) status.textContent = '请将会员卡或已领取优惠券的二维码放入框内。正在使用兼容扫码模式。';
+  if(status) status.textContent = '请将会员卡或已领取优惠券的二维码放入框内。识别成功后会自动打开核销页面。';
   merchantScannerTimer = setInterval(() => {
     if(detecting || !video || video.readyState < 2 || !video.videoWidth || !context) return;
     detecting = true;
@@ -6166,6 +6167,7 @@ async function openMerchantMemberScanner(){
     </div>
     <div class="merchant-form-actions">
       <button onclick="closeMerchantMemberScanner()">关闭</button>
+      <button id="merchantScanTorchBtn" onclick="toggleMerchantScannerTorch()">打开灯光</button>
       <button class="primary" onclick="useManualMemberCodeAfterScan()">手动输入</button>
     </div>
   `;
@@ -6203,6 +6205,26 @@ async function openMerchantMemberScanner(){
     if(status) status.textContent = `相机或扫码器未能启动（${e.message || '设备不支持'}），请点击“手动输入”，让用户出示会员号后核销。`;
   }
 }
+async function toggleMerchantScannerTorch(){
+  const track = merchantScannerStream && merchantScannerStream.getVideoTracks && merchantScannerStream.getVideoTracks()[0];
+  if(!track){ showToast('相机尚未启动'); return; }
+  const capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+  if(!capabilities || !capabilities.torch || typeof track.applyConstraints !== 'function'){
+    showToast('当前设备或浏览器不支持打开相机灯光');
+    return;
+  }
+  try {
+    merchantScannerTorchOn = !merchantScannerTorchOn;
+    await track.applyConstraints({ advanced:[{ torch:merchantScannerTorchOn }] });
+    const button = document.getElementById('merchantScanTorchBtn');
+    if(button) button.textContent = merchantScannerTorchOn ? '关闭灯光' : '打开灯光';
+    showToast(merchantScannerTorchOn ? '已打开灯光' : '已关闭灯光');
+  } catch(error){
+    merchantScannerTorchOn = false;
+    console.warn('切换相机灯光失败:', error.message);
+    showToast('无法控制相机灯光，请检查设备权限');
+  }
+}
 function applyScannedMemberCode(raw){
   const couponMatch = String(raw || '').toUpperCase().match(/LSHC-?\d+/);
   if(couponMatch){
@@ -6236,6 +6258,7 @@ function closeMerchantMemberScanner(){
     merchantScannerStream.getTracks().forEach(t => t.stop());
     merchantScannerStream = null;
   }
+  merchantScannerTorchOn = false;
   document.getElementById('merchantMemberScanner')?.classList.remove('open');
 }
 async function checkInMerchantMemberByCode(field, delta){
