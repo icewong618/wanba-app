@@ -906,6 +906,14 @@
     border-radius:0;box-shadow:none;animation:none;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;overflow:hidden;
   }
   #postModal .xhs-scroll{height:auto;min-height:0;overflow-y:scroll;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+  /* 普通浏览器改由详情外层负责滚动。浏览器会在图片懒加载后二次计算内层 flex 高度，
+     这里避免内层滚动被锁；App WebView 仍沿用上面的固定三段式。 */
+  html:not(.app-webview-entry) #postOverlay{display:none;overflow-y:auto;align-items:flex-start;}
+  html:not(.app-webview-entry) #postOverlay.open{display:block;}
+  html:not(.app-webview-entry) #postModal{height:auto;min-height:100vh;min-height:100dvh;display:block;overflow:visible;margin:0 auto;}
+  html:not(.app-webview-entry) #postModal .xhs-topbar{position:sticky;top:0;z-index:4;}
+  html:not(.app-webview-entry) #postModal .xhs-scroll{height:auto;overflow:visible;}
+  html:not(.app-webview-entry) #postModal .xhs-bottombar{position:sticky;bottom:0;z-index:4;}
   @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
   .sheet-item{display:flex;align-items:center;gap:12px;width:100%;padding:14px 8px;border:none;background:none;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--line);text-align:left;}
   .sheet-item:last-child{border-bottom:none;}
@@ -1918,7 +1926,7 @@
 </div>
 
 <!-- 笔记管理底部面板 -->
-<div id="ownerSheet" style="display:none;position:fixed;inset:0;background:rgba(42,39,33,.45);z-index:300;" onclick="if(event.target.id==='ownerSheet')closeOwnerSheet()">
+<div id="ownerSheet" style="display:none;position:fixed;inset:0;background:rgba(42,39,33,.45);z-index:980;" onclick="if(event.target.id==='ownerSheet')closeOwnerSheet()">
   <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:18px 18px 0 0;padding:10px 16px 26px;animation:slideUp .25s ease;">
     <div style="width:40px;height:4px;background:var(--line);border-radius:999px;margin:6px auto 14px;"></div>
     <div id="ownerSheetBody"></div>
@@ -2967,7 +2975,7 @@ async function ensureAvatarsFor(userIds){
   if(!needProfiles.length && !needMerchants.length) return false;
   try {
     if(needProfiles.length){
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${needProfiles.join(',')})&select=user_id,avatar,updated_at`);
+      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${needProfiles.map(encodeURIComponent).join(',')})&select=user_id,name,avatar,updated_at`);
       if(res.ok){
         const rows = await res.json();
         rows.forEach(setProfileCache);
@@ -3014,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.178';
+const APP_VERSION = '5.179';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -11056,15 +11064,16 @@ function renderPostModal(){
   const commentsHtml = commentThreads.map(t => renderCommentThread(t)).join('') || `<div style="font-size:13px;color:var(--ink-faint);padding:6px 0 12px;">还没有评论,来说第一句吧</div>`;
   const authorUserId = String(p.user_id || '').replace(/'/g, '');
   const safeAuthor = escHtml(p.author || '乐生活用户');
+  const isOwnPost = !!(session && session.user && String(p.user_id || '') === String(session.user.id));
 
   document.getElementById('postModal').innerHTML = `
     <div class="xhs-topbar">
       <button class="xhs-back" onclick="closePost()">‹</button>
       <span onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:inline-flex;">${avatarCircleHtml(p.author, p.user_id)}</span>
       <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;">${safeAuthor}${identityBadgeHtml(p.user_id)}</span>
-      ${p.user_id && (!session || !session.user || p.user_id !== session.user.id) ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
-      ${(p.user_id && session && session.user && p.user_id !== session.user.id) ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${uiIcon('message',18)}</button>` : ''}
-      ${(session && session.user && p.user_id === session.user.id) ? `<button class="xhs-share" title="管理" onclick="openOwnerSheet()" style="font-size:20px;">☰</button>` : `<button class="xhs-share" title="转发" onclick="openPostShare(${JSON.stringify(p.id)})">${uiIcon('share',19)}</button>`}
+      ${p.user_id && !isOwnPost ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
+      ${p.user_id && !isOwnPost ? `<button class="xhs-share" title="私信" onclick="openDmTo('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${uiIcon('message',18)}</button>` : ''}
+      ${isOwnPost ? `<button class="xhs-share" title="管理笔记" aria-label="管理笔记" onclick="openOwnerSheet()" style="font-size:20px;position:relative;z-index:6;">☰</button>` : `<button class="xhs-share" title="转发" onclick="openPostShare(${JSON.stringify(p.id)})">${uiIcon('share',19)}</button>`}
     </div>
     <div class="xhs-scroll">
       ${media ? `<div class="modal-media ${p.youtube || tikTokInfo ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
@@ -13550,11 +13559,11 @@ async function togglePin(){
 async function togglePinById(postId){
   const p = posts.find(item => String(item.id) === String(postId));
   if(!p) return;
-  if(!(session && session.user) || p.user_id !== session.user.id){ showToast('只能置顶自己的笔记'); return; }
+  if(!(session && session.user) || String(p.user_id || '') !== String(session.user.id)){ showToast('只能置顶自己的笔记'); return; }
   try {
     const np = !p.pinned;
     if(np){
-      const pinnedCount = posts.filter(item => item.user_id === session.user.id && item.pinned && String(item.id) !== String(p.id)).length;
+      const pinnedCount = posts.filter(item => String(item.user_id || '') === String(session.user.id) && item.pinned && String(item.id) !== String(p.id)).length;
       if(pinnedCount >= 2){
         showToast('已有两篇置顶，请取消一篇后再尝试');
         return;
@@ -13943,10 +13952,12 @@ async function submitPost(){
     if(activityEndDate < activityStartDate){ showToast('截止日期不能早于开始日期'); return; }
   }
   let event = null;
-  if(eventOn){
+  // 以当前开关的真实 UI 状态为准，避免旧草稿/编辑状态残留出现在未勾选的新笔记中。
+  const registrationEnabled = !!document.getElementById('eventSwitch')?.classList.contains('on');
+  if(registrationEnabled){
     const cap = parseInt(document.getElementById('fCapacity').value) || 10;
     const dl = document.getElementById('fDeadline').value.trim() || '尽快报名';
-    event = {capacity:cap, registered:0, deadline:dl, userJoined:false};
+    event = {capacity:cap, registered:0, deadline:dl, userJoined:false, registration_enabled:true};
   }
   if(cat === '玩乐' && activityLongTerm){
     event = {...(event || {}), activity_long_term:true};
