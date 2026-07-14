@@ -903,9 +903,9 @@
   #postOverlay{padding:0;background:#fff;align-items:stretch;overflow:hidden;z-index:520;}
   #postModal{
     width:100%;max-width:var(--container-w);height:100vh;height:100dvh;max-height:none;
-    border-radius:0;box-shadow:none;animation:none;display:flex;flex-direction:column;min-height:0;
+    border-radius:0;box-shadow:none;animation:none;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;overflow:hidden;
   }
-  #postModal .xhs-scroll{min-height:0;}
+  #postModal .xhs-scroll{height:auto;min-height:0;overflow-y:scroll;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
   @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
   .sheet-item{display:flex;align-items:center;gap:12px;width:100%;padding:14px 8px;border:none;background:none;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--line);text-align:left;}
   .sheet-item:last-child{border-bottom:none;}
@@ -3014,7 +3014,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.177';
+const APP_VERSION = '5.178';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -13332,16 +13332,23 @@ function openMsgCat(cat, keep){
   }
   if(cat === 'cmt'){
     const rows = cmtNotifs();
+    if(!keep && rows.length){
+      loadProfilesForIds(rows.map(row => row.user_id)).then(() => {
+        if(window._msgCat === 'cmt' && document.getElementById('msgDetail')?.style.display !== 'none') openMsgCat('cmt', true);
+      });
+    }
     const nick = myNick();
     detail.innerHTML = msgDetailShell('评论和@', rows.length ? rows.map(r => {
       const p = posts.find(x => x.id === r.post_id);
+      const profile = cachedProfile(r.user_id, r.name);
+      const displayName = profile.name || r.name || '用户';
       const isReplyToMe = r.reply_to_user_id === me;
       const isAt = !isReplyToMe && nick && r.text && r.text.includes('@' + nick) && !myPostIds().has(r.post_id);
       const verb = isReplyToMe ? '回复了你的评论' : (isAt ? '@了你' : '评论了你的笔记');
       return `<div style="display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;" onclick="${p?`openPost(${p.id})`:''}">
-        ${avatarHomeLinkHtml(r.user_id, r.name, 40)}
+        ${avatarHomeLinkHtml(r.user_id, displayName, 40)}
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13.5px;"><b>${r.name||'用户'}</b> ${verb}</div>
+          <div style="font-size:13.5px;"><b>${escHtml(displayName)}</b> ${verb}</div>
           <div style="font-size:13px;color:var(--ink-soft);margin:3px 0;">${r.text}</div>
           <div style="font-size:11px;color:var(--ink-faint);">${p ? '《'+p.title.slice(0,18)+'》 · ' : ''}${fmtTime(r.created_at)}</div>
         </div>
@@ -13378,13 +13385,20 @@ function openMsgCat(cat, keep){
     }).join('') : `<div class="empty-state"><span style="display:block;margin:0 auto 10px;width:36px;height:36px;color:var(--ink-faint);">${uiIcon('user',36)}</span><p>还没有新粉丝</p></div>`);
   } else if(cat === 'lf'){
     const rows = lfNotifs();
+    if(!keep && rows.length){
+      loadProfilesForIds(rows.map(row => row.user_id)).then(() => {
+        if(window._msgCat === 'lf' && document.getElementById('msgDetail')?.style.display !== 'none') openMsgCat('lf', true);
+      });
+    }
     detail.innerHTML = msgDetailShell('赞和收藏', rows.length ? rows.map(r => {
       const p = posts.find(x => x.id === r.post_id);
+      const profile = cachedProfile(r.user_id, r.name);
+      const displayName = profile.name || r.name || '用户';
       const verb = r._t === 'like' ? '赞了你的笔记' : '收藏了你的笔记';
       return `<div style="display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);">
-        ${avatarHomeLinkHtml(r.user_id, r.name, 40)}
+        ${avatarHomeLinkHtml(r.user_id, displayName, 40)}
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13.5px;"><b>${r.name||'用户'}</b> ${verb}</div>
+          <div style="font-size:13.5px;"><b>${escHtml(displayName)}</b> ${verb}</div>
           <div style="font-size:11px;color:var(--ink-faint);">${p ? '《'+p.title.slice(0,18)+'》 · ' : ''}${fmtTime(r.created_at)}</div>
         </div>
         ${p ? `<button onclick="openPost(${p.id})" style="padding:6px 12px;border-radius:999px;border:1px solid var(--sage);background:#fff;color:var(--sage-dark);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">查看笔记</button>` : ''}
