@@ -1759,7 +1759,13 @@
   }
   html.embedded-app-entry #page-home .feed,
   html.app-webview-entry #page-home .feed{
-    margin-top:calc(var(--home-fixed-top, 138px) - 45px) !important;
+    margin-top:calc(var(--home-fixed-top, 138px) - 61px) !important;
+  }
+  @media(min-width:768px){
+    html.embedded-app-entry #page-home .feed,
+    html.app-webview-entry #page-home .feed{
+      margin-top:calc(var(--home-fixed-top, 138px) - 45px) !important;
+    }
   }
   html.embedded-app-entry .deals-meta-row,
   html.app-webview-entry .deals-meta-row{
@@ -2911,7 +2917,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.170';
+const APP_VERSION = '5.169';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14364,7 +14370,7 @@ function updateFixedTopLayout(){
     root.style.setProperty('--home-fixed-top', `${homeTop}px`);
     const homeFeed = document.querySelector('#page-home .feed');
     if(homeFeed){
-      const embeddedFeedOffset = 45;
+      const embeddedFeedOffset = window.innerWidth >= 768 ? 45 : 61;
       homeFeed.style.marginTop = isEmbeddedApp ? `${Math.max(24, homeTop - embeddedFeedOffset)}px` : '';
     }
 
