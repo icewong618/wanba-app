@@ -193,6 +193,8 @@
   .feed-preference-help{font-size:13px;color:var(--ink-soft);line-height:1.6;}
   .feed-preference-list{display:flex;flex-wrap:wrap;gap:8px;min-height:34px;}
   .feed-preference-tag{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:var(--sage-light);color:var(--sage-dark);font-size:12px;font-weight:800;}
+  .feed-interest-picker{display:flex;flex-wrap:wrap;gap:8px;}.feed-interest-picker button{border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-soft);padding:8px 11px;font:800 13px inherit;}.feed-interest-picker button.selected{border-color:var(--sage);background:var(--sage-light);color:var(--sage-dark);}
+  .feed-onboarding-card{max-width:420px;margin:auto;padding:8px 0 0;}.feed-onboarding-card h3{margin:0 0 8px;font-size:23px;}.feed-onboarding-card p{margin:0 0 20px;color:var(--ink-soft);font-size:13px;line-height:1.65;}.feed-onboarding-actions{display:grid;gap:10px;margin-top:24px;}.feed-onboarding-actions button{height:46px;border:0;border-radius:999px;background:var(--sage);color:#fff;font:900 15px inherit;}.feed-onboarding-actions button.secondary{background:var(--bg-alt);color:var(--ink-soft);border:1px solid var(--line);}
   .feed-preference-tag button{border:0;background:transparent;padding:0;color:var(--sage-dark);font-size:16px;line-height:1;cursor:pointer;}
 
   /* ---------- deals page (省钱) ---------- */
@@ -2102,6 +2104,7 @@
     <p class="policy-updated">公测版规则 · 更新于 2026 年 7 月</p>
     <section class="policy-section"><h4>数据与隐私</h4><p>乐生活仅在提供社区、商家主页、会员卡、互动和客服支持所需的范围内处理账号资料、公开内容、上传图片、地点信息和使用记录。请勿发布他人的电话、住址、证件、支付信息或其他敏感个人资料。</p><ul><li>公开发布的笔记、评论和商家资料会向其他用户展示。</li><li>你可在个人或商家资料页修改公开资料；删除内容后，缓存更新可能需要短暂时间。</li><li>账号密码由认证服务安全处理，乐生活页面不会展示或保存明文密码。</li></ul></section>
     <section class="policy-section"><h4>社区内容规则</h4><p>请分享真实、有帮助并与本地生活相关的信息。禁止发布或传播以下内容：</p><ul><li>虚假优惠、欺诈、诱导交易、垃圾广告或恶意引流。</li><li>骚扰、歧视、辱骂、仇恨、暴力、违法或危险内容。</li><li>侵犯他人隐私、肖像、版权、商标或其他合法权益的内容。</li></ul></section>
+    <section class="policy-section"><h4>二手、租房与招聘</h4><p>请如实描述商品、房源或岗位，不公开精确住址、身份证件、银行卡、验证码等敏感资料。招聘方不得以入职、培训、押金、中介等名义向求职者收费；交易、看房、签约和付款请自行核实，警惕脱离平台的异常引导。</p></section>
     <section class="policy-section"><h4>商家、优惠与会员</h4><p>商家应如实填写门店资料、商品、优惠和营业信息。优惠券、会员奖励及核销记录以商家实际规则为准；用户到店前请自行确认适用门店、库存、有效期与限制条件。发现问题可使用“举报内容”或“公测反馈”。</p></section>
     <section class="policy-section"><h4>账号与处理</h4><p>对于违规内容，我们可能采取下架、限制互动、取消商家认证或限制账号使用等措施。公测期间，功能、规则和数据展示会根据安全与体验需要持续调整。</p></section>
     <div class="policy-contact">需要协助或发现问题：请从“我”的菜单进入“公测反馈”。对笔记或用户的具体违规问题，请在笔记转发面板中选择“举报内容”。</div>
@@ -2131,6 +2134,11 @@
 <div class="feedback-overlay" id="feedPreferenceOverlay">
   <div class="feedback-head"><button onclick="closeFeedPreferences()" aria-label="返回">‹</button><h3>内容偏好</h3></div>
   <div class="feedback-body"><div id="feedPreferenceBody" class="feed-preference-panel"></div></div>
+</div>
+
+<div class="feedback-overlay" id="feedOnboardingOverlay">
+  <div class="feedback-head"><span style="width:38px;height:38px;"></span><h3>欢迎来到乐生活</h3></div>
+  <div class="feedback-body"><div class="feed-onboarding-card"><h3>先选几个你关心的内容</h3><p>选择后，“推荐”会优先展示相关的本地生活信息。之后可以随时在首页的“偏好”里修改。</p><div class="feed-interest-picker" id="feedOnboardingPicker"></div><div class="feed-onboarding-actions"><button onclick="saveFeedOnboarding()">开始浏览</button><button class="secondary" onclick="skipFeedOnboarding()">暂时跳过</button></div></div></div>
 </div>
 
 <!-- 公开商家主页：搜索商家后打开，复用认证商家真实内容渲染 -->
@@ -2826,7 +2834,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.163';
+const APP_VERSION = '5.164';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3310,6 +3318,7 @@ async function createAccountFromAuth(email, pass, name, msg){
     session = { access_token:rd.access_token, refresh_token:rd.refresh_token, user:rd.user };
     localStorage.setItem('wanba_session', JSON.stringify(session));
     updateAuthUI(); closeAuth(); fetchProfileFromDb(); fetchMerchantProfile();
+    setTimeout(maybeOpenFeedOnboarding, 350);
     showToast('注册成功，已登录');
   } else {
     pushVerifyLog(email);
@@ -3375,6 +3384,7 @@ async function submitAuth(){
       fetchProfileFromDb();
       fetchMerchantProfile();
       checkDealAdmin();
+      setTimeout(maybeOpenFeedOnboarding, 350);
       showToast('✓ 登入成功');
       return;
     }
@@ -7997,6 +8007,8 @@ let currentSubcategory = '全部';
 let currentTag = null;
 let feedMode = localStorage.getItem('leshenghuo_feed_mode') || 'recommend';
 let mutedFeedCategories = new Set();
+let preferredFeedCategories = new Set();
+let feedInterestDraft = new Set();
 let feedPreferencesLoadedFor = null;
 let feedIsLoading = false;
 let feedLoadFailed = false;
@@ -8132,6 +8144,7 @@ function feedScore(post, signals){
   const recency = Math.max(0, 18 - ageDays * 1.25);
   const quality = Math.min(12, Math.log2(1 + Number(post.likes || 0)) * 2) + Math.min(6, Number(post.commentCount || 0) * 0.75) + Math.min(6, Number(post.favs || 0) * 0.9);
   let score = recency + quality;
+  if(preferredFeedCategories.has(category)) score += 14;
   score += Math.min(20, (signals.categories[category] || 0) * 2.5);
   if(post.user_id) score += Math.min(16, (signals.authors[post.user_id] || 0) * 2);
   const me = session && session.user && session.user.id;
@@ -8169,6 +8182,45 @@ function setTagFilter(tag){
 function localFeedPreferenceKey(){
   return `leshenghuo_muted_feed_categories_${session && session.user ? session.user.id : 'guest'}`;
 }
+function localFeedInterestKey(){ return `leshenghuo_feed_interests_${session && session.user ? session.user.id : 'guest'}`; }
+function feedOnboardingKey(){ return `leshenghuo_feed_onboarding_done_${session && session.user ? session.user.id : 'guest'}`; }
+function readLocalFeedInterests(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(localFeedInterestKey()) || '[]');
+    preferredFeedCategories = new Set(Array.isArray(saved) ? saved.map(normalizeCategory).filter(category => category !== '全部') : []);
+  } catch(e){ preferredFeedCategories = new Set(); }
+}
+function saveLocalFeedInterests(){ localStorage.setItem(localFeedInterestKey(), JSON.stringify([...preferredFeedCategories])); }
+function feedInterestOptions(){ return CATS.filter(category => category.key !== '全部').map(category => category.key); }
+function renderFeedInterestPicker(targetId, selected){
+  const target = document.getElementById(targetId);
+  if(!target) return;
+  target.innerHTML = feedInterestOptions().map(category => `<button class="${selected.has(category) ? 'selected' : ''}" onclick="toggleFeedInterest('${category}','${targetId}')">${catIcon(category,15)}${category}</button>`).join('');
+}
+function toggleFeedInterest(category, targetId){
+  if(feedInterestDraft.has(category)) feedInterestDraft.delete(category); else feedInterestDraft.add(category);
+  renderFeedInterestPicker(targetId, feedInterestDraft);
+}
+function maybeOpenFeedOnboarding(){
+  if(!(session && session.user) || localStorage.getItem(feedOnboardingKey())) return;
+  const overlay = document.getElementById('feedOnboardingOverlay');
+  if(!overlay) return;
+  feedInterestDraft = new Set(preferredFeedCategories);
+  renderFeedInterestPicker('feedOnboardingPicker', feedInterestDraft);
+  overlay.classList.add('open');
+}
+function saveFeedOnboarding(){
+  preferredFeedCategories = new Set(feedInterestDraft);
+  saveLocalFeedInterests();
+  localStorage.setItem(feedOnboardingKey(), '1');
+  document.getElementById('feedOnboardingOverlay')?.classList.remove('open');
+  renderFeedModes(); renderFeed();
+  showToast(preferredFeedCategories.size ? '已按你的兴趣调整推荐' : '已进入推荐内容');
+}
+function skipFeedOnboarding(){
+  localStorage.setItem(feedOnboardingKey(), '1');
+  document.getElementById('feedOnboardingOverlay')?.classList.remove('open');
+}
 function readLocalFeedPreferences(){
   try {
     const saved = JSON.parse(localStorage.getItem(localFeedPreferenceKey()) || '[]');
@@ -8182,6 +8234,7 @@ async function loadFeedPreferences(){
   const userId = session && session.user && session.user.id;
   if(!userId){
     readLocalFeedPreferences();
+    readLocalFeedInterests();
     feedPreferencesLoadedFor = 'guest';
     renderFeedModes();
     renderFeed();
@@ -8189,6 +8242,7 @@ async function loadFeedPreferences(){
   }
   if(feedPreferencesLoadedFor === userId) return;
   readLocalFeedPreferences();
+  readLocalFeedInterests();
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feed_preferences?user_id=eq.${userId}&select=muted_categories`, { method:'GET' });
     if(res.ok){
@@ -8232,9 +8286,12 @@ function openFeedPreferences(){
   const body = document.getElementById('feedPreferenceBody');
   if(!overlay || !body) return;
   const muted = [...mutedFeedCategories];
-  body.innerHTML = `<div class="feed-preference-help">推荐会参考你关注的人、点赞、收藏、评论、内容分类和发布时间。已减少的内容不会出现在“推荐”中，“最新”仍会完整显示。</div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">已减少的内容</label><div class="feed-preference-list">${muted.length ? muted.map(category => `<span class="feed-preference-tag">${escHtml(category)}<button onclick="restoreFeedCategory('${String(category).replace(/'/g, '')}')" aria-label="恢复 ${escAttr(category)}">×</button></span>`).join('') : '<span style="font-size:13px;color:var(--ink-faint);">目前没有减少任何分类。</span>'}</div></div><div class="feedback-meta">${session && session.user ? '偏好会同步到此账号。' : '登录后可同步内容偏好到其他设备。'}</div>`;
+  feedInterestDraft = new Set(preferredFeedCategories);
+  body.innerHTML = `<div class="feed-preference-help">推荐会参考你关注的人、互动、兴趣分类和发布时间；“最新”始终按时间排列。</div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">我关心的内容</label><div class="feed-interest-picker" id="feedPreferenceInterestPicker"></div><button class="feedback-submit" style="margin-top:12px;" onclick="saveFeedPreferenceInterests()">保存兴趣选择</button></div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">已减少的内容</label><div class="feed-preference-list">${muted.length ? muted.map(category => `<span class="feed-preference-tag">${escHtml(category)}<button onclick="restoreFeedCategory('${String(category).replace(/'/g, '')}')" aria-label="恢复 ${escAttr(category)}">×</button></span>`).join('') : '<span style="font-size:13px;color:var(--ink-faint);">目前没有减少任何分类。</span>'}</div></div><div class="feedback-meta">兴趣选择保存在当前设备；登录账号的“减少内容”会同步保存。</div>`;
+  renderFeedInterestPicker('feedPreferenceInterestPicker', feedInterestDraft);
   overlay.classList.add('open');
 }
+function saveFeedPreferenceInterests(){ preferredFeedCategories = new Set(feedInterestDraft); saveLocalFeedInterests(); renderFeedModes(); renderFeed(); closeFeedPreferences(); showToast('兴趣偏好已保存'); }
 function closeFeedPreferences(){ document.getElementById('feedPreferenceOverlay')?.classList.remove('open'); }
 function restoreFeedCategory(category){
   mutedFeedCategories.delete(normalizeCategory(category));
@@ -9163,7 +9220,9 @@ let adminDealPrices = [];
 let adminFeedback = [];
 let adminFeedbackAttachmentMap = new Map();
 let activeAdminFeedbackReply = null;
+let adminFeedbackStatusFilter = 'pending';
 let adminContentReports = [];
+let adminReportFilter = 'pending';
 let adminDealOpsReady = true;
 let adminEditingDealId = '';
 
@@ -9289,9 +9348,11 @@ async function loadAdminFeedback(){
   return adminFeedback;
 }
 function renderAdminFeedback(body){
-  const rows = adminFiltered(adminFeedback, ['title','body','user_name','type','status']);
-  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(row => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(row.title || '未命名反馈')} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已解决' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">${escHtml(row.user_name || '用户')} · ${escHtml(row.type || '')} · v${escHtml(row.app_version || '')}<br>${adminTimeText(row.created_at)} · ${escHtml(row.page_path || '')}</div><div class="admin-row-text">${escHtml(row.body || '')}</div>${row.admin_reply ? `<div class="my-feedback-reply"><b>已回复用户</b>${escHtml(row.admin_reply)}${row.replied_at ? `<div class="my-feedback-meta">${adminTimeText(row.replied_at)}</div>` : ''}</div>` : ''}</div></div><div class="admin-actions">${feedbackAttachmentButtonHtml(row.id, adminFeedbackAttachmentMap)}<button class="primary" onclick="openAdminFeedbackReply(${row.id})">${row.admin_reply ? '修改回复' : '回复用户'}</button><button onclick="adminUpdateFeedback(${row.id},'reviewing')">处理中</button><button onclick="adminUpdateFeedback(${row.id},'resolved')">标记已解决</button></div></div>`).join('')}</div>` : '<div class="admin-empty">暂时没有公测反馈。</div>';
+  const rows = adminFiltered(adminFeedback, ['title','body','user_name','type','status']).filter(row => adminFeedbackStatusFilter === 'all' || (row.status || 'pending') === adminFeedbackStatusFilter);
+  const filters = [['pending','待处理'],['reviewing','处理中'],['resolved','已解决'],['all','全部']];
+  body.innerHTML = `<div class="search-filter-row" style="margin:0 0 14px;padding:0;">${filters.map(([value,label]) => `<button class="search-filter-chip ${adminFeedbackStatusFilter===value?'active':''}" onclick="setAdminFeedbackStatusFilter('${value}')">${label}</button>`).join('')}</div>` + (rows.length ? `<div class="admin-list">${rows.map(row => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(row.title || '未命名反馈')} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已解决' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">${escHtml(row.user_name || '用户')} · ${escHtml(row.type || '')} · v${escHtml(row.app_version || '')}<br>${adminTimeText(row.created_at)} · ${escHtml(row.page_path || '')}</div><div class="admin-row-text">${escHtml(row.body || '')}</div>${row.admin_reply ? `<div class="my-feedback-reply"><b>已回复用户</b>${escHtml(row.admin_reply)}${row.replied_at ? `<div class="my-feedback-meta">${adminTimeText(row.replied_at)}</div>` : ''}</div>` : ''}</div></div><div class="admin-actions">${feedbackAttachmentButtonHtml(row.id, adminFeedbackAttachmentMap)}<button class="primary" onclick="openAdminFeedbackReply(${row.id})">${row.admin_reply ? '修改回复' : '回复用户'}</button><button onclick="adminUpdateFeedback(${row.id},'reviewing')">处理中</button><button onclick="adminUpdateFeedback(${row.id},'resolved')">标记已解决</button></div></div>`).join('')}</div>` : '<div class="admin-empty">当前筛选下没有公测反馈。</div>');
 }
+function setAdminFeedbackStatusFilter(value){ adminFeedbackStatusFilter = value; const body = document.getElementById('adminBody'); if(body) renderAdminFeedback(body); }
 async function loadAdminContentReports(){
   if(!adminHasAccess(true)) return [];
   try {
@@ -9302,9 +9363,18 @@ async function loadAdminContentReports(){
 }
 function contentReportReasonText(reason){ return ({ spam:'垃圾广告或引流', misinformation:'虚假信息或误导', harassment:'骚扰或仇恨内容', privacy:'侵犯隐私', illegal:'违法或危险内容', other:'其他原因' })[reason] || '其他原因'; }
 function renderAdminContentReports(body){
-  const rows = adminFiltered(adminContentReports, ['reason','detail','status','reported_user_id','reporter_user_id']);
-  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(row => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(contentReportReasonText(row.reason))} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已处理' : row.status === 'dismissed' ? '已驳回' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">举报时间：${adminTimeText(row.created_at)}<br>笔记：${escHtml(row.post_id || '无')} · 被举报用户：${escHtml(uidToNumericId(String(row.reported_user_id || '')))}</div>${row.detail ? `<div class="admin-row-text">${escHtml(row.detail)}</div>` : ''}</div></div><div class="admin-actions"><button class="primary" onclick="adminUpdateContentReport(${row.id},'reviewing')">处理中</button><button onclick="adminOpenReportedPost(${JSON.stringify(row.post_id)})">查看笔记</button><button onclick="adminUpdateContentReport(${row.id},'resolved')">已处理</button><button class="danger" onclick="adminUpdateContentReport(${row.id},'dismissed')">驳回</button></div></div>`).join('')}</div>` : '<div class="admin-empty">暂时没有内容举报。</div>';
+  const postById = new Map(adminPosts.map(post => [String(post.id), post]));
+  const rows = adminFiltered(adminContentReports, ['reason','detail','status','reported_user_id','reporter_user_id']).filter(row => {
+    const post = postById.get(String(row.post_id));
+    if(adminReportFilter === 'all') return true;
+    if(adminReportFilter === 'pending') return !['resolved','dismissed'].includes(row.status);
+    if(adminReportFilter === 'community') return post?.subcategory === '二手交易';
+    return post?.subcategory === adminReportFilter;
+  });
+  const filters = [['pending','待处理'],['community','社区交易'],['房屋出租','房屋出租'],['求职招聘','求职招聘'],['all','全部']];
+  body.innerHTML = `<div class="search-filter-row" style="margin:0 0 14px;padding:0;">${filters.map(([value,label]) => `<button class="search-filter-chip ${adminReportFilter===value?'active':''}" onclick="setAdminReportFilter('${value}')">${label}</button>`).join('')}</div>` + (rows.length ? `<div class="admin-list">${rows.map(row => { const post = postById.get(String(row.post_id)); const path = post ? postCategoryPath(post.category, post.subcategory) : '笔记已删除或未加载'; return `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(contentReportReasonText(row.reason))} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已处理' : row.status === 'dismissed' ? '已驳回' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">举报时间：${adminTimeText(row.created_at)}<br>笔记：${escHtml(row.post_id || '无')} · ${escHtml(path)} · 被举报用户：${escHtml(uidToNumericId(String(row.reported_user_id || '')))}</div>${row.detail ? `<div class="admin-row-text">${escHtml(row.detail)}</div>` : ''}</div></div><div class="admin-actions"><button class="primary" onclick="adminUpdateContentReport(${row.id},'reviewing')">处理中</button><button onclick="adminOpenReportedPost(${JSON.stringify(row.post_id)})">查看笔记</button><button onclick="adminUpdateContentReport(${row.id},'resolved')">已处理</button><button class="danger" onclick="adminUpdateContentReport(${row.id},'dismissed')">驳回</button></div></div>`; }).join('')}</div>` : '<div class="admin-empty">当前筛选下没有内容举报。</div>');
 }
+function setAdminReportFilter(value){ adminReportFilter = value; const body = document.getElementById('adminBody'); if(body) renderAdminContentReports(body); }
 function adminOpenReportedPost(postId){
   if(postId === null || postId === undefined){ showToast('该举报没有关联笔记'); return; }
   window.adminReportPostReturn = true;
@@ -11758,6 +11828,20 @@ function communityMetaHtml(post){
   const rows = config.fields.filter(([key]) => meta[key]).map(([key,label]) => `<span><b>${escHtml(label)}：</b>${escHtml(meta[key])}</span>`);
   return rows.length ? `<div class="post-community-meta">${rows.join('')}</div>` : '';
 }
+function validateCommunityPostSafety(title, content, category, subcategory){
+  if(normalizeCategory(category) !== '社区' || !['二手交易','房屋出租','求职招聘'].includes(subcategory)) return true;
+  const text = `${title}\n${content}`.toLowerCase();
+  if(/身份证|护照|银行卡|信用卡|验证码|cvv|social security/.test(text)){
+    showToast('请勿在公开内容中发布证件、银行卡或验证码等敏感信息');
+    return false;
+  }
+  if(subcategory === '求职招聘' && /入职费|培训费|押金|中介费|交钱上岗|先交钱/.test(text)){
+    showToast('招聘内容不能向求职者收取入职、培训或押金费用');
+    return false;
+  }
+  const typeLabel = subcategory === '二手交易' ? '交易' : subcategory === '房屋出租' ? '租房' : '招聘';
+  return confirm(`发布${typeLabel}信息前请确认：内容真实，不含敏感隐私或收费求职要求；${typeLabel}相关的线下沟通与交易请自行核实。是否继续发布？`);
+}
 /* ====== 标记地点：自建地点库（不依赖Google Maps），输入时先搜本地已有地点，没有就直接用新地点 ====== */
 let locationSearchTimer = null;
 function onLocationInput(val){
@@ -13014,6 +13098,7 @@ async function submitPost(){
 
   const cat = selectedCat; // 关键修复：在 closeCompose 清空前捕获分类值
   const subcategory = isValidPostSubcategory(cat, selectedSubcategory) ? selectedSubcategory : null;
+  if(!validateCommunityPostSafety(title, content, cat, subcategory)) return;
   syncCommunityPostMeta();
   const communityMeta = cat === '社区' && COMMUNITY_POST_CONFIG[subcategory] ? {...communityPostMeta} : null;
   // 收纳输入框中未确认的标签，并捕获标签数组（closeCompose 会清空）
@@ -13381,6 +13466,7 @@ async function exportMyData(){
   showToast('个人数据已开始导出');
 }
 function feedbackStatusLabel(status){ return status === 'resolved' ? '已解决' : status === 'reviewing' ? '处理中' : '待处理'; }
+function feedbackStatusDescription(status){ return status === 'resolved' ? '问题已处理完成，可查看管理员回复或重新提交。' : status === 'reviewing' ? '我们正在核查或处理，会在有结论后回复。' : '已收到，等待管理员查看。'; }
 function feedbackTypeLabel(type){ return ({ bug:'问题反馈', suggestion:'功能建议', experience:'体验建议' })[type] || '公测反馈'; }
 function feedbackStatusClass(status){ return status === 'resolved' ? 'good' : status === 'reviewing' ? 'warn' : 'muted'; }
 async function openMyFeedback(){
@@ -13397,7 +13483,7 @@ async function openMyFeedback(){
     const rows = await res.json();
     try { myFeedbackAttachmentMap = await loadFeedbackAttachmentMap(rows); }
     catch(error){ console.warn('我的反馈截图读取失败:', error.message); myFeedbackAttachmentMap = new Map(); }
-    list.innerHTML = rows.length ? rows.map(row => `<article class="my-feedback-card"><div class="my-feedback-title"><span>${escHtml(row.title || '未命名反馈')}</span><span class="admin-badge ${feedbackStatusClass(row.status)}">${feedbackStatusLabel(row.status)}</span></div><div class="my-feedback-meta">${feedbackTypeLabel(row.type)} · v${escHtml(row.app_version || '')} · ${adminTimeText(row.created_at)}</div><div class="my-feedback-text">${escHtml(row.body || '')}</div>${row.admin_reply ? `<div class="my-feedback-reply"><b>管理员回复</b>${escHtml(row.admin_reply)}${row.replied_at ? `<div class="my-feedback-meta">${adminTimeText(row.replied_at)}</div>` : ''}</div>` : ''}${row.resolved_at ? `<div class="my-feedback-meta">处理时间：${adminTimeText(row.resolved_at)}</div>` : ''}${feedbackAttachmentButtonHtml(row.id, myFeedbackAttachmentMap)}</article>`).join('') : '<div class="admin-empty">你还没有提交过公测反馈。使用下方按钮告诉我们你的体验。</div>';
+    list.innerHTML = rows.length ? rows.map(row => `<article class="my-feedback-card"><div class="my-feedback-title"><span>${escHtml(row.title || '未命名反馈')}</span><span class="admin-badge ${feedbackStatusClass(row.status)}">${feedbackStatusLabel(row.status)}</span></div><div class="my-feedback-meta">${feedbackTypeLabel(row.type)} · v${escHtml(row.app_version || '')} · ${adminTimeText(row.created_at)}</div><div class="my-feedback-meta">${feedbackStatusDescription(row.status)}</div><div class="my-feedback-text">${escHtml(row.body || '')}</div>${row.admin_reply ? `<div class="my-feedback-reply"><b>管理员回复</b>${escHtml(row.admin_reply)}${row.replied_at ? `<div class="my-feedback-meta">${adminTimeText(row.replied_at)}</div>` : ''}</div>` : ''}${row.resolved_at ? `<div class="my-feedback-meta">处理时间：${adminTimeText(row.resolved_at)}</div>` : ''}${feedbackAttachmentButtonHtml(row.id, myFeedbackAttachmentMap)}</article>`).join('') : '<div class="admin-empty">你还没有提交过公测反馈。使用下方按钮告诉我们你的体验。</div>';
     markFeedbackRepliesSeen(rows);
   } catch(e){ console.warn('我的反馈读取失败:', e.message); myFeedbackAttachmentMap = new Map(); list.innerHTML = '<div class="admin-empty">暂时无法读取反馈状态，请稍后重试。</div>'; }
 }
@@ -14065,6 +14151,9 @@ async function bootApp(){
       await new Promise(resolve => setTimeout(resolve, minSplashMs - elapsed));
     }
     hideLaunchScreen();
+    if(!routeMerchantSlugFromLocation() && routePostIdFromLocation() == null){
+      setTimeout(maybeOpenFeedOnboarding, 500);
+    }
   }
 }
 
@@ -14093,7 +14182,7 @@ document.addEventListener('visibilitychange', () => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Feed Reliability and Performance】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Beta Operations and Safety】`);
 </script>
 </body>
 </html>
