@@ -2348,6 +2348,19 @@
   <div class="feedback-body" id="composeDraftBody"></div>
 </div>
 
+<div class="feedback-overlay" id="adminUserProfileOverlay">
+  <div class="feedback-head"><button onclick="closeAdminUserProfile()" aria-label="返回">‹</button><h3>用户资料</h3><span style="width:38px;"></span></div>
+  <div class="feedback-body" id="adminUserProfileBody"></div>
+</div>
+<div class="feedback-overlay" id="adminModerationOverlay">
+  <div class="feedback-head"><button onclick="closeAdminModeration()" aria-label="返回">‹</button><h3 id="adminModerationTitle">用户处理</h3><span style="width:38px;"></span></div>
+  <div class="feedback-body" id="adminModerationBody"></div>
+</div>
+<div class="feedback-overlay" id="moderationNoticeOverlay">
+  <div class="feedback-head"><span style="width:38px;"></span><h3>账号通知</h3><button onclick="closeModerationNotice()" aria-label="关闭">×</button></div>
+  <div class="feedback-body" id="moderationNoticeBody"></div>
+</div>
+
 </div>
 
 <!-- Bottom Navigation -->
@@ -2939,7 +2952,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.172';
+const APP_VERSION = '5.173';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -9585,6 +9598,7 @@ let adminContentReports = [];
 let adminReportFilter = 'pending';
 let adminDealOpsReady = true;
 let adminEditingDealId = '';
+let adminActiveUser = null;
 
 function adminHasAccess(silent=false){
   if(session && session.user && isDealAdmin) return true;
@@ -9785,24 +9799,46 @@ async function saveAdminFeedbackReply(){
 function renderAdminUsers(body){
   const counts = {};
   adminPosts.forEach(p => { if(p.user_id) counts[p.user_id] = (counts[p.user_id] || 0) + 1; });
-  const banned = new Set(adminBanned.filter(x => x.status === 'banned').map(x => x.user_id));
-  const rows = adminFiltered(adminUsers, ['name','user_id']);
+  const rows = adminFiltered(adminUsers, ['name','user_id','email']);
   body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(u => `
     <div class="admin-row">
       <div class="admin-row-top">
         ${avatarCircleSizedHtml(u.name || '用户', u.user_id, 42)}
         <div class="admin-row-main">
-          <div class="admin-row-title">${escHtml(u.name || '未命名用户')} ${banned.has(u.user_id) ? '<span class="admin-badge warn">已封禁</span>' : ''}</div>
+          <div class="admin-row-title">${escHtml(u.name || '未命名用户')} ${adminUserStatusLabel(u)}</div>
           <div class="admin-row-meta">ID: ${uidToNumericId(String(u.user_id))}<br>user_id: ${escHtml(u.user_id || '')}${u.email ? `<br>邮箱：${escHtml(u.email)}` : ''}<br>注册：${adminTimeText(u.created_at) || '未知'} · 更新：${adminTimeText(u.updated_at) || '未知'} · 发帖 ${counts[u.user_id] || 0}</div>
         </div>
       </div>
       <div class="admin-actions">
-        <button class="primary" onclick="openUserPublicPage('${String(u.user_id || '').replace(/'/g,'')}','${String(u.name || '').replace(/'/g,'')}')">查看主页</button>
+        <button class="primary" onclick="openAdminUserProfile('${String(u.user_id || '').replace(/'/g,'')}')">用户资料</button>
+        <button onclick="openUserPublicPage('${String(u.user_id || '').replace(/'/g,'')}','${String(u.name || '').replace(/'/g,'')}')">查看主页</button>
         <button onclick="adminShowUserPosts('${String(u.user_id || '').replace(/'/g,'')}')">看TA帖子</button>
-        <button class="danger" onclick="adminBanUser('${String(u.user_id || '').replace(/'/g,'')}','${String(u.name || '').replace(/'/g,'')}')">封禁用户</button>
+        <button class="danger" onclick="openAdminModeration('${String(u.user_id || '').replace(/'/g,'')}','ban')">用户处理</button>
       </div>
     </div>
   `).join('')}</div>` : '<div class="admin-empty">没有找到注册用户。请确认已执行 4.60 管理后台数据读取 SQL。</div>';
+}
+function adminUserStatusActive(u){ return ['banned','muted'].includes(u?.moderation_status) && (!u.moderation_expires_at || new Date(u.moderation_expires_at) > new Date()); }
+function adminUserStatusLabel(u){ if(!adminUserStatusActive(u)) return ''; return `<span class="admin-badge warn">${u.moderation_status === 'banned' ? '已封禁' : '已禁言'}</span>`; }
+function adminReasonOptions(){ return [['违法','违反法律法规'],['privacy','侵犯隐私或肖像权'],['violent','血腥、暴力或危险内容'],['spam','垃圾广告或引流'],['harassment','骚扰、辱骂或歧视'],['fraud','虚假信息或诈骗'],['other','其他']]; }
+function closeAdminUserProfile(){ document.getElementById('adminUserProfileOverlay')?.classList.remove('open'); }
+function openAdminUserProfile(userId){
+  const u = adminUsers.find(row => String(row.user_id) === String(userId)); if(!u) return showToast('未找到用户资料'); adminActiveUser = u;
+  const body=document.getElementById('adminUserProfileBody');
+  body.innerHTML=`<div style="display:flex;align-items:center;gap:13px;margin-bottom:18px;">${avatarCircleSizedHtml(u.name||'用户',u.user_id,64)}<div><b style="font-size:18px;">${escHtml(u.name||'未命名用户')}</b><div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">${adminUserStatusLabel(u) || '正常账号'}</div></div></div><div class="admin-row-meta" style="line-height:1.8;">注册邮箱：${escHtml(u.email||'未提供')}<br>用户 ID：${escHtml(u.user_id||'')}<br>注册时间：${adminTimeText(u.created_at)||'未知'}<br>最后登录：${adminTimeText(u.last_sign_in_at)||'暂无记录'}<br>IP 属地：${escHtml(u.ip_location||'暂未显示')}<br>发笔记：${Number(u.post_count||0)} 篇<br>个人简介：${escHtml(u.bio||'未填写')}</div><div class="admin-actions" style="margin-top:18px;"><button class="primary" onclick="openUserPublicPage('${String(u.user_id).replace(/'/g,'')}','${String(u.name||'').replace(/'/g,'')}')">查看主页</button><button onclick="adminShowUserPosts('${String(u.user_id).replace(/'/g,'')}');closeAdminUserProfile()">查看帖子</button><button class="danger" onclick="openAdminModeration('${String(u.user_id).replace(/'/g,'')}','ban')">处理用户</button></div>`;
+  document.getElementById('adminUserProfileOverlay')?.classList.add('open');
+}
+function closeAdminModeration(){ document.getElementById('adminModerationOverlay')?.classList.remove('open'); }
+function openAdminModeration(userId, preset='warning'){
+  const u=adminUsers.find(row=>String(row.user_id)===String(userId)); if(!u) return showToast('未找到用户'); adminActiveUser=u;
+  const body=document.getElementById('adminModerationBody'); const active=adminUserStatusActive(u);
+  body.innerHTML=`<div class="feedback-meta">处理对象：<b>${escHtml(u.name||'用户')}</b><br>${escHtml(u.email||'')}</div><div class="feedback-field"><label>处理方式</label><select id="moderationAction"><option value="warning" ${preset==='warning'?'selected':''}>警告</option><option value="mute" ${preset==='mute'?'selected':''}>禁言</option><option value="ban" ${preset==='ban'?'selected':''}>封禁</option>${active?'<option value="unban">解除限制</option>':''}</select></div><div class="feedback-field"><label>违规原因</label><select id="moderationReason">${adminReasonOptions().map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div><div class="feedback-field"><label>处理天数 <span style="font-weight:400;color:var(--ink-faint);">（留空为长期；警告无需填写）</span></label><input id="moderationDays" type="number" min="1" max="3650" placeholder="例如：7"></div><div class="feedback-field"><label>附加留言</label><textarea id="moderationNote" maxlength="500" placeholder="这段内容会发送给用户"></textarea></div><button class="feedback-submit" onclick="submitAdminModeration()">确认发送处理通知</button>`;
+  closeAdminUserProfile(); document.getElementById('adminModerationOverlay')?.classList.add('open');
+}
+async function submitAdminModeration(){
+  if(!adminHasAccess() || !adminActiveUser) return; const action=document.getElementById('moderationAction')?.value||'warning'; const reason=document.getElementById('moderationReason')?.value||''; const note=document.getElementById('moderationNote')?.value.trim()||''; const daysRaw=document.getElementById('moderationDays')?.value||''; const days=daysRaw?Number(daysRaw):null;
+  if(days!==null && (!Number.isInteger(days)||days<1||days>3650)) return showToast('处理天数请填写 1 到 3650');
+  try { const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/admin_moderate_user`,{method:'POST',body:JSON.stringify({p_user_id:adminActiveUser.user_id,p_action_type:action,p_reason_code:reason,p_note:note,p_duration_days:days})}); if(!res.ok) throw new Error(await res.text()); closeAdminModeration(); await loadAdminCenter(true); showToast('处理已发送给用户'); } catch(e){ showToast('处理失败：'+friendlyDealReviewError(e.message)); }
 }
 function renderAdminPosts(body){
   const options = [...new Set(adminPosts.map(p => p.subcategory).filter(Boolean))];
@@ -10121,13 +10157,13 @@ function adminExpireDealPrice(id){
   }).then(ok => { if(ok) showToast('已标记过期'); });
 }
 function renderAdminBanned(body){
-  const rows = adminFiltered(adminBanned, ['user_id','status','reason']);
+  const rows = adminFiltered(adminBanned, ['user_id','action_type','reason_code','note']);
   body.innerHTML = rows.length ? `<div class="admin-list">${rows.map(r => `
     <div class="admin-row">
-      <div class="admin-row-title">${escHtml(r.status || 'status')} <span class="admin-badge warn">用户状态</span></div>
-      <div class="admin-row-meta">user_id: ${escHtml(r.user_id || '')}<br>时间：${adminTimeText(r.created_at)}<br>原因：${escHtml(r.reason || '未填写')}</div>
+      <div class="admin-row-title">${escHtml(({ban:'封禁',mute:'禁言',warning:'警告',unban:'解除封禁',unmute:'解除禁言'})[r.action_type] || r.action_type || '处理记录')} <span class="admin-badge warn">用户处理</span></div>
+      <div class="admin-row-meta">user_id: ${escHtml(r.user_id || '')}<br>时间：${adminTimeText(r.created_at)}<br>原因：${escHtml(r.reason_code || '未填写')}${r.expires_at ? `<br>截止：${adminTimeText(r.expires_at)}` : ''}</div>${r.note ? `<div class="admin-row-text">${escHtml(r.note)}</div>` : ''}
       <div class="admin-actions">
-        <button class="danger" onclick="adminUnbanUser('${String(r.user_id || '').replace(/'/g,'')}')">解除封禁</button>
+        ${['ban','mute'].includes(r.action_type) ? `<button class="danger" onclick="openAdminModeration('${String(r.user_id || '').replace(/'/g,'')}','unban')">解除限制</button>` : ''}
       </div>
     </div>
   `).join('')}</div>` : '<div class="admin-empty">暂无封禁记录。</div>';
@@ -10189,15 +10225,7 @@ async function adminBanUser(userId, name){
   } catch(e){ showToast('封禁失败：' + friendlyDealReviewError(e.message)); }
 }
 async function adminUnbanUser(userId){
-  if(!adminHasAccess()) return;
-  if(!confirm('确认解除该用户封禁？')) return;
-  try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses?user_id=eq.${userId}`, { method:'DELETE' });
-    if(!res.ok) throw new Error(await res.text());
-    adminBanned = adminBanned.filter(r => r.user_id !== userId);
-    renderAdminPanel();
-    showToast('已解除封禁');
-  } catch(e){ showToast('操作失败：' + friendlyDealReviewError(e.message)); }
+  openAdminModeration(userId, 'unban');
 }
 function dealReportToDealPayload(r){
   const current = r.current_price === null || r.current_price === undefined || r.current_price === '' ? null : Number(r.current_price);
@@ -12842,6 +12870,7 @@ function captureVideoPoster(vObj){
 /* ====== 消息中心 2.91：评论和@ / 新增粉丝 / 赞和收藏 + 私信 ====== */
 let dmRows = [];
 let memberActivityRows = [];
+let moderationNoticeRows = [];
 window._msgCat = null;
 
 function readTsKey(){ return 'wanba_read_' + (session && session.user ? session.user.id : 'guest'); }
@@ -12931,6 +12960,28 @@ async function loadMemberActivityNotifications(){
   } catch(e){ console.warn('会员权益通知读取失败:', e.message); memberActivityRows = []; }
   updateNavMsgDot();
   return memberActivityRows;
+}
+async function loadModerationNotices(showLatest=false){
+  const me = session && session.user ? session.user.id : null;
+  if(!me){ moderationNoticeRows=[]; return []; }
+  try {
+    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_moderation_notices?user_id=eq.${encodeURIComponent(me)}&select=*&order=created_at.desc&limit=30`,{method:'GET'});
+    moderationNoticeRows=res.ok?await res.json():[];
+    const unread=moderationNoticeRows.find(row=>!row.read_at);
+    if(showLatest && unread) openModerationNotice(unread);
+  } catch(e){ moderationNoticeRows=[]; }
+  return moderationNoticeRows;
+}
+function openModerationNotice(row){
+  if(!row) return;
+  const body=document.getElementById('moderationNoticeBody');
+  if(body) body.innerHTML=`<div style="padding:4px 0 14px;"><div style="font-size:18px;font-weight:900;color:var(--ink);">${escHtml(row.title||'账号通知')}</div><div style="white-space:pre-wrap;font-size:14px;line-height:1.75;color:var(--ink-soft);margin-top:12px;">${escHtml(row.body||'')}</div><div style="font-size:11px;color:var(--ink-faint);margin-top:14px;">${fmtTime(row.created_at)}</div></div><button class="feedback-submit" onclick="closeModerationNotice()">我知道了</button>`;
+  document.getElementById('moderationNoticeOverlay')?.classList.add('open');
+}
+async function closeModerationNotice(){
+  document.getElementById('moderationNoticeOverlay')?.classList.remove('open');
+  const ids=moderationNoticeRows.filter(row=>!row.read_at).map(row=>row.id); if(!ids.length) return;
+  try { await authedFetch(`${SUPABASE_URL}/rest/v1/user_moderation_notices?id=in.(${ids.join(',')})`,{method:'PATCH',body:JSON.stringify({read_at:new Date().toISOString()})}); moderationNoticeRows=moderationNoticeRows.map(row=>ids.includes(row.id)?Object.assign({},row,{read_at:new Date().toISOString()}):row); } catch(e){}
 }
 async function markMemberActivityRead(){
   if(!(session && session.user)) return;
@@ -14697,7 +14748,7 @@ async function bootApp(){
     loadUserProfile(); // 加载用户信息
     loadSession();     // 加载登录会话
     fetchIpLocation(); // 获取真实IP属地
-    setTimeout(() => { if(session) Promise.all([loadDms(), loadMemberActivityNotifications()]).then(updateNavMsgDot); }, 3000); // 消息未读红点
+    setTimeout(() => { if(session) Promise.all([loadDms(), loadMemberActivityNotifications(), loadModerationNotices(true)]).then(updateNavMsgDot); }, 3000); // 消息未读红点
     await handleEmailConfirmRedirect(); // 处理邮箱验证回跳，自动登录
 
     renderChips();
