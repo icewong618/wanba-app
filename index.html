@@ -1021,6 +1021,9 @@
   .carousel-counter{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.45);color:#fff;font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600;z-index:5;}
   /* ---- 正文区（小红书风格） ---- */
   .xhs-tags{font-size:14px;color:#13386C;margin-bottom:10px;font-weight:500;}
+  .xhs-tag-link{border:0;background:transparent;color:#13386C;padding:0 1px;font:700 14px inherit;cursor:pointer;}
+  .xhs-tag-link:active{opacity:.65;}
+  .tag-results-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px;color:var(--ink-soft);font-size:13px;}.tag-results-summary b{color:var(--sage-dark);font-size:14px;}
   .xhs-time{font-size:12px;color:var(--ink-faint);margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line);}
   .xhs-comments-count{font-size:13px;color:var(--ink-faint);margin-bottom:14px;}
   /* ---- 底部固定操作栏 ---- */
@@ -1759,6 +1762,12 @@
   html.app-webview-entry #page-home .feed{
     margin-top:calc(var(--home-fixed-top, 138px) - 61px) !important;
   }
+  @media(min-width:768px){
+    html.embedded-app-entry #page-home .feed,
+    html.app-webview-entry #page-home .feed{
+      margin-top:calc(var(--home-fixed-top, 138px) - 45px) !important;
+    }
+  }
   html.embedded-app-entry .deals-meta-row,
   html.app-webview-entry .deals-meta-row{
     margin-top:calc(var(--deals-fixed-top, 205px) - 75px) !important;
@@ -2179,6 +2188,11 @@
 <div class="feedback-overlay" id="feedPreferenceOverlay">
   <div class="feedback-head"><button onclick="closeFeedPreferences()" aria-label="返回">‹</button><h3>内容偏好</h3></div>
   <div class="feedback-body"><div id="feedPreferenceBody" class="feed-preference-panel"></div></div>
+</div>
+
+<div class="feedback-overlay" id="tagResultsOverlay">
+  <div class="feedback-head"><button onclick="closeTagResults()" aria-label="返回">‹</button><h3 id="tagResultsTitle">标签笔记</h3><span style="width:38px;height:38px;"></span></div>
+  <div class="feedback-body"><div class="tag-results-summary" id="tagResultsSummary">正在读取标签笔记…</div><div class="feed" id="tagResultsFeed"></div></div>
 </div>
 
 <div class="feedback-overlay" id="appPermissionOverlay">
@@ -2905,7 +2919,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.168';
+const APP_VERSION = '5.169';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8172,6 +8186,7 @@ let mutedFeedCategories = new Set();
 let preferredFeedInterests = new Set();
 let feedInterestDraft = new Set();
 let feedPreferencesLoadedFor = null;
+let feedOnboardingCompleted = false;
 let feedIsLoading = false;
 let feedLoadFailed = false;
 let activePostId = null;
@@ -8426,11 +8441,14 @@ function localFeedPreferenceKey(){
 }
 function localFeedInterestKey(){ return `leshenghuo_feed_interests_${session && session.user ? session.user.id : 'guest'}`; }
 function feedOnboardingKey(){ return `leshenghuo_feed_onboarding_done_${session && session.user ? session.user.id : 'guest'}`; }
+function normalizeFeedInterestKeys(values){
+  const legacyMap = { 美食:'food', 玩乐:'weekend', 好物:'deals', 生活:'home', 社区:'friends' };
+  return Array.isArray(values) ? values.map(value => legacyMap[normalizeCategory(value)] || String(value || '')).filter(value => FEED_INTEREST_OPTIONS.some(option => option.key === value)) : [];
+}
 function readLocalFeedInterests(){
   try {
     const saved = JSON.parse(localStorage.getItem(localFeedInterestKey()) || '[]');
-    const legacyMap = { 美食:'food', 玩乐:'weekend', 好物:'deals', 生活:'home', 社区:'friends' };
-    preferredFeedInterests = new Set(Array.isArray(saved) ? saved.map(value => legacyMap[normalizeCategory(value)] || String(value || '')).filter(value => FEED_INTEREST_OPTIONS.some(option => option.key === value)) : []);
+    preferredFeedInterests = new Set(normalizeFeedInterestKeys(saved));
   } catch(e){ preferredFeedInterests = new Set(); }
 }
 function saveLocalFeedInterests(){ localStorage.setItem(localFeedInterestKey(), JSON.stringify([...preferredFeedInterests])); }
@@ -8444,8 +8462,10 @@ function toggleFeedInterest(category, targetId){
   if(feedInterestDraft.has(category)) feedInterestDraft.delete(category); else feedInterestDraft.add(category);
   renderFeedInterestPicker(targetId, feedInterestDraft);
 }
-function maybeOpenFeedOnboarding(){
-  if(localStorage.getItem(feedOnboardingKey())) return;
+async function maybeOpenFeedOnboarding(){
+  const userId = session && session.user && session.user.id;
+  if(userId && feedPreferencesLoadedFor !== userId) await loadFeedPreferences();
+  if(userId ? feedOnboardingCompleted : localStorage.getItem(feedOnboardingKey())) return;
   const overlay = document.getElementById('feedOnboardingOverlay');
   if(!overlay) return;
   feedInterestDraft = new Set(preferredFeedInterests);
@@ -8456,12 +8476,16 @@ function saveFeedOnboarding(){
   preferredFeedInterests = new Set(feedInterestDraft);
   saveLocalFeedInterests();
   localStorage.setItem(feedOnboardingKey(), '1');
+  feedOnboardingCompleted = true;
+  persistFeedInterestState(true);
   document.getElementById('feedOnboardingOverlay')?.classList.remove('open');
   renderFeedModes(); renderFeed();
   showToast(preferredFeedInterests.size ? '已按你的兴趣调整推荐' : '已进入推荐内容');
 }
 function skipFeedOnboarding(){
   localStorage.setItem(feedOnboardingKey(), '1');
+  feedOnboardingCompleted = true;
+  persistFeedInterestState(true);
   document.getElementById('feedOnboardingOverlay')?.classList.remove('open');
 }
 function readLocalFeedPreferences(){
@@ -8478,6 +8502,7 @@ async function loadFeedPreferences(){
   if(!userId){
     readLocalFeedPreferences();
     readLocalFeedInterests();
+    feedOnboardingCompleted = !!localStorage.getItem(feedOnboardingKey());
     feedPreferencesLoadedFor = 'guest';
     renderFeedModes();
     renderFeed();
@@ -8486,21 +8511,49 @@ async function loadFeedPreferences(){
   if(feedPreferencesLoadedFor === userId) return;
   readLocalFeedPreferences();
   readLocalFeedInterests();
+  const localOnboardingDone = !!localStorage.getItem(feedOnboardingKey());
+  feedOnboardingCompleted = false;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feed_preferences?user_id=eq.${userId}&select=muted_categories`, { method:'GET' });
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feed_preferences?user_id=eq.${userId}&select=muted_categories,feed_interests,onboarding_completed_at`, { method:'GET' });
     if(res.ok){
       const rows = await res.json();
-      if(rows[0] && Array.isArray(rows[0].muted_categories)){
-        mutedFeedCategories = new Set(rows[0].muted_categories.map(normalizeCategory));
-        saveLocalFeedPreferences();
+      if(rows[0]){
+        if(Array.isArray(rows[0].muted_categories)){
+          mutedFeedCategories = new Set(rows[0].muted_categories.map(normalizeCategory));
+          saveLocalFeedPreferences();
+        }
+        if(Array.isArray(rows[0].feed_interests)){
+          preferredFeedInterests = new Set(normalizeFeedInterestKeys(rows[0].feed_interests));
+          saveLocalFeedInterests();
+        }
+        feedOnboardingCompleted = !!rows[0].onboarding_completed_at;
       }
     } else if(res.status !== 404){
       console.warn('内容偏好读取失败:', res.status);
     }
   } catch(e){ console.warn('内容偏好读取失败:', e.message); }
   feedPreferencesLoadedFor = userId;
+  if(localOnboardingDone && !feedOnboardingCompleted){
+    feedOnboardingCompleted = true;
+    persistFeedInterestState(true);
+  }
   renderFeedModes();
   renderFeed();
+}
+async function persistFeedInterestState(markOnboardingComplete=false){
+  saveLocalFeedInterests();
+  const userId = session && session.user && session.user.id;
+  if(!userId) return;
+  const body = { user_id:userId, feed_interests:[...preferredFeedInterests], updated_at:new Date().toISOString() };
+  if(markOnboardingComplete) body.onboarding_completed_at = new Date().toISOString();
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feed_preferences?on_conflict=user_id`, {
+      method:'POST',
+      headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+      body:JSON.stringify(body)
+    });
+    if(!res.ok) console.warn('兴趣偏好保存失败:', res.status);
+  } catch(e){ console.warn('兴趣偏好保存失败:', e.message); }
 }
 async function persistFeedPreferences(){
   saveLocalFeedPreferences();
@@ -8530,11 +8583,11 @@ function openFeedPreferences(){
   if(!overlay || !body) return;
   const muted = [...mutedFeedCategories];
   feedInterestDraft = new Set(preferredFeedInterests);
-  body.innerHTML = `<div class="feed-preference-help">推荐会参考你关注的人、互动、兴趣标签和发布时间；“最新”始终按时间排列。</div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">我关心的内容</label><div class="feed-interest-picker" id="feedPreferenceInterestPicker"></div><button class="feedback-submit" style="margin-top:12px;" onclick="saveFeedPreferenceInterests()">保存兴趣选择</button></div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">已减少的内容</label><div class="feed-preference-list">${muted.length ? muted.map(category => `<span class="feed-preference-tag">${escHtml(category)}<button onclick="restoreFeedCategory('${String(category).replace(/'/g, '')}')" aria-label="恢复 ${escAttr(category)}">×</button></span>`).join('') : '<span style="font-size:13px;color:var(--ink-faint);">目前没有减少任何分类。</span>'}</div></div><div class="feedback-meta">兴趣选择保存在当前设备；登录账号的“减少内容”会同步保存。</div>`;
+  body.innerHTML = `<div class="feed-preference-help">推荐会参考你关注的人、互动、兴趣标签和发布时间；“最新”始终按时间排列。</div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">我关心的内容</label><div class="feed-interest-picker" id="feedPreferenceInterestPicker"></div><button class="feedback-submit" style="margin-top:12px;" onclick="saveFeedPreferenceInterests()">保存兴趣选择</button></div><div><label style="display:block;font-size:12px;font-weight:900;color:var(--ink-soft);margin-bottom:8px;">已减少的内容</label><div class="feed-preference-list">${muted.length ? muted.map(category => `<span class="feed-preference-tag">${escHtml(category)}<button onclick="restoreFeedCategory('${String(category).replace(/'/g, '')}')" aria-label="恢复 ${escAttr(category)}">×</button></span>`).join('') : '<span style="font-size:13px;color:var(--ink-faint);">目前没有减少任何分类。</span>'}</div></div><div class="feedback-meta">登录后，兴趣选择会随账号同步到其他设备。</div>`;
   renderFeedInterestPicker('feedPreferenceInterestPicker', feedInterestDraft);
   overlay.classList.add('open');
 }
-function saveFeedPreferenceInterests(){ preferredFeedInterests = new Set(feedInterestDraft); saveLocalFeedInterests(); renderFeedModes(); renderFeed(); closeFeedPreferences(); showToast('兴趣偏好已保存'); }
+function saveFeedPreferenceInterests(){ preferredFeedInterests = new Set(feedInterestDraft); persistFeedInterestState(false); renderFeedModes(); renderFeed(); closeFeedPreferences(); showToast('兴趣偏好已保存'); }
 function closeFeedPreferences(){ document.getElementById('feedPreferenceOverlay')?.classList.remove('open'); }
 function restoreFeedCategory(category){
   mutedFeedCategories.delete(normalizeCategory(category));
@@ -8598,6 +8651,53 @@ function renderFeed(){
     </div>`;
   }).join('');
 }
+function customPostTagLabel(value){ return String(value || '').trim().replace(/^#+/, '').slice(0, 60); }
+function customPostTagHtml(value){
+  const label = customPostTagLabel(value);
+  if(!label) return '';
+  return `<button class="xhs-tag-link" onclick="openTagResults(decodeURIComponent('${encodeURIComponent(label)}'))">#${escHtml(label)}</button>`;
+}
+function tagResultCardHtml(p){
+  const media = postCardMediaHtml(p, 40);
+  const stub = p.event ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
+  const safeId = Number(p.id);
+  return `<div class="card" onclick="openPost(${Number.isFinite(safeId) ? safeId : 0})"><div class="card-media">${media}${cardCategoryTag(p.category, p.subcategory)}${mediaWatermarkHtml(p.author)}${stub}</div><div class="card-body"><div class="card-title">${escHtml(p.title || '无标题')}</div><div class="card-meta"><div class="author">${avatarHomeLinkHtml(p.user_id, p.author, 20)}<span class="author-name" onclick="event.stopPropagation();openUserPublicPage('${String(p.user_id || '').replace(/'/g, '')}','${String(p.author || '乐生活用户').replace(/'/g, '')}')" style="display:flex;align-items:center;gap:5px;min-width:0;cursor:pointer;">${authorNameHtml(p.author, p.user_id)}</span></div><div class="stat-row"><span>${p.liked?'♥':'♡'} ${p.likes || 0}</span></div></div></div></div>`;
+}
+async function openTagResults(tag){
+  const label = customPostTagLabel(tag);
+  if(!label) return;
+  const overlay = document.getElementById('tagResultsOverlay');
+  const title = document.getElementById('tagResultsTitle');
+  const summary = document.getElementById('tagResultsSummary');
+  const feed = document.getElementById('tagResultsFeed');
+  if(!overlay || !title || !summary || !feed) return;
+  title.textContent = `#${label}`;
+  summary.textContent = '正在读取标签笔记…';
+  feed.innerHTML = Array.from({length:4}, () => `<div class="feed-loading-card" aria-label="正在加载笔记"><div class="feed-loading-media"></div><div class="feed-loading-lines"><i></i><i></i></div></div>`).join('');
+  overlay.classList.add('open');
+  try {
+    const select = ['id','title','content','excerpt','category','subcategory','author','image','youtube','likes','event','tags','user_id','visibility','pinned','created_at','location'].join(',');
+    const params = new URLSearchParams({ select, tags:`cs.${JSON.stringify([label])}`, or:'(visibility.eq.public,visibility.is.null)', order:'created_at.desc,id.desc', limit:'200' });
+    const res = await fetchPostFeed(`${SUPABASE_URL}/rest/v1/posts?${params.toString()}`, {
+      method:'GET', headers:{ 'Content-Type':'application/json', 'Accept':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${(session && session.access_token) || SUPABASE_KEY}`, 'Prefer':'count=exact' }
+    }, 7000);
+    if(!res.ok) throw new Error(`标签读取失败 ${res.status}`);
+    const rows = await res.json();
+    const range = res.headers.get('content-range') || '';
+    const matchedCount = Number(range.split('/')[1]);
+    const total = Number.isFinite(matchedCount) ? matchedCount : rows.length;
+    const list = rows.map(compactFeedPost);
+    await ensureAvatarsFor(list.map(p => p.user_id));
+    summary.innerHTML = `<b>${total} 篇笔记</b><span>${total > list.length ? `当前显示前 ${list.length} 篇` : '按最新发布排序'}</span>`;
+    feed.innerHTML = list.length ? list.map(tagResultCardHtml).join('') : `<div class="empty" style="grid-column:1/-1;"><span class="display">还没有相关笔记</span>换一个标签看看吧</div>`;
+  } catch(e){
+    console.warn('标签笔记读取失败:', e.message);
+    const local = posts.filter(p => (p.tags || []).map(customPostTagLabel).includes(label));
+    summary.innerHTML = `<b>${local.length} 篇笔记</b><span>暂时显示已加载内容</span>`;
+    feed.innerHTML = local.length ? local.map(tagResultCardHtml).join('') : `<div class="empty" style="grid-column:1/-1;">标签内容暂时无法读取，请稍后重试</div>`;
+  }
+}
+function closeTagResults(){ document.getElementById('tagResultsOverlay')?.classList.remove('open'); }
 function playIcon(){
   return `<svg viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.45)"/><path d="M10 8.5L16 12L10 15.5V8.5Z" fill="white"/></svg>`;
 }
@@ -10798,7 +10898,7 @@ function renderPostModal(){
       <div class="modal-body">
         <h2 class="modal-title display">${p.title}</h2>
         <div class="modal-content">${visibleContent}</div>
-        <div class="xhs-tags">${catIcon(p.category, 18)} ${escHtml(postCategoryPath(p.category, p.subcategory))}${(p.tags && p.tags.length) ? ' ' + p.tags.map(t => `#${t}`).join(' ') : ''}</div>
+        <div class="xhs-tags">${catIcon(p.category, 18)} ${escHtml(postCategoryPath(p.category, p.subcategory))}${(p.tags && p.tags.length) ? ' ' + p.tags.map(customPostTagHtml).filter(Boolean).join(' ') : ''}</div>
         ${communityMetaHtml(p)}
         ${p.location ? `<div style="font-size:13px;color:var(--ink-faint);margin:-6px 0 10px;display:flex;align-items:center;gap:4px;">${uiIcon('map',13)} ${p.location}</div>` : ''}
         <div class="xhs-time">编辑于 ${p.time} · 洛杉矶</div>
@@ -14272,7 +14372,8 @@ function updateFixedTopLayout(){
     root.style.setProperty('--home-fixed-top', `${homeTop}px`);
     const homeFeed = document.querySelector('#page-home .feed');
     if(homeFeed){
-      homeFeed.style.marginTop = isEmbeddedApp ? `${Math.max(24, homeTop - 61)}px` : '';
+      const embeddedFeedOffset = window.innerWidth >= 768 ? 45 : 61;
+      homeFeed.style.marginTop = isEmbeddedApp ? `${Math.max(24, homeTop - embeddedFeedOffset)}px` : '';
     }
 
     const weekHeader = document.querySelector('#page-week.active .page-header');
