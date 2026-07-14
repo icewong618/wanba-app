@@ -1121,6 +1121,7 @@
     background:var(--card);color:var(--ink);
   }
   .form-field textarea{min-height:90px;resize:vertical;}
+  #fContent{min-height:240px;line-height:1.65;}
   .form-field input:focus, .form-field textarea:focus{outline:2px solid var(--sage-light);border-color:var(--sage);}
   .subcategory-picker{display:flex;flex-wrap:wrap;gap:8px;}
   .subcategory-pick{border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-soft);padding:7px 11px;font:700 12px inherit;}
@@ -2264,8 +2265,8 @@
       <div class="form-field" id="communityPostField" style="display:none;"></div>
 
       <div class="form-field">
-        <label>标题 <span class="char-count"><span id="titleCount">0</span>/20</span></label>
-        <input type="text" id="fTitle" placeholder="比如:巷口那家新开的手作豆花" maxlength="20" oninput="updateTitleCount()">
+        <label>标题 <span class="char-count"><span id="titleCount">0</span>/30</span></label>
+        <input type="text" id="fTitle" placeholder="比如:巷口那家新开的手作豆花" maxlength="30" oninput="updateTitleCount()">
       </div>
 
       <div class="form-field">
@@ -2964,7 +2965,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.174';
+const APP_VERSION = '5.175';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -13680,7 +13681,7 @@ async function submitPost(){
   if(!selectedCat){ showToast('请选择一个分类'); return; }
   if(!title){ showToast('请填写标题'); return; }
   if(!content){ showToast('请填写内容'); return; }
-  if(title.length > 20){ showToast('标题不能超过20个字'); return; }
+  if(title.length > 30){ showToast('标题不能超过30个字'); return; }
   if(content.length > 1000){ showToast('内容不能超过1000个字'); return; }
 
   const videoInfo = extractVideoInfo(videoUrl);
