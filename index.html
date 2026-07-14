@@ -3022,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.180';
+const APP_VERSION = '5.181';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8763,10 +8763,11 @@ function renderFeed(){
   if(!el) return;
   renderFeedModes();
   let list;
+  const publicPosts = posts.filter(p => (p.visibility || 'public') === 'public');
   if(currentTag){
-    list = posts.filter(p => postMatchesQuickLink(p, currentTag));
+    list = publicPosts.filter(p => postMatchesQuickLink(p, currentTag));
   } else {
-    list = currentFilter==='全部' ? posts : posts.filter(p=>normalizeCategory(p.category)===currentFilter);
+    list = currentFilter==='全部' ? publicPosts : publicPosts.filter(p=>normalizeCategory(p.category)===currentFilter);
     if(currentSubcategory !== '全部') list = list.filter(p => p.subcategory === currentSubcategory);
   }
   list = orderedFeedPosts(list);
@@ -8876,7 +8877,7 @@ function openPost(id){
   if(p) ensureAvatarsFor([p.user_id], true).then(changed => { if(changed && String(activePostId) === String(id)) renderPostModal(); });
 }
 async function hydratePostDetail(postId){
-  const post = posts.find(item => String(item.id) === String(postId));
+  const post = findPostById(postId);
   if(!post || hydratedPostIds.has(String(postId))) return;
   hydratedPostIds.add(String(postId));
   try {
@@ -8981,10 +8982,71 @@ function closePost(){
     setTimeout(() => switchAdminTab('reports'), 0);
   }
 }
-function getPost(){ return posts.find(p=>p.id===activePostId); }
+function findPostById(id){
+  return posts.find(p=>String(p.id)===String(id)) || ownProfilePosts.find(p=>String(p.id)===String(id));
+}
+function getPost(){ return findPostById(activePostId); }
 
 /* ---- profile page ---- */
 let browsingHistory = [];
+let ownProfilePosts = [];
+let ownProfilePostsLoadedFor = null;
+let ownProfilePostsLoadPromise = null;
+
+function profilePostTimestamp(post){
+  const value = post && (post.scheduled_at || post.created_at);
+  const timestamp = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+function isPendingScheduledPost(post){
+  if(!post || post.visibility !== 'scheduled' || !post.scheduled_at) return false;
+  return profilePostTimestamp(post) > Date.now();
+}
+function profilePostsForCurrentUser(){
+  const myUid = session && session.user ? session.user.id : null;
+  const merged = new Map();
+  [...posts, ...ownProfilePosts].forEach(post => {
+    if(!post) return;
+    const belongsToMe = (myUid && String(post.user_id || '') === String(myUid)) ||
+      (!post.user_id && (post.author === '我' || post.author === currentUser.name));
+    if(belongsToMe) merged.set(String(post.id), post);
+  });
+  return [...merged.values()].sort((a,b) => {
+    const pinnedFirst = Number(!!b.pinned) - Number(!!a.pinned);
+    return pinnedFirst || profilePostTimestamp(b) - profilePostTimestamp(a) || Number(b.id) - Number(a.id);
+  });
+}
+async function loadOwnProfilePosts(){
+  const myUid = session && session.user ? session.user.id : null;
+  if(!myUid){
+    ownProfilePosts = [];
+    ownProfilePostsLoadedFor = null;
+    return [];
+  }
+  if(ownProfilePostsLoadedFor === myUid) return ownProfilePosts;
+  if(ownProfilePostsLoadPromise) return ownProfilePostsLoadPromise;
+  ownProfilePostsLoadPromise = (async () => {
+    const select = [
+      'id','title','content','excerpt','category','subcategory','author','image',
+      'youtube','likes','event','tags','user_id','visibility','pinned','created_at','scheduled_at','location'
+    ].join(',');
+    const url = `${SUPABASE_URL}/rest/v1/posts?user_id=eq.${encodeURIComponent(myUid)}&select=${select}&order=created_at.desc,id.desc&limit=300`;
+    const res = await authedFetch(url, { method:'GET' });
+    if(!res.ok) throw new Error(`个人笔记读取失败 ${res.status}`);
+    const rows = await res.json();
+    ownProfilePosts = Array.isArray(rows) ? rows.map(compactFeedPost) : [];
+    ownProfilePostsLoadedFor = myUid;
+    return ownProfilePosts;
+  })();
+  try {
+    return await ownProfilePostsLoadPromise;
+  } catch(error){
+    console.warn('个人笔记读取失败，继续显示当前内容:', error.message);
+    return ownProfilePosts;
+  } finally {
+    ownProfilePostsLoadPromise = null;
+  }
+}
 function initProfilePage(){
   const wrapMerchant = document.getElementById('merchantPageWrap');
   const wrapNormal = document.getElementById('normalProfileWrap');
@@ -9005,9 +9067,14 @@ function initProfilePage(){
   renderMerchantApplyBlock();
   loadMerchantApplicationStatus(false);
   
-  // 显示用户的笔记（匹配"我"或当前用户名）
+  // 个人页读取账号的所有笔记：公开、私密、互关及待定时发布内容都只在这里展示给本人。
   const myUid = session && session.user ? session.user.id : null;
-  const userPosts = posts.filter(p => (myUid && p.user_id === myUid) || (!p.user_id && (p.author === '我' || p.author === currentUser.name)));
+  if(myUid && ownProfilePostsLoadedFor !== myUid){
+    loadOwnProfilePosts().then(() => {
+      if(currentTab === 'profile') initProfilePage();
+    });
+  }
+  const userPosts = profilePostsForCurrentUser();
   const notesContent = document.getElementById('userNotes');
   
   if(!notesContent){
@@ -9017,10 +9084,10 @@ function initProfilePage(){
   
   if(userPosts.length > 0){
     console.log('📝 显示', userPosts.length, '条笔记');
-    userPosts.sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
     notesContent.innerHTML = userPosts.map(p => `
       <div onclick="openPost(${p.id})" style="position:relative;border-radius:12px;overflow:hidden;background:var(--bg-alt);cursor:pointer;">
         ${p.pinned ? '<span style="position:absolute;top:6px;left:6px;z-index:3;background:var(--berry);color:#fff;font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600;">置顶</span>' : ''}
+        ${isPendingScheduledPost(p) ? `<span style="position:absolute;top:${p.pinned ? '31' : '6'}px;left:6px;z-index:3;background:var(--sage-dark);color:#fff;font-size:10px;padding:2px 8px;border-radius:999px;font-weight:700;">定时发布</span>` : ''}
         <button onclick="event.stopPropagation();togglePinById(${p.id})" style="position:absolute;top:6px;right:6px;z-index:4;border:0;border-radius:999px;background:rgba(255,255,255,.94);color:${p.pinned ? 'var(--berry)' : 'var(--ink-soft)'};padding:5px 8px;font-size:10px;font-weight:900;box-shadow:0 1px 5px rgba(42,39,33,.14);">${p.pinned ? '取消置顶' : '置顶'}</button>
         <div style="position:relative;aspect-ratio:3/4;background:var(--bg-alt);overflow:hidden;">${postCardMediaHtml(p, 38)}</div>
         <div style="position:absolute;inset:0;background:rgba(0,0,0,0);opacity:0;transition:opacity 0.3s;display:flex;align-items:flex-end;justify-content:space-around;padding:12px;gap:8px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.7));" class="post-overlay-${p.id}">
@@ -9029,6 +9096,7 @@ function initProfilePage(){
         </div>
         <div style="padding:10px;background:#fff;">
           <div style="font-size:12px;font-weight:600;color:var(--ink);line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${p.title}</div>
+          ${isPendingScheduledPost(p) ? `<div style="margin-top:5px;font-size:10px;color:var(--sage-dark);font-weight:700;">${escHtml(formatLaDateTime(p.scheduled_at))} 发布</div>` : ''}
         </div>
       </div>
     `).join('');
@@ -9108,7 +9176,7 @@ function closeBrowsingHistory(){
 /* ---- page navigation ---- */
 function renderWeekFeed(){
   const weekFeed = document.getElementById('weekFeed');
-  const weekPosts = orderedFeedPosts(posts.filter(p => postMatchesQuickLink(p, '本周末活动')));
+  const weekPosts = orderedFeedPosts(posts.filter(p => (p.visibility || 'public') === 'public' && postMatchesQuickLink(p, '本周末活动')));
   weekFeed.innerHTML = weekPosts.length > 0 
     ? `<div class="feed">${weekPosts.map(p=>`
         <div class="card" onclick="openPost(${p.id})">
@@ -13558,13 +13626,13 @@ async function togglePin(){
   return togglePinById(p.id);
 }
 async function togglePinById(postId){
-  const p = posts.find(item => String(item.id) === String(postId));
+  const p = findPostById(postId);
   if(!p) return;
   if(!(session && session.user) || String(p.user_id || '') !== String(session.user.id)){ showToast('只能置顶自己的笔记'); return; }
   try {
     const np = !p.pinned;
     if(np){
-      const pinnedCount = posts.filter(item => String(item.user_id || '') === String(session.user.id) && item.pinned && String(item.id) !== String(p.id)).length;
+      const pinnedCount = profilePostsForCurrentUser().filter(item => item.pinned && String(item.id) !== String(p.id)).length;
       if(pinnedCount >= 2){
         showToast('已有两篇置顶，请取消一篇后再尝试');
         return;
@@ -13583,7 +13651,8 @@ async function ownerDeletePost(id){
   if(!confirm('确定删除这篇笔记吗？删除后无法恢复')) return;
   try {
     await supabaseDeletePost(id);
-    posts = posts.filter(x => x.id !== id);
+    posts = posts.filter(x => String(x.id) !== String(id));
+    ownProfilePosts = ownProfilePosts.filter(x => String(x.id) !== String(id));
     closeOwnerSheet();
     closePost();
     renderFeed();
@@ -13848,7 +13917,7 @@ async function supabaseDeletePost(id){
 let editingPostId = null;
 
 function editPost(id){
-  const p = posts.find(x => x.id === id);
+  const p = findPostById(id);
   if(!p){ showToast('找不到该帖子'); return; }
   editingPostId = id;
   openCompose();
@@ -14022,7 +14091,7 @@ async function submitPost(){
   if(editingPostId !== null){
     if(isScheduledPost){ showToast('已发布笔记暂不支持改为定时发布，请新建一篇内容'); hidePublishProgress(); return; }
     /* ---- 编辑模式：更新已有帖子 ---- */
-    const p = posts.find(x => x.id === editingPostId);
+    const p = findPostById(editingPostId);
     if(p){
       p.title = title; p.content = contentToSave; p.excerpt = excerpt;
       p.category = cat; p.subcategory = subcategory; p.community_meta = communityMeta; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
@@ -14088,8 +14157,12 @@ async function submitPost(){
         localPost.id = saved.id; // 使用数据库生成的 id，保证后续编辑/删除一致
         savePosts();
       } else {
+        localPost.id = saved.id;
+        ownProfilePosts = [localPost, ...ownProfilePosts.filter(post => String(post.id) !== String(saved.id))];
+        ownProfilePostsLoadedFor = session.user.id;
         await removeComposeDraft();
         closeCompose(false);
+        if(currentTab === 'profile') initProfilePage();
         showToast(`已定时：${formatLaDateTime(scheduledAt)}`);
       }
       console.log('✓ 已保存到数据库, id=', saved.id);
@@ -14742,6 +14815,7 @@ function compactFeedPost(raw){
     pinned: !!raw.pinned,
     time: raw.created_at ? new Date(raw.created_at).toLocaleString('zh-CN') : new Date().toLocaleString('zh-CN'),
     created_at: raw.created_at || null,
+    scheduled_at: raw.scheduled_at || null,
     location: raw.location || null,
     comments: []
   };
