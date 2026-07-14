@@ -3022,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.183';
+const APP_VERSION = '5.184';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -12220,7 +12220,8 @@ async function publishMerchantAiPost(){
   const ytVertical = videoInfo && videoInfo.provider === 'youtube' && isYoutubeVerticalSource(videoInfo.url);
   const content = p.body + '\n\n' + p.tags.join(' ') + (tikTokInfo ? `\n\n${tiktokMarker(tikTokInfo.url)}` : '') + (ytVertical ? `\n\n${youtubeVerticalMarker()}` : '');
   const title = p.title.slice(0,20);
-  const image = ytId ? null : (merchantAiState.images[0] || 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
+  // 有上传图片时始终作为笔记封面；YouTube 仅在没有自定义封面时才回退显示视频缩略图。
+  const image = merchantAiState.images[0] || (ytId ? null : 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
   const images = merchantAiState.images.length ? merchantAiState.images : null;
   const cat = (currentMerchant && currentMerchant.category) || '生活';
   const authorName = (currentMerchant && currentMerchant.business_name) || myNick();
@@ -14131,7 +14132,8 @@ async function submitPost(){
       textCoverAssetUploadBusy = false;
     }
   }
-  const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[0] : (textCoverImage || null));
+  // 用户上传的第一张图是封面，即使同时附有 YouTube 链接也不能被视频默认缩略图覆盖。
+  const image = uploadedImages.length > 0 ? uploadedImages[0] : (ytId ? null : (textCoverImage || null));
   const images = uploadedImages.length > 0 ? uploadedImages : (textCoverImage ? [textCoverImage] : null);
   // 2.93：优先取"我的"页可编辑的昵称
   const authorName = (typeof currentUser !== 'undefined' && currentUser.name && currentUser.name !== '未登录用户')
