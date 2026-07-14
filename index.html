@@ -3022,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.184';
+const APP_VERSION = '5.185';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -6104,6 +6104,52 @@ function findMerchantMemberByCode(){
 }
 let merchantScannerStream = null;
 let merchantScannerTimer = null;
+let merchantQrFallbackLoader = null;
+function loadMerchantQrFallback(){
+  if(window.jsQR) return Promise.resolve(window.jsQR);
+  if(merchantQrFallbackLoader) return merchantQrFallbackLoader;
+  merchantQrFallbackLoader = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    script.async = true;
+    script.onload = () => window.jsQR ? resolve(window.jsQR) : reject(new Error('二维码识别器加载失败'));
+    script.onerror = () => reject(new Error('二维码识别器加载失败，请检查网络'));
+    document.head.appendChild(script);
+  }).catch(error => {
+    merchantQrFallbackLoader = null;
+    throw error;
+  });
+  return merchantQrFallbackLoader;
+}
+async function startMerchantQrFallbackScanner(video, status){
+  const decodeQr = await loadMerchantQrFallback();
+  if(!document.getElementById('merchantMemberScanner')?.classList.contains('open')) return;
+  if(!video) throw new Error('相机画面不可用');
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d', { willReadFrequently:true });
+  let detecting = false;
+  if(status) status.textContent = '请将会员卡或已领取优惠券的二维码放入框内。正在使用兼容扫码模式。';
+  merchantScannerTimer = setInterval(() => {
+    if(detecting || !video || video.readyState < 2 || !video.videoWidth || !context) return;
+    detecting = true;
+    try {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+      const width = Math.min(sourceWidth, 960);
+      const height = Math.max(1, Math.round(sourceHeight * (width / sourceWidth)));
+      canvas.width = width;
+      canvas.height = height;
+      context.drawImage(video, 0, 0, width, height);
+      const image = context.getImageData(0, 0, width, height);
+      const result = decodeQr(image.data, width, height, { inversionAttempts:'attemptBoth' });
+      if(result && result.data) applyScannedMemberCode(result.data);
+    } catch(error) {
+      console.warn('兼容扫码识别失败:', error.message);
+    } finally {
+      detecting = false;
+    }
+  }, 420);
+}
 async function openMerchantMemberScanner(){
   if(!(currentMerchant && currentMerchant.user_id)){
     showToast('请先登录商家账号');
@@ -6125,10 +6171,6 @@ async function openMerchantMemberScanner(){
   `;
   sheet.classList.add('open');
   const status = document.getElementById('merchantScanStatus');
-  if(!('BarcodeDetector' in window)){
-    if(status) status.textContent = '当前浏览器暂不支持直接扫码，请点击“手动输入”，让用户出示会员号后核销。';
-    return;
-  }
   if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
     if(status) status.textContent = '当前设备无法打开相机，请点击“手动输入”，让用户出示会员号后核销。';
     return;
@@ -6137,20 +6179,28 @@ async function openMerchantMemberScanner(){
     merchantScannerStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
     const video = document.getElementById('merchantScanVideo');
     if(video) video.srcObject = merchantScannerStream;
-    const detector = new BarcodeDetector({ formats:['qr_code','code_128','code_39','ean_13'] });
-    if(status) status.textContent = '请将会员卡或已领取优惠券的二维码放入框内。识别成功后会自动打开核销页面。';
-    merchantScannerTimer = setInterval(async () => {
+    if('BarcodeDetector' in window){
       try {
-        const targetVideo = document.getElementById('merchantScanVideo');
-        if(!targetVideo || targetVideo.readyState < 2) return;
-        const codes = await detector.detect(targetVideo);
-        const raw = codes && codes[0] && codes[0].rawValue;
-        if(raw) applyScannedMemberCode(raw);
-      } catch(e){}
-    }, 700);
+        const detector = new BarcodeDetector({ formats:['qr_code','code_128','code_39','ean_13'] });
+        if(status) status.textContent = '请将会员卡或已领取优惠券的二维码放入框内。识别成功后会自动打开核销页面。';
+        merchantScannerTimer = setInterval(async () => {
+          try {
+            const targetVideo = document.getElementById('merchantScanVideo');
+            if(!targetVideo || targetVideo.readyState < 2) return;
+            const codes = await detector.detect(targetVideo);
+            const raw = codes && codes[0] && codes[0].rawValue;
+            if(raw) applyScannedMemberCode(raw);
+          } catch(e){}
+        }, 700);
+        return;
+      } catch(error){
+        console.warn('原生扫码器不可用，切换兼容模式:', error.message);
+      }
+    }
+    await startMerchantQrFallbackScanner(video, status);
   } catch(e){
     console.warn('打开会员扫码失败:', e.message);
-    if(status) status.textContent = '相机权限未开启或设备不支持，请点击“手动输入”，让用户出示会员号后核销。';
+    if(status) status.textContent = `相机或扫码器未能启动（${e.message || '设备不支持'}），请点击“手动输入”，让用户出示会员号后核销。`;
   }
 }
 function applyScannedMemberCode(raw){
