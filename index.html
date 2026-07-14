@@ -3022,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.181';
+const APP_VERSION = '5.182';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3483,11 +3483,6 @@ async function resendVerifyEmail(email){
 
 /* ---- 一体化登入：自动判断 注册/登录/补发验证 ---- */
 async function createAccountFromAuth(email, pass, name, msg){
-  const passwordIssue = passwordSafetyMessage(pass);
-  if(passwordIssue){
-    showAuthValidation(`新账号${passwordIssue}`);
-    return 'invalid_password';
-  }
   msg.textContent = '首次使用该邮箱，正在创建账号…';
   const reg = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
     method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
@@ -3495,10 +3490,19 @@ async function createAccountFromAuth(email, pass, name, msg){
   });
   const rd = await reg.json();
   if(!reg.ok){
-    msg.textContent = '注册失败：' + (rd.msg || rd.error_description || reg.status);
+    const reason = String(rd.msg || rd.error_description || rd.message || '').toLowerCase();
+    const passwordIssue = passwordSafetyMessage(pass);
+    // 登录失败后无法从公开接口安全判断邮箱是否已存在。旧账号密码不匹配时，
+    // 不能把新账号的规则误提示为旧账号的密码要求。
+    if(passwordIssue && (reason.includes('password') || reason.includes('weak') || reason.includes('least'))){
+      msg.textContent = `无法登录。若这是首次注册，${passwordIssue}；已注册用户请检查原密码或使用“忘记密码”。`;
+      return 'login_or_password_rule';
+    }
+    msg.textContent = '无法登录。请检查邮箱和原密码；忘记密码可点击下方“忘记密码”。';
     return 'failed';
   }
-  if(rd.user && Array.isArray(rd.user.identities) && rd.user.identities.length === 0){
+  const identities = rd && rd.user && Array.isArray(rd.user.identities) ? rd.user.identities : null;
+  if(!rd.access_token && (!identities || identities.length === 0)){
     msg.textContent = '邮箱或密码错误。忘记密码可点击下方“忘记密码”。';
     return 'existing_account';
   }
@@ -3508,10 +3512,13 @@ async function createAccountFromAuth(email, pass, name, msg){
     updateAuthUI(); closeAuth(); fetchProfileFromDb(); fetchMerchantProfile();
     setTimeout(maybeOpenFeedOnboarding, 350);
     showToast('注册成功，已登录');
-  } else {
+  } else if(identities && identities.length > 0) {
     pushVerifyLog(email);
     msg.style.color = 'var(--sage-dark)';
     msg.textContent = '验证邮件已发送，请点击邮件中的链接完成注册。';
+  } else {
+    msg.textContent = '无法确认账号状态。请检查原密码；忘记密码可点击下方“忘记密码”。';
+    return 'existing_account';
   }
   return 'created';
 }
@@ -3610,15 +3617,26 @@ async function requestPasswordReset(){
   if(!email || !email.includes('@')){ msg.textContent = '请先输入注册邮箱。'; return; }
   msg.style.color = 'var(--berry)'; msg.textContent = '正在发送重置邮件…';
   try {
-    const redirect = new URL('index.html', window.location.href).href;
+    // 使用站点根地址回跳，和 Supabase URL Configuration 中常见的 Site URL 保持一致。
+    const redirect = new URL('/', window.location.origin).href;
     const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
       method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
       body:JSON.stringify({ email, redirect_to:redirect })
     });
-    if(!res.ok) throw new Error('recover failed');
+    if(!res.ok){
+      let detail = {};
+      try { detail = await res.json(); } catch(e){}
+      const raw = String(detail.msg || detail.error_description || detail.message || detail.error || '').toLowerCase();
+      if(res.status === 429 || raw.includes('rate limit')) throw new Error('发送过于频繁，请稍后再试');
+      if(raw.includes('redirect') || raw.includes('url')) throw new Error('回跳地址未获授权，请在 Supabase 的 URL Configuration 中加入 https://escoopcity.com/');
+      throw new Error(detail.msg || detail.error_description || detail.message || `服务暂时不可用（${res.status}）`);
+    }
     msg.style.color = 'var(--sage-dark)';
     msg.textContent = '重置邮件已发送，请点击邮件中的链接设置新密码。';
-  } catch(e){ msg.textContent = '重置邮件发送失败，请稍后重试。'; }
+  } catch(e){
+    console.warn('重置邮件发送失败:', e.message);
+    msg.textContent = `重置邮件发送失败：${e.message || '请稍后重试。'}`;
+  }
 }
 function logoutUser(silent){
   session = null;
