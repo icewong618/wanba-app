@@ -2834,7 +2834,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.164';
+const APP_VERSION = '5.165';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8023,6 +8023,9 @@ let selectedVideos = []; // 已选视频（仅本地预览占位，不上传数�
 let textCardCover = null;
 let textCoverDraftTheme = 'garden';
 let textCoverDraftImage = '';
+let textCoverAssetUploadBusy = false;
+const TEXT_COVER_ASSET_BUCKET = 'post-assets';
+const TEXT_COVER_ASSET_MAX_BYTES = 5 * 1024 * 1024;
 const TEXT_COVER_THEMES = [
   { id:'garden', name:'绿意', note:'侧栏清爽', bg:'#E8F1E6', ink:'#23412C', accent:'#6C9870', label:'#F9FCF7' },
   { id:'paper', name:'留白', note:'网格留白', bg:'#FFFDF7', ink:'#292721', accent:'#C87B55', label:'#FFFDF8' },
@@ -12049,6 +12052,31 @@ function createTextCoverDataUrl(title, content, category, themeId){
     return '';
   }
 }
+function textCoverAssetPath(){
+  const token = globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `text-covers/${session.user.id}/${Date.now()}-${token}.jpg`;
+}
+function publicStorageObjectUrl(bucket, path){
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${storageObjectPathUrl(path)}`;
+}
+async function uploadTextCoverAsset(dataUrl){
+  if(!(session && session.user)) throw new Error('请先登录后再上传文字配图');
+  const source = await fetch(dataUrl);
+  if(!source.ok) throw new Error('文字配图读取失败');
+  const blob = await source.blob();
+  if(!blob.size || blob.size > TEXT_COVER_ASSET_MAX_BYTES) throw new Error('文字配图超过 5MB，请缩短内容后重试');
+  const path = textCoverAssetPath();
+  const objectUrl = `${SUPABASE_URL}/storage/v1/object/${TEXT_COVER_ASSET_BUCKET}/${storageObjectPathUrl(path)}`;
+  const upload = await authedFetch(objectUrl, {
+    method:'POST',
+    headers:{ 'Content-Type':'image/jpeg', 'x-upsert':'false' },
+    body:blob
+  });
+  if(!upload.ok) throw new Error(`文字配图上传失败（${upload.status}）`);
+  return publicStorageObjectUrl(TEXT_COVER_ASSET_BUCKET, path);
+}
 function renderTextCoverThemes(){
   const holder = document.getElementById('textCoverThemes');
   if(!holder) return;
@@ -13112,10 +13140,25 @@ async function submitPost(){
   const excerpt = content.slice(0,40)+(content.length>40?'…':'');
   // 最终发布时按当前已选版式重新生成，避免预览主题没有被带到发布封面。
   const selectedTextCoverTheme = textCardCover?.theme || textCoverDraftTheme || 'garden';
-  const automaticTextCover = !videoInfo && selectedVideos.length === 0 && uploadedImages.length === 0
+  const automaticTextCover = editingPostId === null && !videoInfo && selectedVideos.length === 0 && uploadedImages.length === 0
     ? createTextCoverDataUrl(title, content, cat, selectedTextCoverTheme)
     : '';
-  const textCoverImage = automaticTextCover || textCardCover?.dataUrl || '';
+  const rawTextCoverImage = automaticTextCover || (editingPostId === null ? textCardCover?.dataUrl : '') || '';
+  let textCoverImage = '';
+  if(rawTextCoverImage){
+    if(textCoverAssetUploadBusy){ showToast('文字配图正在上传，请稍候'); return; }
+    textCoverAssetUploadBusy = true;
+    showToast('正在保存文字配图…');
+    try {
+      textCoverImage = await uploadTextCoverAsset(rawTextCoverImage);
+    } catch(error){
+      console.warn('文字配图资产上传失败:', error.message);
+      showToast(error.message || '文字配图上传失败，请重试');
+      return;
+    } finally {
+      textCoverAssetUploadBusy = false;
+    }
+  }
   const image = ytId ? null : (uploadedImages.length > 0 ? uploadedImages[coverImageIndex] : (textCoverImage || null));
   const images = uploadedImages.length > 0 ? uploadedImages : (textCoverImage ? [textCoverImage] : null);
   // 2.93：优先取"我的"页可编辑的昵称
@@ -14182,7 +14225,7 @@ document.addEventListener('visibilitychange', () => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Beta Operations and Safety】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Unified Text Cover Assets】`);
 </script>
 </body>
 </html>
