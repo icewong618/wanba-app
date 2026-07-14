@@ -2968,9 +2968,9 @@ async function loadProfilesForIds(userIds){
   } catch(e){ console.warn('用户资料读取失败:', e.message); return []; }
 }
 /* 批量拉取一批 user_id 的头像并写入缓存，已认证商家优先使用店铺Logo */
-async function ensureAvatarsFor(userIds){
+async function ensureAvatarsFor(userIds, forceRefresh=false){
   const ids = [...new Set((userIds||[]).filter(Boolean))];
-  const needProfiles = ids.filter(uid => !(uid in window._avatarCache));
+  const needProfiles = forceRefresh ? ids : ids.filter(uid => !(uid in window._avatarCache));
   const needMerchants = ids.filter(uid => !(uid in window._merchantLogoCache));
   if(!needProfiles.length && !needMerchants.length) return false;
   try {
@@ -3022,7 +3022,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.179';
+const APP_VERSION = '5.180';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8873,7 +8873,7 @@ function openPost(id){
   recordPostView(id); // 记录一次真实浏览（供商家仪表盘"浏览量"统计使用）
   // 2.94修复：兜底确保笔记作者头像已缓存（一般在首页加载时已批量拉过）
   const p = getPost();
-  if(p) ensureAvatarsFor([p.user_id]).then(changed => { if(changed && activePostId === id) renderPostModal(); });
+  if(p) ensureAvatarsFor([p.user_id], true).then(changed => { if(changed && String(activePostId) === String(id)) renderPostModal(); });
 }
 async function hydratePostDetail(postId){
   const post = posts.find(item => String(item.id) === String(postId));
@@ -8892,7 +8892,7 @@ async function hydratePostDetail(postId){
     post.images = Array.isArray(full.images) ? full.images : post.images;
     post.community_meta = full.community_meta && typeof full.community_meta === 'object' ? full.community_meta : null;
     post.location = full.location || post.location || null;
-    if(activePostId === postId) renderPostModal();
+    if(String(activePostId) === String(postId)) renderPostModal();
   } catch(error){
     hydratedPostIds.delete(String(postId));
     console.warn('笔记详情补充读取失败:', error.message);
@@ -11107,7 +11107,8 @@ function renderPostModal(){
       </button>
     </div>
   `;
-  setupCarouselTouch();
+  // App 保留左右滑图；浏览器端优先页面上下滚动，避免旧多图笔记抢走滚动手势。
+  if(isEmbeddedAppEntry()) setupCarouselTouch();
   if(p.youtube){
     primeYoutubeSound(String(p.youtube || '').replace(/[^A-Za-z0-9_-]/g, ''));
   }
