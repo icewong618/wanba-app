@@ -1960,6 +1960,15 @@
   <div class="merchant-fullscreen-body" id="merchantMemberManagerBody"></div>
 </div>
 
+<div id="merchantTeamManager" class="merchant-fullscreen-sheet">
+  <div class="merchant-fullscreen-head">
+    <button onclick="closeMerchantTeamManager()" aria-label="关闭">×</button>
+    <h3>团队与矩阵账号</h3>
+    <span style="width:38px;height:38px;"></span>
+  </div>
+  <div class="merchant-fullscreen-body" id="merchantTeamManagerBody"></div>
+</div>
+
 <div id="memberCardPresenter" class="merchant-fullscreen-sheet">
   <div class="merchant-fullscreen-head">
     <button onclick="closeMemberCardPresenter()" aria-label="关闭">×</button>
@@ -3022,7 +3031,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.186';
+const APP_VERSION = '5.200';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4197,6 +4206,192 @@ async function fetchProfileFromDb(){
 }
 /* 拉取当前账号的商家资料。若存在且已通过认证(verified=true)，"我"页会显示商家专属主页而非普通个人页 */
 let currentMerchant = null;
+let merchantMatrixWorkspaces = [];
+let merchantMatrixInvites = [];
+let merchantMatrixActiveWorkspace = null;
+let merchantMatrixPeople = [];
+let merchantMatrixSelectedPerson = null;
+function merchantOperatorWorkspace(){
+  return merchantMatrixActiveWorkspace && merchantMatrixActiveWorkspace.merchant
+    ? merchantMatrixActiveWorkspace.merchant
+    : currentMerchant;
+}
+function merchantOperatorRole(){
+  if(merchantMatrixActiveWorkspace) return merchantMatrixActiveWorkspace.role || 'clerk';
+  return currentMerchant && session && session.user && currentMerchant.user_id === session.user.id ? 'owner' : '';
+}
+function canOperateMerchantWorkspace(){
+  const role = merchantOperatorRole();
+  return role === 'owner' || role === 'operator' || role === 'clerk';
+}
+function isMerchantWorkspaceOwner(){
+  return merchantOperatorRole() === 'owner';
+}
+function activeMerchantWorkspaceId(){
+  const m = merchantOperatorWorkspace();
+  return m && m.user_id || '';
+}
+async function loadMerchantMatrixState(){
+  if(!(session && session.user)){
+    merchantMatrixWorkspaces = [];
+    merchantMatrixInvites = [];
+    merchantMatrixActiveWorkspace = null;
+    return;
+  }
+  try {
+    const [accessRes, inviteRes] = await Promise.all([
+      authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_my_access', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' }),
+      authedFetch(SUPABASE_URL + '/rest/v1/merchant_team_members?member_user_id=eq.' + encodeURIComponent(session.user.id) + '&status=eq.pending&select=id,merchant_user_id,role,invited_at&order=invited_at.desc', { method:'GET' })
+    ]);
+    merchantMatrixWorkspaces = accessRes.ok ? (await accessRes.json()).map(row => Object.assign({}, row, { merchant:row.merchant || {} })) : [];
+    merchantMatrixInvites = inviteRes.ok ? await inviteRes.json() : [];
+    const merchantIds = merchantMatrixInvites.map(row => row.merchant_user_id).filter(Boolean);
+    if(merchantIds.length){
+      const res = await authedFetch(SUPABASE_URL + '/rest/v1/merchants?user_id=in.(' + merchantIds.map(encodeURIComponent).join(',') + ')&select=user_id,business_name,logo');
+      if(res.ok) (await res.json()).forEach(row => setMerchantIdentityCache(row.user_id, row));
+    }
+  } catch(error){
+    console.warn('商家矩阵账号读取失败:', error.message);
+    merchantMatrixWorkspaces = [];
+    merchantMatrixInvites = [];
+  }
+}
+function merchantMatrixWorkspaceCardHtml(){
+  if(!(session && session.user)) return '';
+  const invites = merchantMatrixInvites || [];
+  const spaces = merchantMatrixWorkspaces || [];
+  if(!invites.length && !spaces.length) return '';
+  const inviteHtml = invites.map(row => {
+    const merchant = window._merchantIdentityCache[row.merchant_user_id] || {};
+    const name = merchant.business_name || '认证商家';
+    return '<div style="padding:11px 0;border-bottom:1px solid var(--line);"><b style="font-size:13px;">' + escHtml(name) + ' 邀请你加入商家团队</b><div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">授权角色：' + (row.role === 'operator' ? '运营' : '店员') + ' · 可处理会员核销</div><div style="display:flex;gap:8px;margin-top:9px;"><button onclick="respondMerchantMatrixInvite(' + Number(row.id) + ',true)" style="border:0;border-radius:9px;background:var(--sage);color:#fff;padding:7px 12px;font-size:12px;font-weight:800;">接受授权</button><button onclick="respondMerchantMatrixInvite(' + Number(row.id) + ',false)" style="border:1px solid var(--line);border-radius:9px;background:#fff;padding:7px 12px;font-size:12px;font-weight:800;">拒绝</button></div></div>';
+  }).join('');
+  const workspaceHtml = spaces.map(row => {
+    const m = row.merchant || {};
+    const name = m.business_name || '认证商家';
+    return '<button data-merchant-id="' + escAttr(row.merchant_user_id || '') + '" onclick="openMerchantMatrixWorkspace(this.dataset.merchantId)" style="width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px;display:flex;align-items:center;gap:10px;text-align:left;margin-top:8px;"><span class="merchant-member-avatar" style="width:34px;height:34px;background:var(--sage-light);color:var(--sage-dark);">' + (m.logo ? '<img src="' + escAttr(m.logo) + '" alt="">' : escHtml(initials(name))) + '</span><span style="min-width:0;flex:1;"><b style="display:block;font-size:13px;color:var(--ink);">' + escHtml(name) + '</b><small style="display:block;color:var(--ink-faint);margin-top:3px;">' + (row.role === 'operator' ? '运营工作台' : '店员核销工作台') + '</small></span><span style="color:var(--sage-dark);font-weight:900;">进入</span></button>';
+  }).join('');
+  return '<section style="margin:14px 0 4px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);"><div style="font-size:14px;font-weight:900;color:var(--ink);">商家矩阵账号</div>' + inviteHtml + workspaceHtml + '</section>';
+}
+async function respondMerchantMatrixInvite(id, accept){
+  try {
+    const res = await authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_respond_invite', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_team_member_id:Number(id),p_accept:!!accept}) });
+    if(!res.ok) throw new Error(await res.text());
+    await loadMerchantMatrixState();
+    if(currentTab === 'profile') initProfilePage();
+    showToast(accept ? '已加入商家团队' : '已拒绝邀请');
+  } catch(error){ showToast('处理邀请失败，请稍后重试'); }
+}
+function openMerchantMatrixWorkspace(merchantUserId){
+  const workspace = (merchantMatrixWorkspaces || []).find(row => String(row.merchant_user_id) === String(merchantUserId));
+  if(!workspace || !workspace.merchant){ showToast('商家授权已失效，请刷新后重试'); return; }
+  merchantMatrixActiveWorkspace = workspace;
+  window._activeMerchantMemberManagerId = workspace.merchant_user_id;
+  openMerchantMemberManager(workspace.merchant_user_id);
+}
+function leaveMerchantMatrixWorkspace(){
+  merchantMatrixActiveWorkspace = null;
+  window._activeMerchantMemberManagerId = null;
+}
+function closeMerchantTeamManager(){
+  document.getElementById('merchantTeamManager')?.classList.remove('open');
+  merchantMatrixPeople = [];
+  merchantMatrixSelectedPerson = null;
+}
+async function openMerchantTeamManager(){
+  if(!(currentMerchant && currentMerchant.verified && session && session.user && currentMerchant.user_id === session.user.id)){
+    showToast('只有认证商家店主可以管理团队');
+    return;
+  }
+  const sheet = document.getElementById('merchantTeamManager');
+  if(!sheet) return;
+  sheet.classList.add('open');
+  await renderMerchantTeamManager();
+}
+function merchantMatrixRoleText(role){ return role === 'operator' ? '运营' : '店员'; }
+async function renderMerchantTeamManager(){
+  const body = document.getElementById('merchantTeamManagerBody');
+  if(!body || !currentMerchant) return;
+  body.innerHTML = '<div class="deals-empty-panel">正在读取团队成员...</div>';
+  try {
+    const url = SUPABASE_URL + '/rest/v1/merchant_team_members?merchant_user_id=eq.' + encodeURIComponent(currentMerchant.user_id) + '&select=id,member_user_id,role,status,invited_at,responded_at,updated_at&order=updated_at.desc';
+    const res = await authedFetch(url, {method:'GET'});
+    if(!res.ok) throw new Error(await res.text());
+    const rows = await res.json();
+    await loadProfilesForIds(rows.map(row => row.member_user_id));
+    const selected = merchantMatrixSelectedPerson;
+    const selectedName = selected ? (selected.name || '已选择用户') : '还没有选择用户';
+    const members = rows.map(row => {
+      const profile = cachedProfile(row.member_user_id);
+      const name = profile.name || '乐生活用户';
+      const avatar = profile.avatar || resolveAvatarUrl(row.member_user_id);
+      const status = row.status === 'active' ? '已授权' : row.status === 'pending' ? '待确认' : row.status === 'declined' ? '已拒绝' : '已撤销';
+      const actions = row.status === 'active' || row.status === 'pending'
+        ? '<button onclick="revokeMerchantMatrixMember(' + Number(row.id) + ')" style="padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--berry-dark);font-size:11px;font-weight:900;">撤销</button>'
+        : '';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);"><span class="merchant-member-avatar" style="width:38px;height:38px;background:var(--bg-alt);color:var(--sage-dark);">' + (avatar ? '<img src="' + escAttr(avatar) + '" alt="">' : escHtml(initials(name))) + '</span><div style="flex:1;min-width:0;"><b style="display:block;font-size:13px;">' + escHtml(name) + '</b><small style="display:block;margin-top:3px;color:var(--ink-faint);">' + merchantMatrixRoleText(row.role) + ' · ' + status + '</small></div>' + actions + '</div>';
+    }).join('') || '<div class="deals-empty-panel" style="margin:12px 0 0;">还没有矩阵账号。</div>';
+    body.innerHTML = '<div class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:16px;">邀请矩阵账号</b><p style="font-size:12px;line-height:1.6;color:var(--ink-faint);margin:7px 0 12px;">被邀请者使用自己的乐生活个人账号确认后，可进入会员核销工作台；不会共享你的商家密码。</p><div class="merchant-checkin-form"><input id="merchantMatrixSearch" placeholder="输入乐生活昵称搜索" oninput="searchMerchantMatrixPeople(this.value)" autocomplete="off"><button onclick="searchMerchantMatrixPeople(document.getElementById(&quot;merchantMatrixSearch&quot;).value)">搜索</button></div><div id="merchantMatrixPeople" style="margin-top:8px;"></div><div style="margin-top:12px;padding:10px;border-radius:9px;background:var(--bg-alt);font-size:12px;">已选择：<b id="merchantMatrixSelected">' + escHtml(selectedName) + '</b></div><div class="member-tx-filter" style="margin:12px 0 0;"><button data-role="clerk" class="' + ((window._merchantMatrixInviteRole || 'clerk') === 'clerk' ? 'on' : '') + '" onclick="setMerchantMatrixInviteRole(this.dataset.role)">店员</button><button data-role="operator" class="' + ((window._merchantMatrixInviteRole || 'clerk') === 'operator' ? 'on' : '') + '" onclick="setMerchantMatrixInviteRole(this.dataset.role)">运营</button></div><button class="merchant-reward-redeem-btn" style="margin:12px 0 0;" onclick="inviteMerchantMatrixMember()">发送授权邀请</button></div><div style="font-size:14px;font-weight:900;margin:18px 0 6px;">团队成员</div>' + members;
+    renderMerchantMatrixPeople();
+  } catch(error){
+    console.warn('商家团队读取失败:', error.message);
+    body.innerHTML = '<div class="deals-empty-panel">团队功能需要先运行 5.200 数据库脚本。</div>';
+  }
+}
+function setMerchantMatrixInviteRole(role){
+  window._merchantMatrixInviteRole = role === 'operator' ? 'operator' : 'clerk';
+  renderMerchantTeamManager();
+}
+async function searchMerchantMatrixPeople(query){
+  const target = document.getElementById('merchantMatrixPeople');
+  const text = String(query || '').trim();
+  if(!target) return;
+  if(!text){ merchantMatrixPeople = []; renderMerchantMatrixPeople(); return; }
+  target.innerHTML = '<div style="font-size:12px;color:var(--ink-faint);padding:8px 0;">正在搜索...</div>';
+  try {
+    const res = await authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_search_people', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_query:text})});
+    if(!res.ok) throw new Error(await res.text());
+    merchantMatrixPeople = await res.json();
+    merchantMatrixPeople.forEach(setProfileCache);
+    renderMerchantMatrixPeople();
+  } catch(error){
+    target.innerHTML = '<div style="font-size:12px;color:var(--berry-dark);padding:8px 0;">没有找到可邀请的用户。</div>';
+  }
+}
+function renderMerchantMatrixPeople(){
+  const target = document.getElementById('merchantMatrixPeople');
+  if(!target) return;
+  target.innerHTML = (merchantMatrixPeople || []).map(person => {
+    const name = person.name || '乐生活用户';
+    const avatar = person.avatar || resolveAvatarUrl(person.user_id);
+    return '<button data-user-id="' + escAttr(person.user_id || '') + '" onclick="selectMerchantMatrixPerson(this.dataset.userId)" style="width:100%;display:flex;align-items:center;gap:9px;border:0;border-bottom:1px solid var(--line);background:#fff;padding:8px 0;text-align:left;"><span class="merchant-member-avatar" style="width:32px;height:32px;background:var(--bg-alt);color:var(--sage-dark);">' + (avatar ? '<img src="' + escAttr(avatar) + '" alt="">' : escHtml(initials(name))) + '</span><b style="font-size:13px;">' + escHtml(name) + '</b></button>';
+  }).join('');
+}
+function selectMerchantMatrixPerson(userId){
+  merchantMatrixSelectedPerson = (merchantMatrixPeople || []).find(row => String(row.user_id) === String(userId)) || null;
+  const el = document.getElementById('merchantMatrixSelected');
+  if(el) el.textContent = merchantMatrixSelectedPerson ? merchantMatrixSelectedPerson.name : '还没有选择用户';
+}
+async function inviteMerchantMatrixMember(){
+  if(!merchantMatrixSelectedPerson){ showToast('请先搜索并选择一个乐生活用户'); return; }
+  try {
+    const res = await authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_invite_member', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_member_user_id:merchantMatrixSelectedPerson.user_id,p_role:window._merchantMatrixInviteRole || 'clerk'})});
+    if(!res.ok) throw new Error(await res.text());
+    merchantMatrixSelectedPerson = null;
+    merchantMatrixPeople = [];
+    showToast('授权邀请已发送，等待对方确认');
+    await renderMerchantTeamManager();
+  } catch(error){ showToast('邀请失败，请确认对方已完成注册'); }
+}
+async function revokeMerchantMatrixMember(id){
+  if(!confirm('撤销后，该账号将不能再进入会员核销工作台。确定继续吗？')) return;
+  try {
+    const res = await authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_revoke_member', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_team_member_id:Number(id)})});
+    if(!res.ok) throw new Error(await res.text());
+    showToast('已撤销商家授权');
+    await renderMerchantTeamManager();
+  } catch(error){ showToast('撤销失败，请稍后重试'); }
+}
 async function fetchMerchantProfile(){
   if(!(session && session.user)){ currentMerchant = null; return; }
   try {
@@ -4206,6 +4401,7 @@ async function fetchMerchantProfile(){
     currentMerchant = (rows && rows[0]) || null;
     if(currentMerchant) setMerchantIdentityCache(currentMerchant.user_id || session.user.id, currentMerchant);
     await loadMerchantApplicationStatus(false);
+    await loadMerchantMatrixState();
     // 若当前正停留在"我"页，刷新一下让商家主页/普通个人页及时切换
     if(currentTab === 'profile') initProfilePage();
   } catch(e){ console.warn('商家资料拉取失败:', e.message); currentMerchant = null; }
@@ -4759,7 +4955,7 @@ async function claimMerchantCoupon(userId, index){
 function closeMerchantCouponWallet(){ document.getElementById('merchantCouponWallet')?.classList.remove('open'); }
 function closeMerchantCouponRedeem(){ document.getElementById('merchantCouponRedeem')?.classList.remove('open'); }
 async function openMerchantCouponRedeemByCode(code){
-  if(!(currentMerchant && currentMerchant.user_id)){ showToast('请先登录商家账号'); return; }
+  if(!canOperateMerchantWorkspace() || !activeMerchantWorkspaceId()){ showToast('请先进入商家工作台'); return; }
   const idText = String(code || '').toUpperCase().replace(/^LSHC-?/,'').replace(/\D/g,'');
   const id = Number(idText);
   if(!id){ showToast('优惠券二维码无效'); return; }
@@ -4769,7 +4965,7 @@ async function openMerchantCouponRedeemByCode(code){
   sheet.classList.add('open');
   body.innerHTML = '<div class="deals-empty-panel">正在核对优惠券...</div>';
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims?id=eq.${id}&merchant_user_id=eq.${encodeURIComponent(currentMerchant.user_id)}&select=*&limit=1`, { method:'GET' });
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims?id=eq.${id}&merchant_user_id=eq.${encodeURIComponent(activeMerchantWorkspaceId())}&select=*&limit=1`, { method:'GET' });
     if(!res.ok) throw new Error(await res.text());
     const rows = await res.json();
     const claim = rows && rows[0];
@@ -4793,7 +4989,7 @@ async function confirmMerchantCouponRedeem(id){
         couponClaimId:claim.id,
         kind:'coupon',
         title:'优惠券已核销',
-        body:`${currentMerchant && currentMerchant.business_name || '商家'} 已核销你的「${snapshot.title || '优惠券'}」。`
+        body:`${merchantOperatorWorkspace() && merchantOperatorWorkspace().business_name || '商家'} 已核销你的「${snapshot.title || '优惠券'}」。`
       });
     }
     showToast('✓ 优惠券已核销');
@@ -5387,6 +5583,7 @@ function merchantContentHtml(m, opts){
           <button onclick="copyMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}复制微网站链接</button>
           <button onclick="shareMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}转发店铺</button>
           <button onclick="closeProfileMenu();openMerchantEditSheet()">${uiIcon('edit',15)}编辑商家资料</button>
+          <button onclick="closeProfileMenu();openMerchantTeamManager()">${uiIcon('user',15)}团队与矩阵账号</button>
           ${isDealAdmin ? `<button onclick="closeProfileMenu();switchTab('admin')">${uiIcon('settings',15)}管理后台</button>` : ''}
           <button onclick="closeProfileMenu();switchAccount()">${uiIcon('logout',15)}切换账号</button>
         </div>
@@ -5672,8 +5869,8 @@ function merchantMembershipHtml(m, isOwnerPage){
   `;
 }
 function openMerchantMemberManager(merchantUserId){
-  if(!(currentMerchant && currentMerchant.user_id === merchantUserId)){
-    showToast('只有商家本人可以管理会员');
+  if(String(activeMerchantWorkspaceId()) !== String(merchantUserId) || !canOperateMerchantWorkspace()){
+    showToast('你没有这家商店的会员操作权限');
     return;
   }
   window._activeMerchantMemberManagerId = merchantUserId;
@@ -5686,11 +5883,12 @@ function openMerchantMemberManager(merchantUserId){
 }
 function closeMerchantMemberManager(){
   document.getElementById('merchantMemberManager')?.classList.remove('open');
+  leaveMerchantMatrixWorkspace();
 }
 function renderMerchantMemberManager(){
   const body = document.getElementById('merchantMemberManagerBody');
   if(!body) return;
-  const merchantUserId = window._activeMerchantMemberManagerId || (currentMerchant && currentMerchant.user_id);
+  const merchantUserId = window._activeMerchantMemberManagerId || activeMerchantWorkspaceId();
   const cache = cachedMerchantMemberships(merchantUserId);
   const members = cache.rows || [];
   if(cache.missing){
@@ -5708,8 +5906,9 @@ function renderMerchantMemberManager(){
   const latestMembers = members.slice().sort((a,b) => new Date(b.joined_at || 0) - new Date(a.joined_at || 0)).slice(0, 10);
   const recentSpendMemberIds = [...new Set((txCache.rows || []).filter(tx => memberTransactionKind(tx) !== 'reward_reversal').map(tx => String(tx.membership_id)))].slice(0, 10);
   const recentSpendMembers = recentSpendMemberIds.map(id => members.find(member => String(member.id) === id)).filter(Boolean);
-  const merchantName = currentMerchant && currentMerchant.business_name || '我的店铺';
-  const merchantLogo = currentMerchant && currentMerchant.logo;
+  const workspaceMerchant = merchantOperatorWorkspace() || {};
+  const merchantName = workspaceMerchant.business_name || '我的店铺';
+  const merchantLogo = workspaceMerchant.logo;
   body.innerHTML = `
     <div class="merchant-dash-card" style="box-shadow:none;display:flex;align-items:center;gap:12px;">
       <div class="merchant-member-avatar" style="width:46px;height:46px;background:var(--sage-light);color:var(--sage-dark);">${merchantLogo ? `<img src="${escAttr(merchantLogo)}" alt="">` : escHtml(initials(merchantName))}</div>
@@ -5745,7 +5944,7 @@ function merchantMemberManageCardHtml(member){
   const joined = member.joined_at ? new Date(member.joined_at).toLocaleDateString('zh-CN') : '刚加入';
   const stamps = Number(member.stamp_count || 0);
   const points = Number(member.points || 0);
-  const merchant = currentMerchant || {};
+  const merchant = merchantOperatorWorkspace() || {};
   const rewardInfo = merchantRewardInfo(member, merchant);
   const tier = memberTierInfo(member, merchant);
   const birthdayText = isBirthdayMonth(profile.birth) && merchant.birthday_reward ? ` · 本月生日权益` : '';
@@ -5768,13 +5967,13 @@ function merchantMemberManageCardHtml(member){
   `;
 }
 function activeMerchantMemberById(id){
-  const merchantUserId = window._activeMerchantMemberManagerId || (currentMerchant && currentMerchant.user_id);
+  const merchantUserId = window._activeMerchantMemberManagerId || activeMerchantWorkspaceId();
   return cachedMerchantMemberships(merchantUserId).rows.find(r => String(r.id) === String(id));
 }
 async function updateMerchantMembershipRow(id, patch, audit){
-  const merchantUserId = window._activeMerchantMemberManagerId || (currentMerchant && currentMerchant.user_id);
-  if(!(currentMerchant && currentMerchant.user_id === merchantUserId)){
-    showToast('只有商家本人可以管理会员');
+  const merchantUserId = window._activeMerchantMemberManagerId || activeMerchantWorkspaceId();
+  if(!canOperateMerchantWorkspace() || !merchantUserId){
+    showToast('你没有这家商店的会员操作权限');
     return false;
   }
   try {
@@ -5810,8 +6009,8 @@ async function updateMerchantMembershipRow(id, patch, audit){
         kind:isPoints ? 'points' : 'stamp',
         title:autoPoints ? '到店消费已累计' : `${label}${positive ? '已累计' : '已调整'}`,
         body:autoPoints
-          ? `${currentMerchant && currentMerchant.business_name || '商家'} 已为你累计消费 ${Math.abs(Number(audit.delta || 0))} 次，并增加 ${autoPoints} 积分。`
-          : `${currentMerchant && currentMerchant.business_name || '商家'} ${positive ? '已为你' : '已将你的'}${label}${positive ? `增加 ${Math.abs(Number(audit.delta || 0))}` : `调整 ${Number(audit.delta || 0)}`}${isPoints ? ' 分' : ' 次'}。`
+          ? `${merchantOperatorWorkspace() && merchantOperatorWorkspace().business_name || '商家'} 已为你累计消费 ${Math.abs(Number(audit.delta || 0))} 次，并增加 ${autoPoints} 积分。`
+          : `${merchantOperatorWorkspace() && merchantOperatorWorkspace().business_name || '商家'} ${positive ? '已为你' : '已将你的'}${label}${positive ? `增加 ${Math.abs(Number(audit.delta || 0))}` : `调整 ${Number(audit.delta || 0)}`}${isPoints ? ' 分' : ' 次'}。`
       });
     }
     if(audit) window._merchantLastOperation = { membershipId:String(id), text:audit.toast || '会员操作已完成' };
@@ -5820,7 +6019,7 @@ async function updateMerchantMembershipRow(id, patch, audit){
     await loadMerchantMemberships(merchantUserId, true);
     await loadMerchantMemberTransactions(merchantUserId, true);
     renderMerchantMemberManager();
-    renderMerchantPage();
+    if(currentMerchant && !merchantMatrixActiveWorkspace) renderMerchantPage();
     if(document.getElementById('merchantMemberDetail')?.classList.contains('open')) renderMerchantMemberDetail();
     showToast(audit && audit.toast ? audit.toast : '会员记录已更新');
     return true;
@@ -5858,14 +6057,14 @@ function renderMerchantMemberDetail(){
   const profile = cachedProfile(member.user_id, member.user_name);
   const name = profile.name || member.user_name || '乐生活用户';
   const avatar = resolveAvatarUrl(member.user_id) || profile.avatar;
-  const merchant = currentMerchant || {};
+  const merchant = merchantOperatorWorkspace() || {};
   const reward = merchantRewardInfo(member, merchant);
   const quickAction = window._merchantQuickAction || 'stamp';
   const operationContext = window._merchantMemberOperationContext || 'manual';
   const operationHint = operationContext === 'qr_checkin' ? '已通过扫码识别会员卡，请确认本次操作。' : operationContext === 'code_checkin' ? '已通过会员号找到用户，请确认本次操作。' : '选择本次到店操作后确认执行。';
   const lastOperation = window._merchantLastOperation && String(window._merchantLastOperation.membershipId) === String(member.id) ? window._merchantLastOperation.text : '';
   const cardId = memberCardPublicId(member);
-  const txRows = (cachedMerchantTransactions(currentMerchant && currentMerchant.user_id).rows || []).filter(tx => String(tx.membership_id) === String(member.id)).slice(0, 8);
+  const txRows = (cachedMerchantTransactions(activeMerchantWorkspaceId()).rows || []).filter(tx => String(tx.membership_id) === String(member.id)).slice(0, 8);
   body.innerHTML = `
     <div class="merchant-dash-card" style="box-shadow:none;">
       <div style="display:flex;align-items:center;gap:12px;">
@@ -5895,7 +6094,7 @@ function renderMerchantMemberDetail(){
     </div>
     ${reward.ready ? `<button class="merchant-reward-redeem-btn" onclick="redeemMerchantMemberReward(${JSON.stringify(member.id)})">确认兑换「${escHtml(reward.reward)}」</button>` : ''}
     <button class="merchant-member-remove-btn" onclick="pauseMerchantMember(${JSON.stringify(member.id)});closeMerchantMemberDetail();">移除会员</button>
-    <div class="member-tx-panel" style="margin-top:16px;"><div class="member-tx-head"><b>近期消费记录</b><button onclick="openMerchantTransactionHistory(${JSON.stringify(member.id)})" style="color:var(--sage-dark);font-weight:900;">查看全部</button></div>${txRows.length ? `<div class="member-tx-list">${txRows.map(tx => memberTransactionRowHtml(tx, currentMerchant.user_id, { merchantView:true })).join('')}</div>` : '<div class="deals-empty-panel" style="margin:0;">还没有消费记录。</div>'}</div>
+    <div class="member-tx-panel" style="margin-top:16px;"><div class="member-tx-head"><b>近期消费记录</b><button onclick="openMerchantTransactionHistory(${JSON.stringify(member.id)})" style="color:var(--sage-dark);font-weight:900;">查看全部</button></div>${txRows.length ? `<div class="member-tx-list">${txRows.map(tx => memberTransactionRowHtml(tx, activeMerchantWorkspaceId(), { merchantView:true })).join('')}</div>` : '<div class="deals-empty-panel" style="margin:0;">还没有消费记录。</div>'}</div>
   `;
 }
 function setMerchantQuickAction(action){
@@ -5907,14 +6106,14 @@ function confirmMerchantQuickAction(){
   if(!member) return;
   const action = window._merchantQuickAction || 'stamp';
   if(action === 'reward'){
-    const info = merchantRewardInfo(member, currentMerchant || {});
+    const info = merchantRewardInfo(member, merchantOperatorWorkspace() || {});
     if(!info.ready){ showToast(`还差 ${info.remain} 次可兑换`); return; }
     redeemMerchantMemberReward(member.id);
     return;
   }
   const field = action === 'points' ? 'points' : 'stamp_count';
   const before = Number(member[field] || 0);
-  const autoPoints = action === 'stamp' ? merchantPointsPerVisit(currentMerchant || {}) : 0;
+  const autoPoints = action === 'stamp' ? merchantPointsPerVisit(merchantOperatorWorkspace() || {}) : 0;
   const pointsBefore = Number(member.points || 0);
   const source = window._merchantMemberOperationContext === 'qr_checkin' ? 'qr_checkin' : (window._merchantMemberOperationContext === 'code_checkin' ? 'code_checkin' : 'manual');
   const patch = action === 'stamp' ? { stamp_count:before + 1, points:pointsBefore + autoPoints } : { [field]:before + 1 };
@@ -5944,7 +6143,7 @@ function merchantRewardRedeemDialog(){
 function redeemMerchantMemberReward(id){
   const member = activeMerchantMemberById(id);
   if(!member) return;
-  const merchant = currentMerchant || {};
+  const merchant = merchantOperatorWorkspace() || {};
   const info = merchantRewardInfo(member, merchant);
   if(!info.ready){
     showToast(`还差 ${info.remain} 次可兑换`);
@@ -6006,14 +6205,14 @@ async function redeemMerchantRewardWithAudit(membershipId, qty, reward){
         membershipId:memberBefore.id,
         kind:'reward',
         title:'会员奖励已兑换',
-        body:`${currentMerchant && currentMerchant.business_name || '商家'} 已为你兑换 ${qty} 次「${reward}」。`
+        body:`${merchantOperatorWorkspace() && merchantOperatorWorkspace().business_name || '商家'} 已为你兑换 ${qty} 次「${reward}」。`
       });
     }
     clearMemberCardTransactionCache(membershipId);
     window._merchantLastOperation = { membershipId:String(membershipId), text:`已兑换 ${qty} 次「${reward}」` };
     await Promise.all([
-      loadMerchantMemberships(window._activeMerchantMemberManagerId || currentMerchant.user_id, true),
-      loadMerchantMemberTransactions(window._activeMerchantMemberManagerId || currentMerchant.user_id, true)
+      loadMerchantMemberships(window._activeMerchantMemberManagerId || activeMerchantWorkspaceId(), true),
+      loadMerchantMemberTransactions(window._activeMerchantMemberManagerId || activeMerchantWorkspaceId(), true)
     ]);
     renderMerchantMemberManager();
     renderMerchantPage();
@@ -6025,7 +6224,7 @@ async function redeemMerchantRewardWithAudit(membershipId, qty, reward){
 }
 window._merchantRewardReversalState = null;
 function openMerchantRewardReversalConfirm(transactionId){
-  const tx = (cachedMerchantTransactions(window._activeMerchantMemberManagerId || (currentMerchant && currentMerchant.user_id)).rows || []).find(row => String(row.id) === String(transactionId));
+  const tx = (cachedMerchantTransactions(window._activeMerchantMemberManagerId || activeMerchantWorkspaceId()).rows || []).find(row => String(row.id) === String(transactionId));
   if(!tx || memberTransactionKind(tx) !== 'reward_redeem' || tx.revoked_at) return;
   window._merchantRewardReversalState = tx;
   const text = document.getElementById('merchantRewardReversalText');
@@ -6054,14 +6253,14 @@ async function confirmMerchantRewardReversal(){
         transactionId:tx.id,
         kind:'reward',
         title:'会员奖励兑换已撤销',
-        body:`${currentMerchant && currentMerchant.business_name || '商家'} 已撤销「${tx.note || '会员奖励'}」兑换，消费次数已恢复。`
+        body:`${merchantOperatorWorkspace() && merchantOperatorWorkspace().business_name || '商家'} 已撤销「${tx.note || '会员奖励'}」兑换，消费次数已恢复。`
       });
     }
     clearMemberCardTransactionCache(tx.membership_id);
     window._merchantLastOperation = { membershipId:String(tx.membership_id), text:'已撤销兑换，消费次数已恢复' };
     await Promise.all([
-      loadMerchantMemberships(window._activeMerchantMemberManagerId || currentMerchant.user_id, true),
-      loadMerchantMemberTransactions(window._activeMerchantMemberManagerId || currentMerchant.user_id, true)
+      loadMerchantMemberships(window._activeMerchantMemberManagerId || activeMerchantWorkspaceId(), true),
+      loadMerchantMemberTransactions(window._activeMerchantMemberManagerId || activeMerchantWorkspaceId(), true)
     ]);
     renderMerchantMemberManager();
     renderMerchantPage();
@@ -6084,7 +6283,7 @@ function normalizeMemberCardCode(value){
 function memberByPublicCode(code){
   const id = normalizeMemberCardCode(code);
   if(!id) return null;
-  const merchantUserId = window._activeMerchantMemberManagerId || (currentMerchant && currentMerchant.user_id);
+  const merchantUserId = window._activeMerchantMemberManagerId || activeMerchantWorkspaceId();
   return cachedMerchantMemberships(merchantUserId).rows.find(r => String(r.id) === id);
 }
 function renderMerchantCheckinResult(member){
@@ -6152,8 +6351,8 @@ async function startMerchantQrFallbackScanner(video, status){
   }, 420);
 }
 async function openMerchantMemberScanner(){
-  if(!(currentMerchant && currentMerchant.user_id)){
-    showToast('请先登录商家账号');
+  if(!canOperateMerchantWorkspace() || !activeMerchantWorkspaceId()){
+    showToast('请先进入商家工作台');
     return;
   }
   const sheet = document.getElementById('merchantMemberScanner');
@@ -6287,12 +6486,14 @@ async function checkInMerchantMemberByCode(field, delta){
 }
 async function logMerchantMemberTransaction(audit){
   const member = audit && audit.membership;
-  if(!member || !(currentMerchant && currentMerchant.user_id)) return;
+  const merchant = merchantOperatorWorkspace();
+  if(!member || !merchant || !merchant.user_id || !(session && session.user)) return;
   try {
     const isRewardRedeem = audit.source === 'reward_redeem';
     const payload = {
       membership_id: member.id,
-      merchant_user_id: currentMerchant.user_id,
+      merchant_user_id: merchant.user_id,
+      operator_user_id: session.user.id,
       user_id: member.user_id,
       action: audit.action || 'update',
       delta: Number(audit.delta || 0),
@@ -6315,11 +6516,12 @@ async function logMerchantMemberTransaction(audit){
   }
 }
 async function createMemberActivityNotification(input){
-  if(!(session && session.user && currentMerchant && currentMerchant.user_id) || !input || !input.userId) return null;
+  const merchant = merchantOperatorWorkspace();
+  if(!(session && session.user && merchant && merchant.user_id) || !input || !input.userId) return null;
   try {
     const payload = {
       user_id:input.userId,
-      merchant_user_id:currentMerchant.user_id,
+      merchant_user_id:merchant.user_id,
       membership_id:input.membershipId || null,
       transaction_id:input.transactionId || null,
       coupon_claim_id:input.couponClaimId || null,
@@ -6353,11 +6555,15 @@ async function loadMerchantMemberTransactions(merchantUserId, force){
   const cache = cachedMerchantTransactions(key);
   if(cache.loaded && !force) return cache.rows;
   try {
-    const select = 'id,membership_id,merchant_user_id,user_id,action,delta,before_value,after_value,source,note,transaction_kind,reversal_of_id,revoked_at,revoked_by,created_at';
+    const select = 'id,membership_id,merchant_user_id,operator_user_id,user_id,action,delta,before_value,after_value,source,note,transaction_kind,reversal_of_id,revoked_at,revoked_by,created_at';
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions?merchant_user_id=eq.${encodeURIComponent(key)}&select=${select}&order=created_at.desc&limit=1000`, { method:'GET' });
     if(!res.ok) throw new Error(await res.text());
     const rows = await res.json();
     window._merchantMemberTransactionCache[key] = { rows, loaded:true, missing:false };
+    const operatorIds = rows.map(row => row.operator_user_id).filter(id => id && !window._profileCache[id]);
+    if(operatorIds.length) loadProfilesForIds(operatorIds).then(() => {
+      if(document.getElementById('merchantMemberManager')?.classList.contains('open')) renderMerchantMemberManager();
+    });
     return rows;
   } catch(e){
     console.warn('会员流水读取失败:', e.message);
@@ -6465,12 +6671,14 @@ function memberTransactionRowHtml(tx, merchantUserId, opts){
   const title = opts.userView ? `${source} · ${action}` : `${memberTransactionUserName(tx, merchantUserId)} · ${action}`;
   const note = memberTransactionNoteText(tx);
   const kind = memberTransactionKind(tx);
+  const operator = tx && tx.operator_user_id ? cachedProfile(tx.operator_user_id, '').name : '';
   const canReverse = opts.merchantView && kind === 'reward_redeem' && !tx.revoked_at;
   return `
     <div class="member-tx-item">
       <div class="member-tx-main">
         <div class="member-tx-title">${escHtml(title)}${!opts.userView && source ? `<span class="member-tx-badge">${escHtml(source)}</span>` : ''}${tx.revoked_at ? '<span class="member-tx-revoked">已撤销</span>' : ''}</div>
         <div class="member-tx-meta">${date ? escHtml(date) + ' · ' : ''}${Number(tx.before_value || 0)} → ${Number(tx.after_value || 0)}</div>
+        ${!opts.userView && operator ? `<div class="member-tx-meta">操作人：${escHtml(operator)}</div>` : ''}
         ${note ? `<div class="member-tx-note">${escHtml(note)}</div>` : ''}
         ${canReverse ? `<button class="member-tx-reverse-btn" onclick="openMerchantRewardReversalConfirm(${JSON.stringify(tx.id)})">撤销本次兑换</button>` : ''}
       </div>
@@ -6542,7 +6750,7 @@ function renderMerchantTransactionHistory(){
   const body = document.getElementById('merchantTransactionHistoryBody');
   if(!body) return;
   const userMode = !!window._merchantTransactionHistoryUserMode;
-  const merchantUserId = userMode ? window._merchantTransactionHistoryMerchantUserId : (currentMerchant && currentMerchant.user_id);
+  const merchantUserId = userMode ? window._merchantTransactionHistoryMerchantUserId : activeMerchantWorkspaceId();
   const membershipId = window._merchantTransactionHistoryMembershipId;
   const period = window._merchantTransactionHistoryPeriod || 'three_days';
   const baseRows = userMode ? ((window._memberCardTransactionCache[String(membershipId)] || {}).rows || []) : (cachedMerchantTransactions(merchantUserId).rows || []);
@@ -7514,7 +7722,7 @@ function renderMerchantApplyBlock(){
   const el = document.getElementById('merchantApplyBlock');
   const topBtn = document.getElementById('merchantApplyTopBtn');
   if(!el) return;
-  el.innerHTML = '';
+  el.innerHTML = merchantMatrixWorkspaceCardHtml();
   if(topBtn){
     topBtn.style.display = 'none';
     topBtn.className = 'merchant-apply-top-btn';
@@ -15396,7 +15604,7 @@ document.addEventListener('visibilitychange', () => {
 // Initialize pages - show home by default through the same layout path as tab switching
 switchTab('home');
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Native App Reliability and Permissions】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Matrix Accounts】`);
 </script>
 </body>
 </html>
