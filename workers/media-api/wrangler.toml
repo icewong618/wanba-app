@@ -1,0 +1,13 @@
+name = "leshenghuo-media-api"
+main = "src/index.js"
+compatibility_date = "2026-07-16"
+workers_dev = true
+
+[vars]
+SUPABASE_URL = "https://ptxdxepmggmjcndgukjk.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-"
+MEDIA_PUBLIC_ORIGIN = "https://media.escoopcity.com"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "leshenghuo-media"

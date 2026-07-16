@@ -1,13 +1,11 @@
 {
-  "name": "leshenghuo-daily-price-cache",
-  "version": "4.53.0",
+  "name": "leshenghuo-media-migration",
   "private": true,
-  "type": "commonjs",
+  "version": "5.220.0",
   "scripts": {
-    "sync:prices": "node scripts/sync-daily-prices.js"
+    "migrate:media": "node scripts/migrate-base64-media.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4",
-    "playwright": "^1.47.2"
+    "sharp": "^0.34.3"
   }
 }
