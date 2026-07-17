@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.288';
+const APP_VERSION = '5.289';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17272,6 +17272,29 @@ async function openMerchantCouponRedeemByCode(code){
   }catch(error){console.warn('优惠券核对失败:',error.message);body.innerHTML='<div class="deals-empty-panel">优惠券暂时无法核对，请稍后重试。</div>';}
 }
 
+/* ---------- v5.289：已收款订单完成状态与上桌操作收口 ---------- */
+function merchantOrderCardHtml(order,items){
+  const allServed=items.length>0&&items.every(item=>item.is_served===true);
+  const paid=order.payment_status==='paid';
+  const effectivelyCompleted=paid&&allServed;
+  const canManage=merchantWorkspaceHasPermission('order_manage');
+  const canComplete=merchantWorkspaceHasPermission('order_complete');
+  const canBill=merchantWorkspaceHasPermission('bill_view');
+  let actions=[];
+  if(canManage&&order.status==='pending') actions.push(['confirmed','确认接单']);
+  if(canManage&&['confirmed','preparing','reminded'].includes(order.status)&&!allServed) actions.push(['preparing','开始制作']);
+  if(canComplete&&!paid&&order.status!=='cancelled') actions.push(['cashier_cash','现金收款'],['cashier_card','刷卡收款'],['coupon_scan','扫码优惠券']);
+  const orderId=String(order.id).replace(/'/g,'');
+  const actionHtml=actions.map(([key,label],index)=>{
+    const click=key==='cashier_cash'?`openMerchantCashierPayment('${orderId}','cash')`:key==='cashier_card'?`openMerchantCashierPayment('${orderId}','card')`:key==='coupon_scan'?`openMerchantOrderCouponScanner('${orderId}','cash')`:`setMerchantOrderStatus('${orderId}','${key}')`;
+    return `<button class="${index===0?'primary':''}" onclick="${click}">${label}</button>`;
+  }).join('');
+  const paymentNote=paid?`<div style="margin-top:9px;color:var(--sage-dark);font-size:12px;font-weight:800;">${uiIcon('check',13)} 已收款${effectivelyCompleted?'，订单已完成':'，菜品仍可继续制作与上桌'}</div>`:`<div style="margin-top:9px;color:var(--ink-faint);font-size:12px;">${uiIcon('wallet',13)} 待收款，可在菜品未上齐时提前结账</div>`;
+  const billButton=canBill&&paid?`<button onclick="openMerchantPrintPreview('bill','${orderId}')" style="margin-top:8px;width:100%;border:1px solid var(--line);border-radius:9px;background:#fff;padding:8px;font:900 12px inherit;">打印顾客账单</button>`:'';
+  const statusText=effectivelyCompleted?'已完成':merchantOrderStatusText(order.status);
+  return `<div class="merchant-order-card"><div class="merchant-order-card-head"><div><b>${escHtml(order.table_name||'餐桌')} · ${escHtml(order.order_code||'')}</b><span>${escHtml(order.user_name||'乐生活用户')} · ${order.created_at?new Date(order.created_at).toLocaleString('zh-CN'):''}${Number(order.addition_count||0)?` · 加菜 ${order.addition_count} 次`:''}</span></div><i class="merchant-order-state">${statusText} · ${merchantOrderPaymentLabel(order)}</i></div><div class="merchant-order-lines">${merchantOrderBatchHtml(items,order)}${order.note?`<div style="margin-top:8px;color:var(--berry-dark);">备注：${escHtml(order.note)}</div>`:''}<div class="merchant-order-line" style="margin-top:9px;padding-top:9px;border-top:1px solid var(--line);font-size:13px;"><b>合计 ${Number(order.item_count||0)} 件</b><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div></div>${paymentNote}${actionHtml?`<div class="merchant-order-card-actions">${actionHtml}</div>`:''}${billButton}</div>`;
+}
+
 // Keep the static home panel visible immediately. Data loading remains owned by bootApp.
 const initialHomePage = document.getElementById('page-home');
 if(initialHomePage){
@@ -17303,7 +17326,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Coupon Claim Frequency & Checkout Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Paid Order Completion Fix】`);
 </script>
 </body>
 </html>
