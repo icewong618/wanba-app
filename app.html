@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.295';
+const APP_VERSION = '5.296';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5566,7 +5566,7 @@ async function claimMerchantCoupon(userId, index){
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims`, {
       method:'POST', headers:{ 'Content-Type':'application/json', 'Prefer':'return=representation' },
-      body:JSON.stringify({ merchant_user_id:userId, user_id:session.user.id, coupon_id:couponId, coupon_snapshot:{ title:c.title || '优惠券', badge:c.badge || '优惠', description:c.description || '', image:c.image || '', expires_at:c.expires_at || '' } })
+      body:JSON.stringify({ merchant_user_id:userId, user_id:session.user.id, coupon_id:couponId, coupon_snapshot:{ title:c.title || '优惠券', badge:c.badge || '优惠', description:c.description || '', image:c.image || '', expires_at:c.expires_at || '', pricing_rule:c.pricing_rule || null } })
     });
     if(!res.ok && res.status !== 409) throw new Error(await res.text());
     await loadMerchantCouponClaims(true);
@@ -5669,6 +5669,22 @@ function openMerchantCouponEditor(userId, index){
       <textarea id="merchantCouponDesc" placeholder="例如：限堂食饮品，到店出示使用。">${escHtml(item.description || '')}</textarea>
     </div>
     <div class="merchant-form-field">
+      <label>优惠计算规则</label>
+      <select id="merchantCouponRuleType" onchange="toggleMerchantCouponPricingRule()">
+        ${[['fixed','满额立减固定金额'],['percent','满额按百分比优惠'],['tiered_fixed','每满金额重复立减'],['gift','满额赠送指定商品']].map(([value,label]) => `<option value="${value}" ${((item.pricing_rule && item.pricing_rule.type) || 'fixed') === value ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;">
+        <label style="font-size:12px;color:var(--ink-soft);">订单满额<input id="merchantCouponMinSpend" type="number" min="0" step="0.01" inputmode="decimal" value="${escAttr(String(item.pricing_rule?.min_spend ?? ''))}" placeholder="例如 100"></label>
+        <label id="merchantCouponRuleValueLabel" style="font-size:12px;color:var(--ink-soft);">优惠金额<input id="merchantCouponRuleValue" type="number" min="0" step="0.01" inputmode="decimal" value="${escAttr(String(item.pricing_rule?.value ?? ''))}" placeholder="例如 5"></label>
+      </div>
+      <label id="merchantCouponRepeatWrap" style="display:${item.pricing_rule?.type === 'tiered_fixed' ? 'flex' : 'none'};align-items:center;gap:7px;margin-top:10px;font-size:12px;"><input id="merchantCouponRepeat" type="checkbox" ${item.pricing_rule?.repeat ? 'checked' : ''}>单笔订单每满一次都可重复优惠（例如满 100 减 5，满 305 减 15）</label>
+      <div id="merchantCouponGiftWrap" style="display:${item.pricing_rule?.type === 'gift' ? 'grid' : 'none'};grid-template-columns:1fr 110px;gap:9px;margin-top:10px;">
+        <label style="font-size:12px;color:var(--ink-soft);">赠送商品<select id="merchantCouponGiftProduct"><option value="">请选择商品</option>${merchantOrderProducts(currentMerchant).map(product => `<option value="${escAttr(String(product.id || ''))}" ${String(item.pricing_rule?.gift_product_id || '') === String(product.id || '') ? 'selected' : ''}>${escHtml(product.name || '未命名商品')} · ${merchantOrderMoney(product.price || 0)}</option>`).join('')}</select></label>
+        <label style="font-size:12px;color:var(--ink-soft);">赠送数量<input id="merchantCouponGiftQuantity" type="number" min="1" step="1" inputmode="numeric" value="${escAttr(String(item.pricing_rule?.gift_quantity || 1))}"></label>
+      </div>
+      <p id="merchantCouponRuleHint" style="font-size:11px;color:var(--ink-faint);margin:8px 0 0;"></p>
+    </div>
+    <div class="merchant-form-field">
       <label>有效期（可选）</label>
       <input id="merchantCouponExpires" type="text" placeholder="例如：2026-08-31" value="${escAttr(item.expires_at || '')}">
     </div>
@@ -5696,7 +5712,20 @@ function openMerchantCouponEditor(userId, index){
       <button class="primary" onclick="saveMerchantCouponFromEditor()">${editing ? '保存修改' : '保存优惠券'}</button>
     </div>
   `;
+  toggleMerchantCouponPricingRule();
   document.getElementById('merchantProductEditor')?.classList.add('open');
+}
+function toggleMerchantCouponPricingRule(){
+  const type=document.getElementById('merchantCouponRuleType')?.value||'fixed';
+  const label=document.getElementById('merchantCouponRuleValueLabel');
+  const value=document.getElementById('merchantCouponRuleValue');
+  const repeat=document.getElementById('merchantCouponRepeatWrap');
+  const gift=document.getElementById('merchantCouponGiftWrap');
+  const hint=document.getElementById('merchantCouponRuleHint');
+  if(label) label.innerHTML=type==='percent'?'优惠比例（%）<input id="merchantCouponRuleValue" type="number" min="0.01" max="100" step="0.01" inputmode="decimal" value="'+escAttr(String(value?.value||''))+'" placeholder="例如 15">':type==='gift'?'赠品优惠由商品价格自动计算<input id="merchantCouponRuleValue" type="hidden" value="0">':'优惠金额（美元）<input id="merchantCouponRuleValue" type="number" min="0" step="0.01" inputmode="decimal" value="'+escAttr(String(value?.value||''))+'" placeholder="例如 5">';
+  if(repeat) repeat.style.display=type==='tiered_fixed'?'flex':'none';
+  if(gift) gift.style.display=type==='gift'?'grid':'none';
+  if(hint) hint.textContent=type==='fixed'?'达到订单满额后，每单仅减一次。':type==='percent'?'达到订单满额后，按订单金额计算优惠。':type==='tiered_fixed'?'可设置每满一次重复优惠，或仅按一档优惠一次。':'顾客须将赠品加入订单；达到门槛后，系统自动扣除赠品金额。';
 }
 async function saveMerchantCouponFromEditor(){
   if(!(session && session.user) || !currentMerchant){ showToast('请先登录商家账号'); return; }
@@ -5704,6 +5733,15 @@ async function saveMerchantCouponFromEditor(){
   if(!title){ showToast('请填写优惠券标题'); return; }
   const coupons = merchantCoupons(currentMerchant).slice();
   const state = window._merchantItemEditor || {};
+  const pricingType=document.getElementById('merchantCouponRuleType')?.value||'fixed';
+  const minSpend=Math.max(0,Number(document.getElementById('merchantCouponMinSpend')?.value||0));
+  const ruleValue=Math.max(0,Number(document.getElementById('merchantCouponRuleValue')?.value||0));
+  const giftProductId=String(document.getElementById('merchantCouponGiftProduct')?.value||'');
+  const giftQuantity=Math.max(1,Math.floor(Number(document.getElementById('merchantCouponGiftQuantity')?.value||1)));
+  if(minSpend<=0){ showToast('请填写订单满额'); return; }
+  if(pricingType==='gift'&&!giftProductId){ showToast('请选择要赠送的商品'); return; }
+  if(pricingType!=='gift'&&ruleValue<=0){ showToast(pricingType==='percent'?'请填写优惠比例':'请填写优惠金额'); return; }
+  if(pricingType==='percent'&&ruleValue>100){ showToast('优惠比例不能超过 100%'); return; }
   let image = state.image || '';
   try {
     if(isDataImageUrl(image)){
@@ -5724,6 +5762,7 @@ async function saveMerchantCouponFromEditor(){
     payment_methods: [...document.querySelectorAll('.merchantCouponPaymentMethod:checked')].map(input => String(input.value)),
     claim_mode: document.getElementById('merchantCouponClaimMode')?.value || 'once',
     claim_interval_days: Math.min(365, Math.max(1, Number(document.getElementById('merchantCouponClaimIntervalDays')?.value || 7))),
+    pricing_rule: { type:pricingType, min_spend:minSpend, value:ruleValue, repeat:pricingType==='tiered_fixed'&&!!document.getElementById('merchantCouponRepeat')?.checked, gift_product_id:giftProductId, gift_quantity:giftQuantity },
     image,
     active: state.index != null && coupons[state.index] ? coupons[state.index].active !== false : true
   };
@@ -5811,7 +5850,7 @@ async function claimMerchantCoupon(userId, index){
   if(!eligibility.eligible){ showToast(eligibility.reason); return; }
   const couponId = merchantCouponId(coupon, index);
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims`, { method:'POST', headers:{'Content-Type':'application/json','Prefer':'return=representation'}, body:JSON.stringify({ merchant_user_id:userId, user_id:session.user.id, coupon_id:couponId, coupon_snapshot:{ title:coupon.title || '优惠券', badge:coupon.badge || '优惠', description:coupon.description || '', image:coupon.image || '', expires_at:coupon.expires_at || '', weekdays:coupon.weekdays || [], time_start:coupon.time_start || '', time_end:coupon.time_end || '', payment_methods:coupon.payment_methods || [] } }) });
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims`, { method:'POST', headers:{'Content-Type':'application/json','Prefer':'return=representation'}, body:JSON.stringify({ merchant_user_id:userId, user_id:session.user.id, coupon_id:couponId, coupon_snapshot:{ title:coupon.title || '优惠券', badge:coupon.badge || '优惠', description:coupon.description || '', image:coupon.image || '', expires_at:coupon.expires_at || '', weekdays:coupon.weekdays || [], time_start:coupon.time_start || '', time_end:coupon.time_end || '', payment_methods:coupon.payment_methods || [], pricing_rule:coupon.pricing_rule || null } }) });
     if(!res.ok && res.status !== 409) throw new Error(await res.text());
     await loadMerchantCouponClaims(true);
     showToast(res.status === 409 ? '这张优惠券已经领取' : '已领取，到店出示二维码即可');
@@ -5871,7 +5910,7 @@ function renderMerchantOrderCheckout(){
   const rows = merchantOrderCheckoutClaims(state);
   const selectedRows = (checkout.selectedClaims || []).map(id => rows.find(row => Number(row.claim.id) === Number(id) && row.eligibility.eligible)).filter(Boolean);
   const subtotal = Number(state.order.subtotal || 0);
-  const discount = Math.min(subtotal, selectedRows.reduce((sum,row) => sum + merchantCouponDiscountAmount(row.coupon || row.claim.coupon_snapshot || {}, subtotal), 0));
+  const discount = Math.min(subtotal, selectedRows.reduce((sum,row) => sum + merchantCouponDiscountAmount(row.coupon || row.claim.coupon_snapshot || {}, subtotal, state.items), 0));
   const afterCoupon = Math.max(0, subtotal - discount);
   const tip = checkout.customTipAmount != null ? Number(checkout.customTipAmount) : afterCoupon * (Number(checkout.tip || 0) / 100);
   const total = afterCoupon + tip;
@@ -17277,17 +17316,31 @@ function merchantCouponEligibility(coupon,paymentMethod){
   if(!usable){const labels={cash:'现金',card:'刷卡',online:'在线支付'};return {eligible:false,reason:`该优惠券仅适用于${methods.map(method=>labels[method]||method).join('、')}`};}
   return {eligible:true,reason:''};
 }
-function merchantCouponDiscountAmount(coupon,subtotal){
-  const text=`${coupon&&coupon.description||''} ${coupon&&coupon.title||''}`;
+function merchantCouponDiscountDetail(coupon,subtotal,items){
   const amount=Math.max(0,Number(subtotal)||0);
-  // "满$100立减$5"、"满100减15"、"满 100 美元减 15" 均按同一规则处理。
+  const rule=coupon&&coupon.pricing_rule&&typeof coupon.pricing_rule==='object'?coupon.pricing_rule:null;
+  if(rule){
+    const type=String(rule.type||'fixed'),minimum=Math.max(0,Number(rule.min_spend)||0),value=Math.max(0,Number(rule.value)||0);
+    if(!minimum||amount<minimum)return {amount:0,reason:`订单未满 ${merchantOrderMoney(minimum)}`};
+    if(type==='fixed')return {amount:Math.min(amount,value),reason:''};
+    if(type==='percent')return {amount:Math.min(amount,amount*Math.min(100,value)/100),reason:''};
+    if(type==='tiered_fixed')return {amount:Math.min(amount,value*(rule.repeat?Math.max(1,Math.floor(amount/minimum)):1)),reason:''};
+    if(type==='gift'){
+      const productId=String(rule.gift_product_id||'');let remaining=Math.max(1,Math.floor(Number(rule.gift_quantity)||1)),giftAmount=0;
+      (Array.isArray(items)?items:[]).filter(item=>String(item.product_id||item.id||'')===productId).forEach(item=>{const take=Math.min(remaining,Math.max(0,Number(item.quantity)||0));if(take>0){giftAmount+=take*Math.max(0,Number(item.unit_price??item.price)||0);remaining-=take;}});
+      return {amount:Math.min(amount,giftAmount),reason:giftAmount?'':'请先将赠品加入订单'};
+    }
+  }
+  // 兼容历史优惠券；新创建的优惠券全部使用上方结构化规则。
+  const text=`${coupon&&coupon.description||''} ${coupon&&coupon.title||''}`;
   const minus=text.match(/满[^0-9]*([0-9]+(?:\.\d+)?)[^0-9]*减[^0-9]*([0-9]+(?:\.\d+)?)/);
-  if(minus)return amount>=Number(minus[1])?Math.min(amount,Number(minus[2])):0;
+  if(minus)return {amount:amount>=Number(minus[1])?Math.min(amount,Number(minus[2])):0,reason:''};
   const percent=text.match(/([0-9]+(?:\.\d+)?)\s*折/);
-  if(percent&&Number(percent[1])>0&&Number(percent[1])<10)return amount*(1-Number(percent[1])/10);
+  if(percent&&Number(percent[1])>0&&Number(percent[1])<10)return {amount:amount*(1-Number(percent[1])/10),reason:''};
   const percentOff=text.match(/(?:优惠|立减|折扣|减免)?\s*([0-9]+(?:\.\d+)?)\s*%/);
-  return percentOff&&Number(percentOff[1])>0&&Number(percentOff[1])<=100?amount*Number(percentOff[1])/100:0;
+  return {amount:percentOff&&Number(percentOff[1])>0&&Number(percentOff[1])<=100?amount*Number(percentOff[1])/100:0,reason:''};
 }
+function merchantCouponDiscountAmount(coupon,subtotal,items){return merchantCouponDiscountDetail(coupon,subtotal,items).amount;}
 function closeMerchantCouponRedeem(){window._merchantCouponOrderContext=null;document.getElementById('merchantCouponRedeem')?.classList.remove('open');}
 async function payMerchantOrderWithScannedCoupon(orderId,claimId,paymentMethod){
   if(!confirm(`确认使用优惠券并按${paymentMethod==='cash'?'现金':paymentMethod==='card'?'刷卡':'在线支付'}结算该订单？`))return;
@@ -17323,13 +17376,16 @@ async function openMerchantCouponRedeemByCode(code){
       if(result.ok)orders=await result.json();
     }
     orders=orders.filter(order=>String(order.user_id)===String(claim.user_id)&&order.payment_status!=='paid');
+    const orderIds=orders.map(order=>String(order.id)).filter(Boolean);
+    let orderItems=[];
+    if(orderIds.length){const itemRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_items?order_id=in.(${orderIds.map(encodeURIComponent).join(',')})&select=order_id,product_id,quantity,unit_price`,{method:'GET'});if(itemRes.ok)orderItems=await itemRes.json();}
     const title=`<div class="merchant-dash-card" style="box-shadow:none;"><b style="display:block;font-size:17px;">${escHtml(snapshot.title||coupon?.title||'优惠券')}</b><p style="margin:8px 0 0;line-height:1.7;color:var(--ink-soft);">${escHtml(snapshot.description||coupon?.description||'')}</p></div>`;
     if(!coupon){body.innerHTML=`${title}<div class="deals-empty-panel">该优惠券对应的商家规则已被删除或停用，暂时不能用于订单结算。</div>`;return;}
     if(!orders.length){body.innerHTML=`${title}<div class="deals-empty-panel">没有找到这位顾客待收款的订单。请先在点餐后台打开对应餐桌，再扫描优惠券。</div>`;return;}
     const cards=orders.map(order=>{
       const methods=['cash','card','online'].map(method=>{
         const eligibility=merchantCouponEligibility(coupon,method);
-        const discount=eligibility.eligible?merchantCouponDiscountAmount(coupon,Number(order.subtotal||0)):0;
+        const discount=eligibility.eligible?merchantCouponDiscountAmount(coupon,Number(order.subtotal||0),orderItems.filter(item=>String(item.order_id)===String(order.id))):0;
         const payable=Math.max(0,Number(order.subtotal||0)-discount);
         const label={cash:'现金',card:'刷卡',online:'在线支付'}[method];
         return `<button ${eligibility.eligible?'':'disabled'} onclick="payMerchantOrderWithScannedCoupon('${String(order.id).replace(/'/g,'')}',${Number(claim.id)},'${method}')" style="border:1px solid ${eligibility.eligible?'var(--sage)':'var(--line)'};border-radius:9px;background:${eligibility.eligible?'var(--sage-light)':'#f4f2ec'};color:${eligibility.eligible?'var(--sage-dark)':'var(--ink-faint)'};padding:9px 8px;font:900 12px inherit;">${label}${eligibility.eligible?`<small style="display:block;margin-top:3px;">优惠 -${merchantOrderMoney(discount)}</small><small style="display:block;margin-top:2px;">应收 ${merchantOrderMoney(payable)}</small>`:`<small style="display:block;margin-top:3px;">不可用</small>`}</button>`;
@@ -17448,7 +17504,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Customer Coupon & Table Lock】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Structured Coupon Rules】`);
 </script>
 </body>
 </html>
