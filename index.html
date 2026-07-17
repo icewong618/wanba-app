@@ -3141,7 +3141,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.246';
+const APP_VERSION = '5.247';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5774,7 +5774,7 @@ function callMerchantPhone(phone){
   window.location.href = `tel:${clean}`;
 }
 const MERCHANT_FEATURE_CATALOG = [
-  { id:'table_order', title:'扫码点餐', icon:'bag', live:true, phone:false, description:'顾客扫码选择餐桌、点菜和加菜，商家集中处理订单。' },
+  { id:'table_order', title:'扫码点餐', icon:'bag', live:true, description:'顾客扫码选择餐桌、点菜和加菜，商家集中处理订单。' },
   { id:'takeout_order', title:'外卖点餐与叫号', icon:'store', live:true, phone:true, description:'顾客下单后生成取餐编号，适合奶茶、咖啡和外带窗口。' },
   { id:'booking', title:'预约', icon:'calendar', live:true, phone:true, description:'自定义可预约时间、服务内容、技师、美容师或包间类型。' },
   { id:'event_registration', title:'活动报名', icon:'calendar', live:true, phone:true, description:'设置日期、总人数、每账号人数限制和剩余报名名额。' },
@@ -5786,12 +5786,29 @@ const MERCHANT_FEATURE_CATALOG = [
   { id:'delivery_tracking', title:'配送订单追踪', icon:'map', live:false, phone:true, description:'为配送订单展示制作、出发和送达进度。' }
 ];
 function merchantFeatureStorageKey(merchantUserId){ return `leshenghuo_merchant_features_${merchantUserId || ''}`; }
-function merchantEnabledFeatures(merchantUserId){
+function merchantEnabledFeatures(merchant){
+  const stored = merchant && Array.isArray(merchant.enabled_features) ? merchant.enabled_features : null;
+  if(stored) return [...new Set(stored.filter(Boolean))];
+  const merchantUserId = typeof merchant === 'object' ? merchant && merchant.user_id : merchant;
   try { return JSON.parse(localStorage.getItem(merchantFeatureStorageKey(merchantUserId)) || '[]').filter(Boolean); }
   catch(error){ return []; }
 }
-function saveMerchantEnabledFeatures(merchantUserId, values){
-  localStorage.setItem(merchantFeatureStorageKey(merchantUserId), JSON.stringify([...new Set(values || [])]));
+async function saveMerchantEnabledFeatures(merchant, values){
+  const clean = [...new Set((values || []).filter(Boolean))];
+  const merchantUserId = merchant && merchant.user_id;
+  if(!merchantUserId || !(session && session.user && String(session.user.id) === String(merchantUserId))) throw new Error('not_owner');
+  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(merchantUserId)}`, {
+    method:'PATCH',
+    headers:{'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify({ enabled_features:clean, updated_at:new Date().toISOString() })
+  });
+  if(!res.ok) throw new Error(await res.text());
+  const rows = await res.json();
+  if(!rows.length) throw new Error('merchant_not_found');
+  Object.assign(merchant, rows[0]);
+  if(currentMerchant && String(currentMerchant.user_id) === String(merchantUserId)) Object.assign(currentMerchant, rows[0]);
+  localStorage.setItem(merchantFeatureStorageKey(merchantUserId), JSON.stringify(clean));
+  return clean;
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
 function openMerchantFeatureCenter(){
@@ -5805,7 +5822,7 @@ function renderMerchantFeatureCenter(){
   const body = document.getElementById('merchantFeatureCenterBody');
   const merchant = currentMerchant;
   if(!body || !merchant) return;
-  const enabled = merchantEnabledFeatures(merchant.user_id);
+  const enabled = merchantEnabledFeatures(merchant);
   const renderCard = feature => {
     const added = enabled.includes(feature.id);
     const disabled = !feature.live;
@@ -5820,28 +5837,30 @@ function renderMerchantFeatureCenter(){
     { title:'商家页面基础功能', icon:'store' },
     { title:'AI 发文', icon:'edit' },
     { title:'商家店铺', icon:'bag' },
-    { title:'会员功能', icon:'star' }
+    { title:'会员功能', icon:'star' },
+    { title:'优惠券核销', icon:'ticket' }
   ];
-  body.innerHTML = `<div class="merchant-feature-intro"><b>商家开通即拥有</b><p>以下基础能力无需额外添加；高级功能可按店铺需要逐项开通。客户提交交易或预约时，默认使用乐生活昵称但可修改姓名，并需填写联系电话；未来支付成功即作为真实下单或报名的最终确认。</p></div><div class="merchant-feature-included">${included.map(item => `<div class="merchant-feature-included-item"><span>${uiIcon(item.icon,16)}</span><b>${escHtml(item.title)}</b></div>`).join('')}</div><div class="merchant-feature-section-title">高级功能 <span>${enabled.filter(id => live.some(item => item.id === id)).length}/${live.length} 已添加</span></div><div class="merchant-feature-list">${live.map(renderCard).join('')}</div><div class="merchant-feature-section-title">后续功能 <span>逐步开放</span></div><div class="merchant-feature-list">${planned.map(renderCard).join('')}</div>`;
+  body.innerHTML = `<div class="merchant-feature-intro"><b>商家开通即有：</b><p>以下基础功能无需额外添加，高级功能按需求开通。</p></div><div class="merchant-feature-included">${included.map(item => `<div class="merchant-feature-included-item"><span>${uiIcon(item.icon,16)}</span><b>${escHtml(item.title)}</b></div>`).join('')}</div><div class="merchant-feature-section-title">高级功能 <span>${enabled.filter(id => live.some(item => item.id === id)).length}/${live.length} 已添加</span></div><div class="merchant-feature-list">${live.map(renderCard).join('')}</div><div class="merchant-feature-section-title">后续功能 <span>逐步开放</span></div><div class="merchant-feature-list">${planned.map(renderCard).join('')}</div>`;
 }
 function showMerchantFeatureRoadmap(featureId){
   const feature = MERCHANT_FEATURE_CATALOG.find(item => item.id === featureId);
   showToast(`${feature ? feature.title : '该功能'}将后续逐步开放，敬请期待`);
 }
-function toggleMerchantFeature(featureId){
+async function toggleMerchantFeature(featureId){
   const merchant = currentMerchant;
   const feature = MERCHANT_FEATURE_CATALOG.find(item => item.id === featureId);
   if(!merchant || !feature || !feature.live) return;
-  const enabled = merchantEnabledFeatures(merchant.user_id);
+  const enabled = merchantEnabledFeatures(merchant);
   if(enabled.includes(featureId)){
     if(!confirm(`确定取消「${feature.title}」吗？现有功能数据不会被删除。`)) return;
-    saveMerchantEnabledFeatures(merchant.user_id, enabled.filter(id => id !== featureId));
-    showToast(`已取消${feature.title}`);
+    try { await saveMerchantEnabledFeatures(merchant, enabled.filter(id => id !== featureId)); showToast(`已取消${feature.title}`); }
+    catch(error){ console.warn('取消商家功能失败:', error.message); showToast('保存失败，请先运行 5.247 SQL 后重试'); return; }
   } else {
-    saveMerchantEnabledFeatures(merchant.user_id, enabled.concat(featureId));
-    showToast(`已添加${feature.title}`);
+    try { await saveMerchantEnabledFeatures(merchant, enabled.concat(featureId)); showToast(`已添加${feature.title}`); }
+    catch(error){ console.warn('添加商家功能失败:', error.message); showToast('保存失败，请先运行 5.247 SQL 后重试'); return; }
   }
   renderMerchantFeatureCenter();
+  renderMerchantPage();
 }
 function merchantContentHtml(m, opts){
   opts = opts || {};
@@ -5859,6 +5878,8 @@ function merchantContentHtml(m, opts){
   const merchantLocationText = (m.address || '').replace(/^美国/, '').replace(/，邮编.*/, '').trim() || '乐生活认证商家';
   const merchantIntroText = m.intro || m.description || '这个商家还没有填写介绍。';
   const merchantHoursText = formatMerchantHoursForDisplay(m.business_hours);
+  const merchantFeatures = merchantEnabledFeatures(m);
+  const tableOrderEnabled = merchantFeatures.includes('table_order');
   const sectionBody = section === 'store'
     ? merchantStoreHtml(m, isOwnerPage)
     : section === 'coupons'
@@ -5915,6 +5936,7 @@ function merchantContentHtml(m, opts){
         <button onclick="callMerchantPhone('${escAttr(m.phone || '')}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:none;border-radius:10px;background:var(--sage);color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;">${uiIcon('phone',15)} Call</button>
         <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.address || m.business_name || '')}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px solid var(--line-strong);border-radius:10px;background:var(--card);color:var(--ink);font-size:13.5px;font-weight:700;text-decoration:none;">${uiIcon('map',15)} 导航</a>
       </div>
+      ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 扫码点餐</b><p>顾客可扫码选择餐桌、点菜和加菜。</p>${isOwnerPage ? `<button onclick="openMerchantOrderManager('${uidSafe}')" style="margin-top:10px;width:100%;border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('store',15)} 管理扫码点餐</button>` : `<button onclick="openMerchantOrderEntry('${uidSafe}')" style="margin-top:10px;width:100%;border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('bag',15)} 扫码点餐</button>`}</div>` : ''}
       <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
         <div style="display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;">${uiIcon('bag',15)} 会员优惠规则</div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
@@ -16112,7 +16134,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Feature Center Refinement】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Table Order Module】`);
 </script>
 </body>
 </html>
