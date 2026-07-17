@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.287';
+const APP_VERSION = '5.288';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5645,6 +5645,13 @@ function openMerchantCouponEditor(userId, index){
       <label>适用支付方式（不选则全部可用）</label>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">${[['cash','现金'],['card','刷卡 / 在线支付']].map(([value,label]) => `<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;"><input class="merchantCouponPaymentMethod" type="checkbox" value="${value}" ${(Array.isArray(item.payment_methods) && item.payment_methods.map(String).includes(value)) ? 'checked' : ''}>${label}</label>`).join('')}</div>
     </div>
+    <div class="merchant-form-field">
+      <label>每位用户领取频率</label>
+      <select id="merchantCouponClaimMode" onchange="toggleMerchantCouponClaimInterval()">
+        ${[['once','仅可领取一次'],['unlimited','不限次数'],['daily','每天可领取一次'],['weekly','每周可领取一次'],['monthly','每月可领取一次'],['interval','每 N 天可领取一次']].map(([value,label]) => `<option value="${value}" ${(item.claim_mode || 'once') === value ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
+      <div id="merchantCouponClaimIntervalWrap" style="display:${(item.claim_mode || 'once') === 'interval' ? 'block' : 'none'};margin-top:9px;"><input id="merchantCouponClaimIntervalDays" type="number" min="1" max="365" inputmode="numeric" value="${escAttr(String(item.claim_interval_days || 7))}" placeholder="例如：7"><p style="font-size:11px;color:var(--ink-faint);margin:6px 0 0;">填写 1-365，例如每 14 天可领取一次。</p></div>
+    </div>
     <div class="merchant-form-actions">
       <button onclick="closeMerchantProductEditor()">取消</button>
       <button class="primary" onclick="saveMerchantCouponFromEditor()">${editing ? '保存修改' : '保存优惠券'}</button>
@@ -5676,6 +5683,8 @@ async function saveMerchantCouponFromEditor(){
     time_start: document.getElementById('merchantCouponTimeStart')?.value || '',
     time_end: document.getElementById('merchantCouponTimeEnd')?.value || '',
     payment_methods: [...document.querySelectorAll('.merchantCouponPaymentMethod:checked')].map(input => String(input.value)),
+    claim_mode: document.getElementById('merchantCouponClaimMode')?.value || 'once',
+    claim_interval_days: Math.min(365, Math.max(1, Number(document.getElementById('merchantCouponClaimIntervalDays')?.value || 7))),
     image,
     active: state.index != null && coupons[state.index] ? coupons[state.index].active !== false : true
   };
@@ -17134,6 +17143,62 @@ async function openMerchantCouponRedeemByCode(code){
   }catch(error){console.warn('优惠券核对失败:',error.message);body.innerHTML='<div class="deals-empty-panel">优惠券暂时无法核对，请稍后重试。</div>';}
 }
 
+/* ---------- v5.288：优惠券领取频率 ---------- */
+function toggleMerchantCouponClaimInterval(){
+  const wrap=document.getElementById('merchantCouponClaimIntervalWrap');
+  if(wrap) wrap.style.display=document.getElementById('merchantCouponClaimMode')?.value==='interval'?'block':'none';
+}
+function merchantCouponClaimModeText(coupon){
+  const mode=String(coupon?.claim_mode||'once');
+  if(mode==='unlimited')return '不限次数领取';
+  if(mode==='daily')return '每天可领一次';
+  if(mode==='weekly')return '每周可领一次';
+  if(mode==='monthly')return '每月可领一次';
+  if(mode==='interval')return `每 ${Math.max(1,Number(coupon?.claim_interval_days||7))} 天可领一次`;
+  return '每人限领一次';
+}
+function merchantCouponMayClaimAgain(merchant,coupon,index){
+  const mode=String(coupon?.claim_mode||'once');
+  const id=merchantCouponId(coupon,index);
+  const claims=(window._merchantCouponClaims.rows||[]).filter(row=>String(row.merchant_user_id)===String(merchant?.user_id)&&String(row.coupon_id)===String(id));
+  if(mode==='unlimited')return true;
+  if(!claims.length)return true;
+  const latest=claims.reduce((result,row)=>!result||new Date(row.claimed_at)>new Date(result.claimed_at)?row:result,null);
+  const now=new Date();
+  const laDate=value=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
+  if(mode==='daily')return laDate(latest.claimed_at)!==laDate(now);
+  if(mode==='weekly'){const week=value=>{const local=new Date(new Date(value).toLocaleString('en-US',{timeZone:'America/Los_Angeles'}));local.setHours(0,0,0,0);local.setDate(local.getDate()-((local.getDay()+6)%7));return local.toISOString().slice(0,10);};return week(latest.claimed_at)!==week(now);}
+  if(mode==='monthly')return new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit'}).format(latest.claimed_at)!==new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit'}).format(now);
+  if(mode==='interval')return Date.now()-new Date(latest.claimed_at).getTime()>=Math.max(1,Number(coupon.claim_interval_days||7))*86400000;
+  return false;
+}
+async function claimMerchantCoupon(userId,index){
+  if(!isNativeMerchantApp()){openMerchantCouponAppDownload();return;}
+  if(!(session&&session.user)){showToast('请先登录后领取优惠券');openAuth();return;}
+  const merchant=(currentMerchant&&String(currentMerchant.user_id)===String(userId))?currentMerchant:window._merchantIdentityCache[userId];
+  const coupon=merchantCoupons(merchant)[index];
+  const eligibility=merchantCouponEligibility(coupon);
+  if(!eligibility.eligible){showToast(eligibility.reason);return;}
+  try{
+    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/claim_merchant_coupon`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_merchant_user_id:userId,p_coupon_id:merchantCouponId(coupon,index)})});
+    if(!res.ok)throw new Error(await res.text());
+    await loadMerchantCouponClaims(true);
+    showToast('已领取，到店出示二维码即可');
+    rerenderMerchantSection(merchant);
+  }catch(error){
+    const text=String(error.message||'');
+    const messages={coupon_claim_once_limit:'这张优惠券每人只能领取一次。',coupon_claim_daily_limit:'今天已经领取过，明天再来吧。',coupon_claim_weekly_limit:'本周已经领取过，下周可再次领取。',coupon_claim_monthly_limit:'本月已经领取过，下月可再次领取。',coupon_claim_interval_limit:'还未到下次可领取时间。',coupon_expired:'该优惠券已过期。'};
+    console.warn('领取优惠券失败:',text);
+    showToast(Object.entries(messages).find(([key])=>text.includes(key))?.[1]||'领取失败，请稍后重试');
+  }
+}
+function merchantCouponCardHtml(m,c,i,isOwnerPage){
+  const claim=couponClaimFor(m,c,i),canClaimAgain=merchantCouponMayClaimAgain(m,c,i),userId=String(m.user_id||'').replace(/'/g,''),eligibility=merchantCouponEligibility(c);
+  const primaryLabel=!eligibility.eligible?'当前不可用':canClaimAgain?(claim?'再次领取':'领取优惠券'):(claim&&claim.status==='redeemed'?'已核销':'出示优惠券');
+  const primaryClick=canClaimAgain?`claimMerchantCoupon('${userId}',${i})`:'openMerchantCouponWallet()';
+  return `<div class="merchant-coupon-card">${c.image?`<div class="merchant-coupon-image"><img src="${escAttr(c.image)}" alt=""></div>`:''}<div class="merchant-coupon-title">${escHtml(c.title||'优惠券')}<span>${eligibility.eligible?escHtml(c.badge||'优惠'):'暂不可用'}</span></div><div class="merchant-coupon-note">${escHtml(c.description||'到店出示使用，具体规则以商家说明为准。')}</div>${c.expires_at?`<div class="merchant-coupon-note">有效期至：${escHtml(c.expires_at)}</div>`:''}<div class="merchant-coupon-note">适用：${escHtml(merchantCouponRuleText(c))} · ${escHtml(merchantCouponClaimModeText(c))}</div>${!eligibility.eligible?`<div class="merchant-coupon-note" style="color:var(--berry);">${escHtml(eligibility.reason)}</div>`:''}<div class="merchant-coupon-actions"><button class="primary" onclick="${primaryClick}" ${eligibility.eligible?'':'disabled style="opacity:.55;"'}>${primaryLabel}</button><button onclick="${claim?'openMerchantCouponWallet()':`copyMerchantSiteLink('${userId}')`}">${claim?'我的优惠券':'分享店铺'}</button></div>${isOwnerPage?`<div class="merchant-owner-actions"><button onclick="openMerchantCouponEditor('${userId}',${i})">编辑</button><button onclick="toggleMerchantCouponActive(${i})">${c.active===false?'启用':'停用'}</button><button class="danger" onclick="deleteMerchantCoupon(${i})">删除</button></div>`:''}</div>`;
+}
+
 /* ---------- v5.287：优惠券扫码关联订单；在线支付规则兼容 ---------- */
 function merchantCouponEligibility(coupon,paymentMethod){
   if(!coupon || coupon.active===false) return {eligible:false,reason:'该优惠券已停用'};
@@ -17238,7 +17303,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Coupon Order Linking & Online Payment Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Coupon Claim Frequency & Checkout Fix】`);
 </script>
 </body>
 </html>
