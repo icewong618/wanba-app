@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.284';
+const APP_VERSION = '5.285';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17030,6 +17030,110 @@ function openMerchantMemberManager(merchantUserId){
   Promise.all([loadMerchantMemberships(merchantUserId,true),loadMerchantMemberTransactions(merchantUserId,true)]).then(renderMerchantMemberManager);
 }
 
+/* ---------- v5.285：付款不等待出餐；订单内扫码核销优惠券 ---------- */
+window._merchantCouponOrderContext = null;
+
+function openMerchantOrderCheckout(){
+  const state = merchantOrderState();
+  if(!state.order || !(state.items || []).length){ showToast('正在读取订单，请稍后再试'); return; }
+  loadMerchantCouponClaims(true).finally(() => {
+    state.checkout = { method:'cash', selectedClaims:[], tip:0, customTipAmount:null };
+    document.getElementById('merchantOrderCheckout')?.classList.add('open');
+    renderMerchantOrderCheckout();
+  });
+}
+
+function merchantOrderPaymentLabel(order){
+  return order && order.payment_status === 'paid' ? '已收款' : '待收款';
+}
+
+function merchantOrderCardHtml(order,items){
+  const allServed=items.length>0&&items.every(item=>item.is_served===true);
+  const paid=order.payment_status==='paid';
+  const canManage=merchantWorkspaceHasPermission('order_manage');
+  const canComplete=merchantWorkspaceHasPermission('order_complete');
+  const canBill=merchantWorkspaceHasPermission('bill_view');
+  let actions=[];
+  if(canManage&&order.status==='pending') actions.push(['confirmed','确认接单']);
+  if(canManage&&['confirmed','preparing','reminded'].includes(order.status)&&!allServed) actions.push(['preparing','开始制作']);
+  if(canComplete&&!paid&&order.status!=='cancelled'){
+    actions.push(['cashier_cash','现金收款'],['cashier_card','刷卡收款'],['coupon_scan','扫码优惠券']);
+  }
+  const orderId=String(order.id).replace(/'/g,'');
+  const actionHtml=actions.map(([key,label],index)=>{
+    const click=key==='cashier_cash'?`openMerchantCashierPayment('${orderId}','cash')`:key==='cashier_card'?`openMerchantCashierPayment('${orderId}','card')`:key==='coupon_scan'?`openMerchantOrderCouponScanner('${orderId}','cash')`:`setMerchantOrderStatus('${orderId}','${key}')`;
+    return `<button class="${index===0?'primary':''}" onclick="${click}">${label}</button>`;
+  }).join('');
+  const paymentNote=paid?`<div style="margin-top:9px;color:var(--sage-dark);font-size:12px;font-weight:800;">${uiIcon('check',13)} 已收款${allServed?'，订单已完成':'，菜品仍可继续制作与上桌'}</div>`:`<div style="margin-top:9px;color:var(--ink-faint);font-size:12px;">${uiIcon('wallet',13)} 待收款，可在菜品未上齐时提前结账</div>`;
+  const billButton=canBill&&paid?`<button onclick="openMerchantPrintPreview('bill','${orderId}')" style="margin-top:8px;width:100%;border:1px solid var(--line);border-radius:9px;background:#fff;padding:8px;font:900 12px inherit;">打印顾客账单</button>`:'';
+  return `<div class="merchant-order-card"><div class="merchant-order-card-head"><div><b>${escHtml(order.table_name||'餐桌')} · ${escHtml(order.order_code||'')}</b><span>${escHtml(order.user_name||'乐生活用户')} · ${order.created_at?new Date(order.created_at).toLocaleString('zh-CN'):''}${Number(order.addition_count||0)?` · 加菜 ${order.addition_count} 次`:''}</span></div><i class="merchant-order-state">${merchantOrderStatusText(order.status)} · ${merchantOrderPaymentLabel(order)}</i></div><div class="merchant-order-lines">${merchantOrderBatchHtml(items,order)}${order.note?`<div style="margin-top:8px;color:var(--berry-dark);">备注：${escHtml(order.note)}</div>`:''}<div class="merchant-order-line" style="margin-top:9px;padding-top:9px;border-top:1px solid var(--line);font-size:13px;"><b>合计 ${Number(order.item_count||0)} 件</b><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div></div>${paymentNote}${actionHtml?`<div class="merchant-order-card-actions">${actionHtml}</div>`:''}${billButton}</div>`;
+}
+
+async function completeMerchantOrderWithBill(orderId,paymentMethod,claimIds,skipConfirm){
+  const couponIds=Array.isArray(claimIds)?claimIds:[];
+  if(!skipConfirm && !confirm(`确认该订单已使用${paymentMethod==='cash'?'现金':'刷卡'}完成支付？`)) return;
+  try {
+    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_complete_with_bill`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_order_id:orderId,p_payment_method:paymentMethod,p_tip_amount:0,p_discount_amount:0,p_coupon_claim_ids:couponIds})});
+    if(!res.ok) throw new Error(await res.text());
+    const bill=await res.json();
+    const state=merchantOrderState();
+    const order=(state.orders||[]).find(row=>String(row.id)===String(orderId))||state.order;
+    if(order&&order.user_id) await createMemberActivityNotification({userId:order.user_id,kind:'order_bill',title:'订单已结算',body:`${merchantOperatorWorkspace()?.business_name||'商家'} 已完成你的订单结算，应付 ${merchantOrderMoney(bill.total_amount)}。`});
+    window._merchantCouponOrderContext=null;
+    closeMerchantCouponRedeem();
+    showToast(`已收款，应付 ${merchantOrderMoney(bill.total_amount)}${Number(bill.discount_amount)?`，已优惠 ${merchantOrderMoney(bill.discount_amount)}`:''}`);
+    renderMerchantOrderManager(true);
+  } catch(error){
+    const text=String(error.message||'');
+    const messages={coupon_not_for_this_order:'这张优惠券不属于本桌顾客。',coupon_limit_one:'本店每单仅可使用一张优惠券。',coupon_invalid_payment_method:'该优惠券不适用于当前支付方式。',coupon_expired:'该优惠券已过期。',coupon_invalid_weekday:'该优惠券今天不可使用。',coupon_invalid_time:'当前不在优惠券的适用时段。',coupon_already_redeemed:'这张优惠券已经核销。'};
+    console.warn('订单收款失败:',text);
+    showToast(Object.entries(messages).find(([key])=>text.includes(key))?.[1]||'收款失败，请确认订单和优惠券后重试');
+  }
+}
+
+function openMerchantCashierPayment(orderId,paymentMethod){
+  if(confirm(`本次${paymentMethod==='cash'?'现金':'刷卡'}支付是否需要扫描优惠券？`)){
+    openMerchantOrderCouponScanner(orderId,paymentMethod);
+    return;
+  }
+  completeMerchantOrderWithBill(orderId,paymentMethod,[]);
+}
+
+async function openMerchantOrderCouponScanner(orderId,paymentMethod){
+  window._merchantCouponOrderContext={orderId,paymentMethod};
+  await openMerchantMemberScanner();
+  const status=document.getElementById('merchantScanStatus');
+  if(status) status.textContent='请扫描顾客已领取优惠券的二维码；系统会核对本桌顾客、优惠规则并自动计算优惠金额。';
+}
+
+async function openMerchantCouponRedeemByCode(code){
+  if(!canOperateMerchantWorkspace()||!activeMerchantWorkspaceId()){showToast('请先进入商家工作台');return;}
+  const id=Number(String(code||'').toUpperCase().replace(/^LSHC-?/,'').replace(/\D/g,''));
+  if(!id){showToast('优惠券二维码无效');return;}
+  const sheet=document.getElementById('merchantCouponRedeem'),body=document.getElementById('merchantCouponRedeemBody');
+  if(!sheet||!body)return;
+  sheet.classList.add('open');body.innerHTML='<div class="deals-empty-panel">正在核对优惠券…</div>';
+  try{
+    const claimRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims?id=eq.${id}&merchant_user_id=eq.${encodeURIComponent(activeMerchantWorkspaceId())}&select=*&limit=1`,{method:'GET'});
+    if(!claimRes.ok)throw new Error(await claimRes.text());
+    const claim=(await claimRes.json())[0];
+    if(!claim){body.innerHTML='<div class="deals-empty-panel">没有找到本店的这张优惠券。</div>';return;}
+    const context=window._merchantCouponOrderContext;
+    if(context){
+      const orderRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?id=eq.${encodeURIComponent(context.orderId)}&select=*&limit=1`,{method:'GET'});
+      if(!orderRes.ok)throw new Error(await orderRes.text());
+      const order=(await orderRes.json())[0];
+      if(!order){body.innerHTML='<div class="deals-empty-panel">没有找到当前订单。</div>';return;}
+      if(String(claim.user_id)!==String(order.user_id)){body.innerHTML='<div class="deals-empty-panel">这张优惠券不属于本桌顾客，不能用于该订单。</div>';return;}
+      const snapshot=claim.coupon_snapshot||{};
+      body.innerHTML=`<div class="merchant-dash-card" style="box-shadow:none;"><b style="display:block;font-size:17px;">${escHtml(snapshot.title||'优惠券')}</b><p style="line-height:1.7;color:var(--ink-soft);">${escHtml(snapshot.description||'到店优惠')}</p><div class="order-notice">将用于 ${escHtml(order.table_name||'本桌')} · ${escHtml(order.order_code||'')}。最终优惠金额将由系统按有效期、适用日期、时段、支付方式与订单金额重新计算。</div></div>${claim.status==='redeemed'?'<div class="deals-empty-panel">这张优惠券已经核销。</div>':`<button class="merchant-reward-redeem-btn" onclick="completeMerchantOrderWithBill('${String(order.id).replace(/'/g,'')}','${context.paymentMethod}',[${Number(claim.id)}],true)">确认核销并${context.paymentMethod==='cash'?'现金':'刷卡'}收款</button>`}`;
+      return;
+    }
+    const snapshot=claim.coupon_snapshot||{};
+    body.innerHTML=`<div class="merchant-dash-card" style="box-shadow:none;"><b>${escHtml(snapshot.title||'优惠券')}</b><p>${escHtml(snapshot.description||'')}</p></div>${claim.status==='redeemed'?'<div class="deals-empty-panel">这张优惠券已经核销。</div>':`<button class="merchant-reward-redeem-btn" onclick="confirmMerchantCouponRedeem(${Number(claim.id)})">确认核销优惠券</button>`}`;
+  }catch(error){console.warn('优惠券核对失败:',error.message);body.innerHTML='<div class="deals-empty-panel">优惠券暂时无法核对，请稍后重试。</div>';}
+}
+
 // Keep the static home panel visible immediately. Data loading remains owned by bootApp.
 const initialHomePage = document.getElementById('page-home');
 if(initialHomePage){
@@ -17061,7 +17165,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Multi-Role Service Link】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Flexible Checkout & Coupon Payment】`);
 </script>
 </body>
 </html>
