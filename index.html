@@ -3127,7 +3127,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.243';
+const APP_VERSION = '5.244';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -16004,6 +16004,12 @@ async function bootApp(){
   }
 }
 
+// Keep the static home panel visible immediately. Data loading remains owned by bootApp.
+const initialHomePage = document.getElementById('page-home');
+if(initialHomePage){
+  initialHomePage.classList.add('active');
+  initialHomePage.style.display = 'block';
+}
 bootApp();
 
 // 定时刷新仅在首页可见时执行，减少后台页面的无效网络请求。
@@ -16029,7 +16035,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Media Cache CORS Bypass】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Home Startup Visibility Fix】`);
 </script>
 </body>
 </html>
