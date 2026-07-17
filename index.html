@@ -3127,7 +3127,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.241';
+const APP_VERSION = '5.242';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -15395,7 +15395,8 @@ const R2_MEDIA_API_URL = 'https://upload.escoopcity.com';
 const R2_MEDIA_PUBLIC_ORIGIN = 'https://media.escoopcity.com';
 const MEDIA_CACHE_NAME = 'leshenghuo-media-v1';
 const MEDIA_CACHE_META_KEY = 'leshenghuo-media-cache-meta-v1';
-const MEDIA_CACHE_MAX_BYTES = 500 * 1024 * 1024;
+// Upper bound only. The operating system/browser may grant less space per device.
+const MEDIA_CACHE_MAX_BYTES = 3 * 1024 * 1024 * 1024;
 const MEDIA_CACHE_MAX_ENTRIES = 1200;
 const mediaCachePending = new Set();
 const POSTS_REFRESH_COOLDOWN_MS = 30000;
@@ -16020,10 +16021,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Initialize pages - show home by default through the same layout path as tab switching
-switchTab('home');
+// The home tab is already active in the static markup. Boot owns the first data load so
+// authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Emergency Stable Rollback】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Media Cache & Startup Fix】`);
 </script>
 </body>
 </html>
