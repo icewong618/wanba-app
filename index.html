@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.289';
+const APP_VERSION = '5.290';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5208,7 +5208,7 @@ async function loadMerchantCustomerActiveOrder(silent){
   const state = merchantOrderState();
   if(!state.merchant || !state.table || !(session && session.user)) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&table_id=eq.${Number(state.table.id)}&user_id=eq.${encodeURIComponent(session.user.id)}&status=in.(pending,confirmed,preparing,served)&select=*&order=updated_at.desc&limit=1`, { method:'GET' });
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&table_id=eq.${Number(state.table.id)}&user_id=eq.${encodeURIComponent(session.user.id)}&status=in.(pending,confirmed,preparing,reminded,served)&select=*&order=updated_at.desc&limit=1`, { method:'GET' });
     if(!res.ok) throw new Error(await res.text());
     const order = (await res.json())[0] || null;
     if(order){
@@ -5277,7 +5277,11 @@ function merchantCustomerOrderSummaryHtml(state){
   if(!order) return '';
   const allServed = (state.items || []).length > 0 && (state.items || []).every(item => item.is_served === true);
   const canRemind = ['pending','confirmed','preparing'].includes(String(order.status || ''));
-  return `<div class="merchant-mini-section" style="margin:14px 0 2px;"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><b>${uiIcon('bag',14)} 已点内容</b><span style="font-size:11px;font-weight:800;color:var(--sage-dark);">${escHtml(merchantOrderStatusText(order.status))}</span></div><div class="merchant-order-lines" style="margin-top:10px;">${merchantOrderBatchHtml(state.items)}</div><div class="merchant-order-line" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);"><b>合计 ${Number(order.item_count || 0)} 件</b><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div>${allServed ? `<button onclick="openMerchantOrderCheckout()" style="margin-top:12px;width:100%;border:0;border-radius:10px;background:var(--sage);color:#fff;padding:11px;font:900 13px inherit;">结算</button>` : `${canRemind ? `<button onclick="remindMerchantOrder()" style="margin-top:12px;width:100%;border:1px solid var(--berry);border-radius:10px;background:#fff;color:var(--berry);padding:10px;font:900 13px inherit;">催菜</button>` : ''}<div style="margin-top:10px;font-size:11.5px;color:var(--ink-faint);">菜品将由商家逐项标记上桌，全部上桌后即可结算。</div>`}</div>`;
+  const canCheckout = order.payment_status !== 'paid' && !['cancelled','completed'].includes(String(order.status || ''));
+  const checkoutButton = canCheckout ? `<button onclick="openMerchantOrderCheckout()" style="margin-top:12px;width:100%;border:0;border-radius:10px;background:var(--sage);color:#fff;padding:11px;font:900 13px inherit;">${allServed?'结算':'提前结算'}</button>` : '';
+  const serviceAction = !allServed && canRemind ? `<button onclick="remindMerchantOrder()" style="margin-top:10px;width:100%;border:1px solid var(--berry);border-radius:10px;background:#fff;color:var(--berry);padding:10px;font:900 13px inherit;">催菜</button>` : '';
+  const note = order.payment_status === 'paid' ? '<div style="margin-top:10px;font-size:11.5px;color:var(--sage-dark);">已完成付款，商家仍会继续制作并上菜。</div>' : !allServed ? '<div style="margin-top:10px;font-size:11.5px;color:var(--ink-faint);">菜品未全部上桌也可先结算，商家会继续出菜。</div>' : '';
+  return `<div class="merchant-mini-section" style="margin:14px 0 2px;"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><b>${uiIcon('bag',14)} 已点内容</b><span style="font-size:11px;font-weight:800;color:var(--sage-dark);">${escHtml(merchantOrderStatusText(order.status))}</span></div><div class="merchant-order-lines" style="margin-top:10px;">${merchantOrderBatchHtml(state.items)}</div><div class="merchant-order-line" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);"><b>合计 ${Number(order.item_count || 0)} 件</b><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div>${checkoutButton}${serviceAction}${note}</div>`;
 }
 function renderMerchantOrderMenu(){
   const body = document.getElementById('merchantOrderMenuBody');
@@ -6185,7 +6189,9 @@ async function renderMerchantOrderManager(silent){
 }
 function merchantOrderBatchHtml(items,manager){
   let lastBatch=null;const canServe=!!manager&&merchantWorkspaceHasPermission('order_serve');
-  return(items||[]).map(item=>{const batch=Number(item.batch_no||1),divider=batch!==lastBatch?`<div style="margin:${lastBatch===null?'0 0 7px':'12px 0 7px'};padding-top:${lastBatch===null?'0':'10px'};border-top:${lastBatch===null?'0':'1px dashed var(--line)'};font-size:11px;font-weight:900;color:${batch>1?'var(--berry)':'var(--ink-faint)'};">${batch>1?`新加菜 · 第 ${batch-1} 次追加`:'首次点单'}</div>`:'';lastBatch=batch;const served=item.is_served===true,ready=!!item.kitchen_done,canLink=canServe&&merchantWorkspaceCanLinkKitchenServe(),serveAction=!canServe?'':served?`<button onclick="setMerchantOrderItemServed(${Number(item.id)},false)" style="border:0;border-radius:8px;padding:6px 8px;font:800 11px inherit;color:#fff;background:var(--sage);white-space:nowrap;">已上桌 · 撤回</button>`:ready?`<button onclick="setMerchantOrderItemServed(${Number(item.id)},true)" style="border:0;border-radius:8px;padding:6px 8px;font:800 11px inherit;color:#fff;background:var(--berry);white-space:nowrap;">上桌</button>`:canLink?`<button onclick="setMerchantOrderItemServed(${Number(item.id)},true)" style="border:0;border-radius:8px;padding:6px 8px;font:800 11px inherit;color:#fff;background:var(--berry);white-space:nowrap;">上桌 · 同步完成</button>`:`<button disabled style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:800 11px inherit;color:var(--ink-faint);background:var(--bg-alt);white-space:nowrap;cursor:not-allowed;">待后厨完成</button>`;return `${divider}<div class="merchant-order-line" style="align-items:center;gap:8px;"><span style="flex:1;${served?'color:var(--ink-faint);text-decoration:line-through;':''}">${escHtml(item.product_name)} × ${Number(item.quantity||0)}${ready&&!served?' <small style="color:var(--sage-dark);">已完成制作</small>':''}</span><b style="white-space:nowrap;">${merchantOrderMoney(Number(item.unit_price||0)*Number(item.quantity||0))}</b>${serveAction}</div>`;}).join('');
+  // 同一秒创建的菜品也按编号排序，刷新后不会改变行位置。
+  const orderedItems=[...(items||[])].sort((a,b)=>Number(a.batch_no||1)-Number(b.batch_no||1)||new Date(a.created_at||0)-new Date(b.created_at||0)||Number(a.id||0)-Number(b.id||0));
+  return orderedItems.map(item=>{const batch=Number(item.batch_no||1),divider=batch!==lastBatch?`<div style="margin:${lastBatch===null?'0 0 7px':'12px 0 7px'};padding-top:${lastBatch===null?'0':'10px'};border-top:${lastBatch===null?'0':'1px dashed var(--line)'};font-size:11px;font-weight:900;color:${batch>1?'var(--berry)':'var(--ink-faint)'};">${batch>1?`新加菜 · 第 ${batch-1} 次追加`:'首次点单'}</div>`:'';lastBatch=batch;const served=item.is_served===true,ready=!!item.kitchen_done,canLink=canServe&&merchantWorkspaceCanLinkKitchenServe(),serveAction=!canServe?'':served?`<button onclick="setMerchantOrderItemServed(${Number(item.id)},false)" style="border:0;border-radius:8px;padding:6px 8px;font:800 11px inherit;color:#fff;background:var(--sage);white-space:nowrap;">已上桌 · 撤回</button>`:ready?`<button onclick="setMerchantOrderItemServed(${Number(item.id)},true)" style="border:0;border-radius:8px;padding:6px 8px;font:800 11px inherit;color:#fff;background:var(--berry);white-space:nowrap;">上桌</button>`:canLink?`<button onclick="setMerchantOrderItemServed(${Number(item.id)},true)" style="border:0;border-radius:8px;padding:6px 8px;font:800 11px inherit;color:#fff;background:var(--berry);white-space:nowrap;">上桌 · 同步完成</button>`:`<button disabled style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:800 11px inherit;color:var(--ink-faint);background:var(--bg-alt);white-space:nowrap;cursor:not-allowed;">待后厨完成</button>`;return `${divider}<div class="merchant-order-line" style="align-items:center;gap:8px;"><span style="flex:1;${served?'color:var(--ink-faint);text-decoration:line-through;':''}">${escHtml(item.product_name)} × ${Number(item.quantity||0)}${ready&&!served?' <small style="color:var(--sage-dark);">已完成制作</small>':''}</span><b style="white-space:nowrap;">${merchantOrderMoney(Number(item.unit_price||0)*Number(item.quantity||0))}</b>${serveAction}</div>`;}).join('');
 }
 function merchantOrderCardHtml(order,items){
   const allServed=items.length>0&&items.every(item=>item.is_served===true),canManage=merchantWorkspaceHasPermission('order_manage'),canComplete=merchantWorkspaceHasPermission('order_complete');let actions=[];
@@ -17326,7 +17332,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Paid Order Completion Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Stable Serve Item Order】`);
 </script>
 </body>
 </html>
