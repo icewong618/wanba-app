@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.280';
+const APP_VERSION = '5.281';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3660,7 +3660,7 @@ function canSendVerify(email){
   return { ok:true };
 }
 async function resendVerifyEmail(email){
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/resend`, {
+  const {res} = await authRequest(`${SUPABASE_URL}/auth/v1/resend`, {
     method:'POST',
     headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
     body: JSON.stringify({ type:'signup', email })
@@ -3668,14 +3668,37 @@ async function resendVerifyEmail(email){
   return res.ok;
 }
 
+/* 认证邮件通过外部 SMTP 发送时可能需要数十秒。统一解析响应，避免网关返回纯文本时让界面永远停在“处理中”。 */
+async function authRequest(url, options, timeoutMs=45000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, Object.assign({}, options, {signal:controller.signal}));
+    const raw = await res.text();
+    let data = {};
+    try { data = raw ? JSON.parse(raw) : {}; } catch(e) { data = {message:raw}; }
+    return {res, data};
+  } catch(e) {
+    if(e && e.name === 'AbortError') throw new Error('邮件服务响应超时，请稍后再试');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* ---- 一体化登入：自动判断 注册/登录/补发验证 ---- */
 async function createAccountFromAuth(email, pass, name, msg){
   msg.textContent = '首次使用该邮箱，正在创建账号…';
-  const reg = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-    method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-    body: JSON.stringify({ email, password:pass, data:{ name } })
-  });
-  const rd = await reg.json();
+  let reg, rd;
+  try {
+    ({res:reg, data:rd} = await authRequest(`${SUPABASE_URL}/auth/v1/signup`, {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+      body: JSON.stringify({ email, password:pass, data:{ name } })
+    }));
+  } catch(e) {
+    msg.textContent = `账号创建暂时失败：${e.message || '请稍后再试'}`;
+    return 'failed';
+  }
   if(!reg.ok){
     const reason = String(rd.msg || rd.error_description || rd.message || '').toLowerCase();
     const passwordIssue = passwordSafetyMessage(pass);
@@ -3752,12 +3775,11 @@ async function submitAuth(){
 
   try {
     /* 先登录；仅当该邮箱不是现有账号时才自动创建账号。 */
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    const {res, data} = await authRequest(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
       body: JSON.stringify({ email, password: pass })
     });
-    const data = await res.json();
 
     if(res.ok){
       session = { access_token: data.access_token, refresh_token: data.refresh_token, user: data.user };
@@ -3806,13 +3828,11 @@ async function requestPasswordReset(){
   try {
     // 使用站点根地址回跳，和 Supabase URL Configuration 中常见的 Site URL 保持一致。
     const redirect = new URL('/', window.location.origin).href;
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    const {res, data:detail} = await authRequest(`${SUPABASE_URL}/auth/v1/recover`, {
       method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
       body:JSON.stringify({ email, redirect_to:redirect })
     });
     if(!res.ok){
-      let detail = {};
-      try { detail = await res.json(); } catch(e){}
       const raw = String(detail.msg || detail.error_description || detail.message || detail.error || '').toLowerCase();
       if(res.status === 429 || raw.includes('rate limit')) throw new Error('发送过于频繁，请稍后再试');
       if(raw.includes('redirect') || raw.includes('url')) throw new Error('回跳地址未获授权，请在 Supabase 的 URL Configuration 中加入 https://escoopcity.com/');
@@ -17013,7 +17033,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Order Print Templates】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Auth Delivery Resilience】`);
 </script>
 </body>
 </html>
