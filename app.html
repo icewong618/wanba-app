@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.291';
+const APP_VERSION = '5.292';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5652,7 +5652,7 @@ function openMerchantCouponEditor(userId, index){
     <div class="merchant-form-field">
       <label>每位用户领取频率</label>
       <select id="merchantCouponClaimMode" onchange="toggleMerchantCouponClaimInterval()">
-        ${[['once','仅可领取一次'],['unlimited','不限次数'],['daily','每天可领取一次'],['weekly','每周可领取一次'],['monthly','每月可领取一次'],['interval','每 N 天可领取一次']].map(([value,label]) => `<option value="${value}" ${(item.claim_mode || 'once') === value ? 'selected' : ''}>${label}</option>`).join('')}
+        ${[['once','仅可领取一次'],['after_redeem','核销后可再次领取'],['unlimited','不限次数'],['daily','每天可领取一次'],['weekly','每周可领取一次'],['monthly','每月可领取一次'],['interval','每 N 天可领取一次']].map(([value,label]) => `<option value="${value}" ${(item.claim_mode || 'once') === value ? 'selected' : ''}>${label}</option>`).join('')}
       </select>
       <div id="merchantCouponClaimIntervalWrap" style="display:${(item.claim_mode || 'once') === 'interval' ? 'block' : 'none'};margin-top:9px;"><input id="merchantCouponClaimIntervalDays" type="number" min="1" max="365" inputmode="numeric" value="${escAttr(String(item.claim_interval_days || 7))}" placeholder="例如：7"><p style="font-size:11px;color:var(--ink-faint);margin:6px 0 0;">填写 1-365，例如每 14 天可领取一次。</p></div>
     </div>
@@ -17157,6 +17157,7 @@ function toggleMerchantCouponClaimInterval(){
 function merchantCouponClaimModeText(coupon){
   const mode=String(coupon?.claim_mode||'once');
   if(mode==='unlimited')return '不限次数领取';
+  if(mode==='after_redeem')return '核销后可再次领取';
   if(mode==='daily')return '每天可领一次';
   if(mode==='weekly')return '每周可领一次';
   if(mode==='monthly')return '每月可领一次';
@@ -17168,6 +17169,7 @@ function merchantCouponMayClaimAgain(merchant,coupon,index){
   const id=merchantCouponId(coupon,index);
   const claims=(window._merchantCouponClaims.rows||[]).filter(row=>String(row.merchant_user_id)===String(merchant?.user_id)&&String(row.coupon_id)===String(id));
   if(mode==='unlimited')return true;
+  if(mode==='after_redeem')return !claims.some(row=>row.status==='claimed');
   if(!claims.length)return true;
   const latest=claims.reduce((result,row)=>!result||new Date(row.claimed_at)>new Date(result.claimed_at)?row:result,null);
   const now=new Date();
@@ -17193,7 +17195,7 @@ async function claimMerchantCoupon(userId,index){
     rerenderMerchantSection(merchant);
   }catch(error){
     const text=String(error.message||'');
-    const messages={coupon_claim_once_limit:'这张优惠券每人只能领取一次。',coupon_claim_daily_limit:'今天已经领取过，明天再来吧。',coupon_claim_weekly_limit:'本周已经领取过，下周可再次领取。',coupon_claim_monthly_limit:'本月已经领取过，下月可再次领取。',coupon_claim_interval_limit:'还未到下次可领取时间。',coupon_expired:'该优惠券已过期。'};
+    const messages={coupon_claim_once_limit:'这张优惠券每人只能领取一次。',coupon_claim_unredeemed_limit:'请先使用或核销当前已领取的优惠券，再领取下一张。',coupon_claim_daily_limit:'今天已经领取过，明天再来吧。',coupon_claim_weekly_limit:'本周已经领取过，下周可再次领取。',coupon_claim_monthly_limit:'本月已经领取过，下月可再次领取。',coupon_claim_interval_limit:'还未到下次可领取时间。',coupon_expired:'该优惠券已过期。'};
     console.warn('领取优惠券失败:',text);
     showToast(Object.entries(messages).find(([key])=>text.includes(key))?.[1]||'领取失败，请稍后重试');
   }
@@ -17332,7 +17334,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Repeat Coupon Claim Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Coupon Redeem Before Reclaim】`);
 </script>
 </body>
 </html>
