@@ -3178,7 +3178,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.250';
+const APP_VERSION = '5.251';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5864,7 +5864,7 @@ function openMerchantCouponAppDownload(){
   body.innerHTML = `<div class="deals-empty-panel" style="margin-top:20px;"><b style="display:block;font-size:17px;color:var(--ink);margin-bottom:8px;">优惠券仅支持在乐生活 App 使用</b><p style="line-height:1.7;">网页端可正常扫码点餐，但优惠券领取、出示和结算核销需在 App 内完成。</p><button class="primary" onclick="showToast('乐生活 App 即将上架，下载链接将在上架后自动启用')" style="margin-top:14px;width:100%;border:0;border-radius:10px;padding:12px;background:var(--sage);color:#fff;font:900 14px inherit;">下载${primary}</button>${!ios && !android ? '<button onclick="showToast(\'请使用手机打开本页下载 App\')" style="margin-top:9px;width:100%;border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff;font:800 13px inherit;">在手机上继续</button>' : ''}<p style="font-size:11px;color:var(--ink-faint);margin-top:14px;">App 上架后将按你的设备自动跳转至 App Store 或 Google Play。</p></div>`;
   sheet.classList.add('open');
 }
-function merchantCouponAvailable(coupon){ return isNativeMerchantApp() && merchantCouponEligibility(coupon).eligible; }
+function merchantCouponAvailable(coupon){ return merchantCouponEligibility(coupon).eligible; }
 async function claimMerchantCoupon(userId,index){
   if(!isNativeMerchantApp()){ openMerchantCouponAppDownload(); return; }
   if(!(session && session.user)){ showToast('请先登录后领取优惠券'); openAuth(); return; }
@@ -16761,7 +16761,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Order Billing & Coupon App Gate】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Coupon Browser Preview Fix】`);
 </script>
 </body>
 </html>
