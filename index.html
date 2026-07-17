@@ -3127,7 +3127,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.242';
+const APP_VERSION = '5.243';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -15393,8 +15393,8 @@ const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
 const R2_MEDIA_API_URL = 'https://upload.escoopcity.com';
 const R2_MEDIA_PUBLIC_ORIGIN = 'https://media.escoopcity.com';
-const MEDIA_CACHE_NAME = 'leshenghuo-media-v1';
-const MEDIA_CACHE_META_KEY = 'leshenghuo-media-cache-meta-v1';
+const MEDIA_CACHE_NAME = 'leshenghuo-media-v2';
+const MEDIA_CACHE_META_KEY = 'leshenghuo-media-cache-meta-v2';
 // Upper bound only. The operating system/browser may grant less space per device.
 const MEDIA_CACHE_MAX_BYTES = 3 * 1024 * 1024 * 1024;
 const MEDIA_CACHE_MAX_ENTRIES = 1200;
@@ -15486,14 +15486,19 @@ async function warmMediaCache(url){
   mediaCachePending.add(url);
   try {
     const cache = await caches.open(MEDIA_CACHE_NAME);
-    const existing = await cache.match(url);
+    // Existing edge objects were cached before R2 CORS headers were enabled.
+    // A versioned request bypasses those stale responses without changing media URLs in posts.
+    const cacheUrl = new URL(url);
+    cacheUrl.searchParams.set('media_cache_v', '2');
+    const cacheKey = cacheUrl.toString();
+    const existing = await cache.match(cacheKey);
     const meta = mediaCacheMeta();
-    if(existing){ meta[url] = Object.assign({}, meta[url], { touchedAt:Date.now() }); saveMediaCacheMeta(meta); return; }
-    const response = await fetch(url, { mode:'cors', cache:'force-cache' });
+    if(existing){ meta[cacheKey] = Object.assign({}, meta[cacheKey], { touchedAt:Date.now() }); saveMediaCacheMeta(meta); return; }
+    const response = await fetch(cacheKey, { mode:'cors', cache:'force-cache' });
     if(!response.ok) return;
     const size = Number(response.headers.get('content-length')) || (await response.clone().blob()).size || 0;
-    await cache.put(url, response);
-    meta[url] = { size, touchedAt:Date.now() };
+    await cache.put(cacheKey, response);
+    meta[cacheKey] = { size, touchedAt:Date.now() };
     let entries = Object.entries(meta);
     let total = entries.reduce((sum, [,item]) => sum + Number(item.size || 0), 0);
     entries.sort((a,b) => Number(a[1].touchedAt || 0) - Number(b[1].touchedAt || 0));
@@ -16024,7 +16029,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Media Cache & Startup Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Media Cache CORS Bypass】`);
 </script>
 </body>
 </html>
