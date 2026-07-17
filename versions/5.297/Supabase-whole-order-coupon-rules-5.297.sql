@@ -1,4 +1,4 @@
--- 乐生活 v5.296：优惠券使用结构化数字规则，避免通过文案解析金额。
+-- 乐生活 v5.297：补充整单固定金额与整单百分比优惠，可继续限定支付方式。
 
 create or replace function public.merchant_order_complete_with_bill(
   p_order_id uuid,
