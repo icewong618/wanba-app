@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.281';
+const APP_VERSION = '5.282';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -6059,13 +6059,11 @@ async function setMerchantOrderItemRunnerServed(itemId,served){
 
 /* 商家矩阵：岗位与权限。店主和店经理默认拥有完整日常经营权限。 */
 const MERCHANT_STAFF_ROLES = [
-  ['manager','店经理','订单、后厨、传菜、收银与团队管理'],
+  ['manager','管理','全部功能与团队管理'],
+  ['cashier','收银','结账、会员与优惠券核销'],
+  ['runner','服务员','上菜、催菜与桌台服务'],
   ['kitchen','后厨','后厨订单屏与完成制作'],
-  ['runner','传菜','将完成制作的菜品标记上桌'],
-  ['cashier','收银','核销优惠、会员奖励和完成订单'],
-  ['operator','运营','内容发布、AI 发文和社媒同步'],
-  ['cleaning','清洁','先记录岗位，后续接入排班任务'],
-  ['other','其他','先记录岗位，后续按需授权']
+  ['operator','宣传','AI 发文、内容发布与社媒同步']
 ];
 const MERCHANT_STAFF_PERMISSIONS = [
   ['order_view','查看订单'],['order_manage','管理订单'],['kitchen_view','查看后厨屏'],['kitchen_complete','完成制作'],
@@ -6079,17 +6077,27 @@ function merchantWorkspaceRoles(){
 }
 function merchantWorkspacePermissions(){
   if(merchantWorkspaceRoles().includes('owner')||merchantWorkspaceRoles().includes('manager'))return ['*'];
-  const row=merchantMatrixActiveWorkspace||{};
-  return Array.isArray(row.permissions)?row.permissions:[];
+  return merchantRolePermissionCodes(merchantWorkspaceRoles());
+}
+function merchantRolePermissionCodes(roles){
+  const set=new Set(Array.isArray(roles)?roles:[]);
+  if(set.has('manager')) return ['*'];
+  const permissions=[];
+  if(set.has('kitchen')) permissions.push('kitchen_view','kitchen_complete');
+  if(set.has('runner')) permissions.push('order_view','order_serve');
+  if(set.has('cashier')) permissions.push('order_view','order_complete','coupon_redeem','member_manage','bill_view');
+  if(set.has('operator')) permissions.push('content_manage');
+  if(set.has('clerk')) permissions.push('order_view','order_serve','coupon_redeem','member_manage');
+  return [...new Set(permissions)];
 }
 function merchantWorkspaceHasPermission(permission){ return merchantWorkspacePermissions().includes('*')||merchantWorkspacePermissions().includes(permission); }
-function merchantMatrixRoleText(role){ const found=MERCHANT_STAFF_ROLES.find(row=>row[0]===role);return found?found[1]:(role==='owner'?'店主':'员工'); }
+function merchantMatrixRoleText(role){ const found=MERCHANT_STAFF_ROLES.find(row=>row[0]===role);return found?found[1]:(role==='owner'?'店主':role==='clerk'?'服务员':'员工'); }
 function merchantMatrixRolesText(roles,legacyRole){ const list=Array.isArray(roles)&&roles.length?roles:(legacyRole?[legacyRole]:[]);return list.map(merchantMatrixRoleText).join('、')||'员工'; }
 function merchantPermissionText(code){ const row=MERCHANT_STAFF_PERMISSIONS.find(item=>item[0]===code);return row?row[1]:code; }
 function canOperateMerchantWorkspace(){ return merchantWorkspaceHasPermission('member_manage')||merchantWorkspaceHasPermission('content_manage')||merchantWorkspaceHasPermission('order_view')||merchantWorkspaceHasPermission('coupon_redeem'); }
 function merchantStaffAccessPickerHtml(prefix,roles,permissions){
-  const roleSet=new Set(roles||[]), permissionSet=new Set(permissions||[]);
-  return '<div style="margin-top:13px;"><b style="font-size:13px;">岗位（可多选）</b><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px;">'+MERCHANT_STAFF_ROLES.map(row=>'<label style="display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;background:#fff;"><input class="'+prefix+'-role" type="checkbox" value="'+row[0]+'" '+(roleSet.has(row[0])?'checked':'')+'><span>'+row[1]+'</span></label>').join('')+'</div></div><div style="margin-top:14px;"><b style="font-size:13px;">附加权限</b><p style="margin:5px 0 8px;font-size:11px;color:var(--ink-faint);line-height:1.5;">岗位会自动带上必要权限；这里可额外增加单项权限。</p><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;">'+MERCHANT_STAFF_PERMISSIONS.map(row=>'<label style="display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;background:#fff;"><input class="'+prefix+'-permission" type="checkbox" value="'+row[0]+'" '+(permissionSet.has(row[0])?'checked':'')+'><span>'+row[1]+'</span></label>').join('')+'</div></div>';
+  const selected=(Array.isArray(roles)&&roles[0]) || 'runner';
+  return '<div style="margin-top:13px;"><b style="font-size:13px;">岗位</b><p style="margin:5px 0 8px;font-size:11px;color:var(--ink-faint);line-height:1.5;">每位员工选择一个岗位，系统会自动配置对应后台与操作权限。</p><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;">'+MERCHANT_STAFF_ROLES.map(row=>'<label style="display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;background:#fff;"><input class="'+prefix+'-role" name="'+prefix+'-role" type="radio" value="'+row[0]+'" '+(selected===row[0]?'checked':'')+'><span>'+row[1]+'</span></label>').join('')+'</div></div>';
 }
 function merchantStaffPickerValues(prefix,kind){ return Array.from(document.querySelectorAll('.'+prefix+'-'+kind+':checked')).map(node=>node.value); }
 async function loadMerchantMatrixState(){
@@ -6106,16 +6114,32 @@ async function loadMerchantMatrixState(){
   }catch(error){console.warn('商家矩阵账号读取失败:',error.message);merchantMatrixWorkspaces=[];merchantMatrixInvites=[];}
 }
 function merchantMatrixWorkspaceCardHtml(){
-  if(!(session&&session.user))return '';const invites=merchantMatrixInvites||[],spaces=merchantMatrixWorkspaces||[];if(!invites.length&&!spaces.length)return '';
+  if(!(session&&session.user))return '';
+  const invites=merchantMatrixInvites||[],spaces=merchantMatrixWorkspaces||[];
+  if(!invites.length&&!spaces.length)return '';
   const inviteHtml=invites.map(row=>{const m=window._merchantIdentityCache[row.merchant_user_id]||{},name=m.business_name||'认证商家';return '<div style="padding:11px 0;border-bottom:1px solid var(--line);"><b style="font-size:13px;">'+escHtml(name)+' 邀请你加入商家团队</b><div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">岗位：'+escHtml(merchantMatrixRolesText(row.roles,row.role))+'</div><div style="display:flex;gap:8px;margin-top:9px;"><button onclick="respondMerchantMatrixInvite('+Number(row.id)+',true)" style="border:0;border-radius:9px;background:var(--sage);color:#fff;padding:7px 12px;font-size:12px;font-weight:800;">接受授权</button><button onclick="respondMerchantMatrixInvite('+Number(row.id)+',false)" style="border:1px solid var(--line);border-radius:9px;background:#fff;padding:7px 12px;font-size:12px;font-weight:800;">拒绝</button></div></div>';}).join('');
-  const workspaceHtml=spaces.map(row=>{const m=row.merchant||{},name=m.business_name||'认证商家',roles=merchantMatrixRolesText(row.roles,row.role),perms=Array.isArray(row.permissions)?row.permissions:[],buttons=[];if(perms.includes('member_manage')||perms.includes('*'))buttons.push('<button data-merchant-id="'+escAttr(row.merchant_user_id||'')+'" onclick="openMerchantMatrixWorkspace(this.dataset.merchantId)" style="border:1px solid var(--line);border-radius:8px;background:var(--bg-alt);padding:7px;font-size:11px;font-weight:900;">会员核销</button>');if(perms.includes('kitchen_view')||perms.includes('*'))buttons.push('<button data-merchant-id="'+escAttr(row.merchant_user_id||'')+'" onclick="openMerchantMatrixKitchen(this.dataset.merchantId)" style="border:1px solid var(--sage);border-radius:8px;background:var(--sage-light);color:var(--sage-dark);padding:7px;font-size:11px;font-weight:900;">后厨订单屏</button>');if(perms.includes('order_serve')||perms.includes('*'))buttons.push('<button data-merchant-id="'+escAttr(row.merchant_user_id||'')+'" onclick="openMerchantMatrixRunner(this.dataset.merchantId)" style="border:1px solid var(--sage);border-radius:8px;background:var(--sage-light);color:var(--sage-dark);padding:7px;font-size:11px;font-weight:900;">传菜上桌</button>');if(perms.includes('order_complete')||perms.includes('order_manage')||perms.includes('*'))buttons.push('<button data-merchant-id="'+escAttr(row.merchant_user_id||'')+'" onclick="openMerchantMatrixOrders(this.dataset.merchantId)" style="border:1px solid var(--sage);border-radius:8px;background:var(--sage-light);color:var(--sage-dark);padding:7px;font-size:11px;font-weight:900;">'+(perms.includes('order_complete')&&!perms.includes('order_manage')?'收银订单':'订单管理')+'</button>');return '<div style="width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px;margin-top:8px;"><div style="display:flex;align-items:center;gap:10px;"><span class="merchant-member-avatar" style="width:34px;height:34px;background:var(--sage-light);color:var(--sage-dark);">'+(m.logo?'<img src="'+escAttr(m.logo)+'" alt="">':escHtml(initials(name)))+'</span><span style="min-width:0;flex:1;"><b style="display:block;font-size:13px;color:var(--ink);">'+escHtml(name)+'</b><small style="display:block;color:var(--ink-faint);margin-top:3px;">'+escHtml(roles)+'</small></span></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px;">'+buttons.join('')+'</div></div>';}).join('');
-  return '<section style="margin:14px 0 4px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);"><div style="font-size:14px;font-weight:900;color:var(--ink);">商家矩阵账号</div>'+inviteHtml+workspaceHtml+'</section>';
+  const workspaceHtml=spaces.map(row=>{const m=row.merchant||{},name=m.business_name||'认证商家',roles=Array.isArray(row.roles)&&row.roles.length?row.roles:[row.role],perms=merchantRolePermissionCodes(roles),id=escAttr(row.merchant_user_id||''),buttons=[];
+    if(roles.includes('kitchen')) buttons.push('<button data-merchant-id="'+id+'" onclick="openMerchantMatrixKitchen(this.dataset.merchantId)" style="border:1px solid var(--sage);border-radius:8px;background:var(--sage-light);color:var(--sage-dark);padding:8px;font-size:12px;font-weight:900;">后厨订单屏</button>');
+    else if(perms.includes('order_view')||perms.includes('*')) buttons.push('<button data-merchant-id="'+id+'" onclick="openMerchantMatrixOrders(this.dataset.merchantId)" style="border:1px solid var(--sage);border-radius:8px;background:var(--sage-light);color:var(--sage-dark);padding:8px;font-size:12px;font-weight:900;">点餐后台</button>');
+    if(perms.includes('content_manage')||perms.includes('*')) buttons.push('<button data-merchant-id="'+id+'" onclick="openMerchantMatrixOperations(this.dataset.merchantId)" style="border:1px solid var(--line);border-radius:8px;background:var(--bg-alt);padding:8px;font-size:12px;font-weight:900;">运营后台</button>');
+    return '<div style="width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px;margin-top:8px;"><div style="display:flex;align-items:center;gap:10px;"><span class="merchant-member-avatar" style="width:34px;height:34px;background:var(--sage-light);color:var(--sage-dark);">'+(m.logo?'<img src="'+escAttr(m.logo)+'" alt="">':escHtml(initials(name)))+'</span><span style="min-width:0;flex:1;"><b style="display:block;font-size:13px;color:var(--ink);">'+escHtml(name)+'</b><small style="display:block;color:var(--ink-faint);margin-top:3px;">'+escHtml(merchantMatrixRolesText(roles,row.role))+'</small></span></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px;">'+buttons.join('')+'</div></div>';}).join('');
+  return '<section style="margin:14px 0 4px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);"><div style="font-size:14px;font-weight:900;color:var(--ink);">商家工作台</div>'+inviteHtml+workspaceHtml+'</section>';
 }
 function setMerchantMatrixWorkspace(merchantUserId){const row=(merchantMatrixWorkspaces||[]).find(item=>String(item.merchant_user_id)===String(merchantUserId));if(!row||!row.merchant){showToast('商家授权已失效，请刷新后重试');return null;}merchantMatrixActiveWorkspace=row;window._activeMerchantMemberManagerId=row.merchant_user_id;return row;}
 function openMerchantMatrixWorkspace(merchantUserId){const row=setMerchantMatrixWorkspace(merchantUserId);if(row)openMerchantMemberManager(row.merchant_user_id);}
 function openMerchantMatrixOrders(merchantUserId){const row=setMerchantMatrixWorkspace(merchantUserId);if(row)openMerchantOrderManager(row.merchant_user_id);}
 function openMerchantMatrixKitchen(merchantUserId){const row=setMerchantMatrixWorkspace(merchantUserId);if(row)openMerchantKitchenDisplay(row.merchant_user_id);}
 function openMerchantMatrixRunner(merchantUserId){const row=setMerchantMatrixWorkspace(merchantUserId);if(row)openMerchantRunnerDisplay(row.merchant_user_id);}
+async function openMerchantMatrixOperations(merchantUserId){
+  const row=setMerchantMatrixWorkspace(merchantUserId);
+  if(!row||!merchantWorkspaceHasPermission('content_manage')){showToast('你没有这家商店的运营权限');return;}
+  try{
+    const merchant=await getMerchantOrderMerchant(row.merchant_user_id);
+    if(!merchant)throw new Error('merchant_not_found');
+    currentMerchant=merchant;
+    openMerchantPublishDashboard();
+  }catch(error){console.warn('运营后台打开失败:',error.message);showToast('运营后台暂时无法打开，请稍后重试');}
+}
 async function renderMerchantTeamManager(){
   const body=document.getElementById('merchantTeamManagerBody');if(!body||!currentMerchant)return;body.innerHTML='<div class="deals-empty-panel">正在读取团队成员...</div>';
   try{
@@ -6132,7 +6156,7 @@ async function inviteMerchantMatrixMember(){const roles=merchantStaffPickerValue
 
 async function openMerchantOrderManager(merchantUserId){
   const id=merchantUserId||merchantOrderManagerMerchantId();
-  if(!id||(!merchantWorkspaceHasPermission('order_manage')&&!merchantWorkspaceHasPermission('order_complete'))){showToast('你没有这家商店的订单管理权限');return;}
+  if(!id||(!merchantWorkspaceHasPermission('order_view')&&!merchantWorkspaceHasPermission('order_manage')&&!merchantWorkspaceHasPermission('order_complete'))){showToast('你没有这家商店的点餐后台权限');return;}
   const sheet=document.getElementById('merchantOrderManager');if(!sheet)return;
   sheet.dataset.merchantUserId=id;sheet.classList.add('open');startMerchantOrderAutoRefresh('manager');await renderMerchantOrderManager();
 }
@@ -6142,7 +6166,7 @@ async function renderMerchantOrderManager(silent){
   try{
     const [merchant,tables,orders]=await Promise.all([getMerchantOrderMerchant(merchantUserId),loadMerchantOrderTables(merchantUserId,true),(async()=>{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&select=*&order=updated_at.desc&limit=100`,{method:'GET'});if(!res.ok)throw new Error(await res.text());return await res.json();})()]);const ids=orders.map(row=>row.id).filter(Boolean);let items=[];if(ids.length){const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_items?order_id=in.(${ids.map(encodeURIComponent).join(',')})&select=*&order=batch_no.asc,created_at.asc`,{method:'GET'});if(res.ok)items=await res.json();}
     Object.assign(merchantOrderState(),{merchant,tables,orders,items});const status=merchantOrderState().managerStatus||'processing',statusMatch={processing:row=>['pending','confirmed','preparing'].includes(row.status),reminded:row=>row.status==='reminded',served:row=>row.status==='served',completed:row=>row.status==='completed'},list=orders.filter(statusMatch[status]||statusMatch.processing).sort((a,b)=>merchantOrderLastActivity(a,items)-merchantOrderLastActivity(b,items)),tabs=[['processing','处理中'],['served','已上桌'],['reminded','催菜中'],['completed','已完成']],actions=[];
-    if(merchantWorkspaceHasPermission('kitchen_view'))actions.push(`<button class="primary" onclick="openMerchantKitchenDisplay('${String(merchantUserId).replace(/'/g,'')}')">${uiIcon('bag',17)} 后厨订单屏</button>`);if(merchantWorkspaceHasPermission('order_serve'))actions.push(`<button onclick="openMerchantRunnerDisplay('${String(merchantUserId).replace(/'/g,'')}')">传菜上桌</button>`);if(merchantWorkspaceHasPermission('table_manage'))actions.push(`<button onclick="openMerchantTableManager()">${uiIcon('store',17)} 餐桌二维码</button>`);if(merchantWorkspaceHasPermission('order_manage'))actions.push(`<button onclick="openMerchantOrderCheckoutSettings()">${uiIcon('settings',17)} 结算设置</button>`);actions.push(`<button onclick="renderMerchantOrderManager()">${uiIcon('refresh',17)} 刷新订单</button>`);
+    if(merchantWorkspaceHasPermission('kitchen_view'))actions.push(`<button class="primary" onclick="openMerchantKitchenDisplay('${String(merchantUserId).replace(/'/g,'')}')">${uiIcon('bag',17)} 后厨订单屏</button>`);if(merchantWorkspaceHasPermission('order_serve'))actions.push(`<button onclick="openMerchantRunnerDisplay('${String(merchantUserId).replace(/'/g,'')}')">传菜上桌</button>`);if(merchantWorkspaceHasPermission('member_manage'))actions.push(`<button onclick="openMerchantMemberManager('${String(merchantUserId).replace(/'/g,'')}')">会员与优惠核销</button>`);if(merchantWorkspaceHasPermission('table_manage'))actions.push(`<button onclick="openMerchantTableManager()">${uiIcon('store',17)} 餐桌二维码</button>`);if(merchantWorkspaceHasPermission('order_manage'))actions.push(`<button onclick="openMerchantOrderCheckoutSettings()">${uiIcon('settings',17)} 结算设置</button>`);actions.push(`<button onclick="renderMerchantOrderManager()">${uiIcon('refresh',17)} 刷新订单</button>`);
     body.innerHTML=`<div class="merchant-order-top-actions">${actions.join('')}</div><div class="order-notice">${escHtml(merchant&&merchant.business_name||'商家')} · 每 3 分钟自动刷新；不同岗位只显示其授权操作。</div><div class="merchant-order-status-tabs">${tabs.map(row=>`<button class="${status===row[0]?'on':''}" onclick="merchantOrderManagerStatus('${row[0]}')">${row[1]} (${orders.filter(statusMatch[row[0]]).length})</button>`).join('')}</div>${list.length?list.map(order=>merchantOrderCardHtml(order,items.filter(item=>String(item.order_id)===String(order.id)))).join(''):'<div class="deals-empty-panel">这里暂时没有订单。</div>'}`;
   }catch(error){console.warn('订单管理读取失败:',error.message);if(!silent)body.innerHTML='<div class="deals-empty-panel">订单读取失败，请稍后重试。</div>';}
 }
@@ -16980,7 +17004,7 @@ async function renderMerchantKitchenDisplay(silent){
   const sheet=document.getElementById('merchantKitchenDisplay'),body=document.getElementById('merchantKitchenDisplayBody'),merchantUserId=sheet?.dataset.merchantUserId||merchantOrderManagerMerchantId();if(!body||!merchantUserId)return;if(!silent)body.innerHTML='<div class="deals-empty-panel">正在同步后厨订单...</div>';
   try{const [merchant,orderRes]=await Promise.all([getMerchantOrderMerchant(merchantUserId),authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&status=in.(pending,confirmed,preparing,reminded,served)&select=*&order=updated_at.asc&limit=120`,{method:'GET'})]);if(!orderRes.ok)throw new Error(await orderRes.text());const orders=await orderRes.json(),ids=orders.map(row=>row.id).filter(Boolean);let items=[];if(ids.length){const itemRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_items?order_id=in.(${ids.map(encodeURIComponent).join(',')})&select=*&order=created_at.asc`,{method:'GET'});if(itemRes.ok)items=await itemRes.json();}
     const groups={};items.filter(item=>!item.is_served).forEach(item=>{const order=orders.find(row=>String(row.id)===String(item.order_id));if(!order)return;const category=merchantKitchenGroupName(item,merchant);(groups[category]||(groups[category]=[])).push({item,order});});
-    const html=Object.keys(groups).sort().map(category=>`<section style="margin:0 0 18px;"><div style="position:sticky;top:0;background:var(--bg);padding:8px 0 7px;display:flex;justify-content:space-between;align-items:center;"><b style="font-size:16px;">${escHtml(category)}</b><span style="font-size:12px;color:var(--ink-faint);">${groups[category].filter(row=>!row.item.kitchen_done).length} 道制作中</span></div><div style="display:grid;gap:9px;">${groups[category].sort((a,b)=>new Date(a.item.created_at||0)-new Date(b.item.created_at||0)).map(({item,order})=>`<div class="merchant-order-card" style="margin:0;border-left:4px solid ${item.kitchen_done?'var(--sage)':order.status==='reminded'?'var(--berry)':'#d85151'};"><div style="display:flex;justify-content:space-between;gap:10px;"><div><b style="font-size:16px;">${escHtml(item.product_name)} × ${Number(item.quantity||0)}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-soft);">${escHtml(order.table_name||'餐桌')} · ${escHtml(order.order_code||'')} ${item.batch_no>1?'· 新加菜':''}</span></div><span style="font-size:12px;font-weight:900;color:${item.kitchen_done?'var(--sage-dark)':order.status==='reminded'?'var(--berry)':'#c64040'};">${item.kitchen_done?'已完成制作':order.status==='reminded'?'催菜中':'制作中'}</span></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button onclick="openMerchantPrintPreview('kitchen','${String(order.id).replace(/'/g,'')}')" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;font:900 12px inherit;">后厨单</button><button onclick="openMerchantPrintPreview('label','${String(order.id).replace(/'/g,'')}',${Number(item.id)})" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;font:900 12px inherit;">打印标签</button>${item.kitchen_done?`<button style="border:0;border-radius:9px;padding:8px 11px;background:var(--sage);color:#fff;font:900 12px inherit;">已完成</button><button onclick="setMerchantOrderItemKitchenDone(${Number(item.id)},false)" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;background:#fff;font:900 12px inherit;">取消完成</button>`:`<button onclick="setMerchantOrderItemKitchenDone(${Number(item.id)},true)" style="border:0;border-radius:9px;padding:8px 11px;background:#d85151;color:#fff;font:900 12px inherit;">完成制作</button>`}</div></div>`).join('')}</div></section>`).join('');body.innerHTML=`<div class="order-notice">${escHtml(merchant?.business_name||'商家')} · 每 8 秒自动同步。后厨只负责制作完成；可打印后厨单或饮品标签。</div>${html||'<div class="deals-empty-panel">当前没有待出菜品。</div>'}`;
+    const html=Object.keys(groups).sort().map(category=>`<section style="margin:0 0 18px;"><div style="position:sticky;top:0;background:var(--bg);padding:8px 0 7px;display:flex;justify-content:space-between;align-items:center;"><b style="font-size:16px;">${escHtml(category)}</b><span style="font-size:12px;color:var(--ink-faint);">${groups[category].filter(row=>!row.item.kitchen_done).length} 道待制作</span></div><div style="display:grid;gap:9px;">${groups[category].sort((a,b)=>new Date(a.item.created_at||0)-new Date(b.item.created_at||0)).map(({item,order})=>`<div class="merchant-order-card" style="margin:0;border-left:4px solid ${item.kitchen_done?'var(--sage)':'#d85151'};"><div style="display:flex;justify-content:space-between;gap:10px;"><div><b style="font-size:16px;">${escHtml(item.product_name)} × ${Number(item.quantity||0)}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-soft);">${escHtml(order.table_name||'餐桌')} · ${escHtml(order.order_code||'')} ${item.batch_no>1?'· 新加菜':''}</span></div><span style="font-size:12px;font-weight:900;padding:4px 7px;border-radius:7px;background:${item.kitchen_done?'var(--sage-light)':'#fff0f0'};color:${item.kitchen_done?'var(--sage-dark)':'#c64040'};">${item.kitchen_done?'已完成制作':'待制作'}</span></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button onclick="openMerchantPrintPreview('kitchen','${String(order.id).replace(/'/g,'')}')" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;font:900 12px inherit;">后厨单</button>${item.kitchen_done?`<button style="border:0;border-radius:9px;padding:8px 11px;background:var(--sage);color:#fff;font:900 12px inherit;">已完成</button><button onclick="setMerchantOrderItemKitchenDone(${Number(item.id)},false)" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;background:#fff;font:900 12px inherit;">取消完成</button>`:`<button onclick="setMerchantOrderItemKitchenDone(${Number(item.id)},true)" style="border:0;border-radius:9px;padding:8px 11px;background:#d85151;color:#fff;font:900 12px inherit;">完成制作</button>`}</div></div>`).join('')}</div></section>`).join('');body.innerHTML=`<div class="order-notice">${escHtml(merchant?.business_name||'商家')} · 每 8 秒自动同步。红色项目为待制作；后厨只负责完成制作，上桌由服务员处理。</div>${html||'<div class="deals-empty-panel">当前没有待出菜品。</div>'}`;
   }catch(error){console.warn('后厨订单屏读取失败:',error.message);if(!silent)body.innerHTML='<div class="deals-empty-panel">后厨订单暂时无法同步，请稍后刷新。</div>';}
 }
 function merchantOrderCardHtml(order,items){
@@ -17033,7 +17057,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Auth Delivery Resilience】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Role Simplification】`);
 </script>
 </body>
 </html>
