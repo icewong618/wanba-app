@@ -4329,6 +4329,24 @@ async function confirmCoverCrop(){
   syncProfileToDb();
   showToast('背景已更新');
 }
+async function syncAuthDisplayName(name){
+  if(!(session && session.user) || !name) return false;
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'PUT',
+      body: JSON.stringify({ data: { name, display_name: name } })
+    });
+    if(!res.ok){ console.warn('Auth 昵称同步失败:', await res.text()); return false; }
+    const data = await res.json();
+    session.user = data.user || session.user;
+    session.user.user_metadata = Object.assign({}, session.user.user_metadata || {}, { name, display_name: name });
+    localStorage.setItem('wanba_session', JSON.stringify(session));
+    return true;
+  } catch(error){
+    console.warn('Auth 昵称同步异常:', error.message);
+    return false;
+  }
+}
 /* 同步头像/昵称到 profiles 表：先尝试更新已有行，没有行再插入（与关注表同一套路） */
 async function syncProfileToDb(){
   if(!(session && session.user)) return;
@@ -4369,6 +4387,7 @@ async function syncProfileToDb(){
     }
     if(res.ok){
       setProfileCache(Object.assign({ user_id:session.user.id }, fullPayload));
+      await syncAuthDisplayName(currentUser.name);
       showToast('✓ 资料已同步');
     }
     else { const t = await res.text(); console.warn('资料同步失败:', t); showToast('资料同步失败，请重试'); }
