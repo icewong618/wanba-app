@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.328';
+const APP_VERSION = '5.329';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4886,7 +4886,64 @@ function switchMerchantSection(userId, section){
 function merchantOwnerButton(label, handler){
   return `<button onclick="${handler}" style="width:100%;margin-bottom:10px;border-radius:999px;background:var(--sage);color:#fff;padding:10px 12px;font-size:13px;font-weight:900;">${label}</button>`;
 }
+window._merchantRentalStoreCatalog = window._merchantRentalStoreCatalog || {};
+function merchantRentalStoreKey(m){ return String(m?.user_id || merchantSiteSlug(m) || ''); }
+function merchantRentalStoreRate(vehicle){
+  if(vehicle?.pricing_mode === 'hour') return `${merchantRentalMoney(vehicle.hourly_rate)}/小时`;
+  if(vehicle?.pricing_mode === 'both') return `${merchantRentalMoney(vehicle.hourly_rate)}/小时起`;
+  return `${merchantRentalMoney(vehicle?.daily_rate)}/天`;
+}
+async function loadMerchantRentalStoreCatalog(m){
+  const key = merchantRentalStoreKey(m);
+  if(!key || window._merchantRentalStoreCatalog[key]?.loading) return;
+  window._merchantRentalStoreCatalog[key] = { loading:true, vehicles:[] };
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_public_catalog`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ p_slug:merchantSiteSlug(m) })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    window._merchantRentalStoreCatalog[key] = { loading:false, vehicles:Array.isArray(data?.vehicles) ? data.vehicles : [] };
+  } catch(error){
+    console.warn('租车车辆库读取失败:', error.message);
+    window._merchantRentalStoreCatalog[key] = { loading:false, error:true, vehicles:[] };
+  }
+  rerenderMerchantSection(m);
+}
+function merchantRentalStoreHtml(m, isOwnerPage){
+  const key = merchantRentalStoreKey(m);
+  const catalog = window._merchantRentalStoreCatalog[key];
+  if(!catalog){
+    setTimeout(() => loadMerchantRentalStoreCatalog(m), 0);
+    return '<div class="deals-empty-panel">正在读取车辆库...</div>';
+  }
+  const vehicles = Array.isArray(catalog.vehicles) ? catalog.vehicles : [];
+  const userId = String(m.user_id || '').replace(/'/g, '');
+  const ownerAction = isOwnerPage
+    ? merchantOwnerButton(`${uiIcon('car',16)} 管理车辆`, `openMerchantRentalManager('${userId}')`)
+    : '';
+  if(!vehicles.length){
+    if(catalog.loading) return `${ownerAction}<div class="deals-empty-panel">正在读取车辆库...</div>`;
+    return `${ownerAction}<div class="deals-empty-panel">${isOwnerPage ? '还没有添加车辆。添加后，顾客会在这里查看并预约。' : '这家商家暂未发布可预约车辆。'}</div>`;
+  }
+  return `${ownerAction}<div class="merchant-product-grid">${vehicles.map(vehicle => {
+    const photo = merchantRentalPhotos(vehicle.photos)[0];
+    const details = [vehicle.year, vehicle.make, vehicle.model, `${vehicle.seats || 5}座`, vehicle.transmission].filter(Boolean).join(' · ');
+    return `<div class="merchant-product-card" onclick="openMerchantRentalPage('${userId}')">
+      <div class="merchant-product-thumb">${photo ? `<img src="${escAttr(photo)}" alt="">` : uiIcon('car',34)}</div>
+      <div class="merchant-product-body">
+        <div><span class="merchant-product-chip">租车</span></div>
+        <div class="merchant-product-name">${escHtml(vehicle.name || '可预约车辆')}</div>
+        <div class="merchant-product-price">${escHtml(merchantRentalStoreRate(vehicle))}</div>
+        ${details ? `<div class="merchant-product-desc">${escHtml(details)}</div>` : ''}
+        <div class="merchant-product-desc">押金 ${merchantRentalMoney(vehicle.deposit_amount)} · 点击查看并预约</div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
 function merchantStoreHtml(m, isOwnerPage){
+  if(merchantEnabledFeatures(m).includes('rental')) return merchantRentalStoreHtml(m, isOwnerPage);
   const allProducts = merchantProducts(m);
   const products = isOwnerPage ? allProducts : allProducts.filter(merchantProductAvailable);
   const userId = String(m.user_id || '').replace(/'/g, '');
@@ -7303,8 +7360,8 @@ function merchantContentHtml(m, opts){
     </div>
     <div style="padding:14px 16px 4px;">
       <div class="deals-section-header" style="margin:0 0 10px;">
-        ${section === 'store' ? '店铺' : section === 'coupons' ? '优惠券' : '最新动态'}
-        <span>${section === 'store' ? '商品 / 服务列表' : section === 'coupons' ? '到店出示使用' : '来自商家真实发布'}</span>
+        ${section === 'store' ? (rentalEnabled ? '车辆库' : '店铺') : section === 'coupons' ? '优惠券' : '最新动态'}
+        <span>${section === 'store' ? (rentalEnabled ? '可预约车辆' : '商品 / 服务列表') : section === 'coupons' ? '到店出示使用' : '来自商家真实发布'}</span>
       </div>
       ${sectionBody}
     </div>
@@ -17904,7 +17961,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental Vehicle Save Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental Store Vehicle Library】`);
 </script>
 </body>
 </html>
