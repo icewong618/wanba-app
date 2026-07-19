@@ -6,6 +6,7 @@
   const state = {
     merchant: null, products: [], category: '全部', cart: {}, claims: [], recentOrders: [], screen: 'menu',
     mode: query.get('mode') === 'takeout' ? 'takeout' : 'dinein',
+    dinein: { tableCode: String(query.get('table') || '').trim().toLowerCase(), tableName: '', note: '' },
     takeout: { fulfillment: 'delivery', speed: 'standard', name: '', phone: '', address: '', note: '', scheduledAt: '', couponId: null, payment: 'apple_pay', tipPercent: 0, customTip: '' }
   };
 
@@ -20,6 +21,7 @@
     return fetch(`${SUPABASE_URL}${path}`, Object.assign({}, options, { headers }));
   };
   const products = () => state.products.filter(product => product.active !== false && product.orderable !== false);
+  const isTakeout = () => state.mode === 'takeout';
   const cartRows = () => state.products.filter(product => Number(state.cart[product.id] || 0) > 0).map(product => Object.assign({}, product, { quantity: Number(state.cart[product.id]) }));
   const subtotal = () => cartRows().reduce((sum, product) => sum + price(product.price) * product.quantity, 0);
   const categories = () => ['全部', ...new Set(products().flatMap(product => Array.isArray(product.categories) ? product.categories : (product.category ? [product.category] : [])).filter(Boolean))];
@@ -36,6 +38,7 @@
     state.takeout.address = (get('deliveryAddress') ?? state.takeout.address).trim();
     state.takeout.note = (get('deliveryNote') ?? state.takeout.note).trim();
     state.takeout.scheduledAt = get('scheduledAt') ?? state.takeout.scheduledAt;
+    state.dinein.note = (get('dineinNote') ?? state.dinein.note).trim();
   };
   const close = () => {
     if (window.parent !== window) window.parent.postMessage({ type: 'leshenghuo-close-takeout' }, '*');
@@ -49,7 +52,7 @@
     else close();
   };
   const top = title => `<header class="top"><button class="back" onclick="Order.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button class="close" onclick="Order.close()" aria-label="关闭">×</button></header>`;
-  const hero = () => `<section class="hero"><h1>${esc(state.merchant?.business_name || '乐生活点餐')}</h1><p>${esc(state.merchant?.address || '')}</p></section>`;
+  const hero = () => `<section class="hero"><h1>${esc(state.merchant?.business_name || '乐生活点餐')}</h1><p>${isTakeout() ? esc(state.merchant?.address || '') : `当前餐桌：${esc(state.dinein.tableName || '扫码点餐')}`}</p></section>`;
   const productCategories = product => Array.isArray(product.categories) ? product.categories : (product.category ? [product.category] : []);
   const fulfillmentLabel = () => state.takeout.fulfillment === 'delivery' ? '派送' : '到店自取';
   const tipAmount = () => {
@@ -82,15 +85,25 @@
     const rows = products().filter(product => state.category === '全部' || productCategories(product).includes(state.category));
     const count = cartRows().reduce((sum, product) => sum + product.quantity, 0);
     const ordered = state.recentOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length;
-    app.innerHTML = `${top('外卖点单')}${hero()}${ordered ? `<button class="active-order" onclick="Order.orders()"><span><b>已点外卖</b><small>${ordered} 笔订单正在处理中</small></span><strong>查看详情 ›</strong></button>` : ''}<div class="tabs">${categories().map(category => `<button class="${state.category === category ? 'on' : ''}" onclick="Order.category('${esc(category)}')">${esc(category)}</button>`).join('')}</div><div class="list">${rows.length ? rows.map(product => `<article class="product">${product.image ? `<img src="${esc(product.image)}" alt="">` : '<div class="product-placeholder"></div>'}<div class="product-main"><b>${esc(product.name || '未命名商品')}</b>${product.description ? `<p>${esc(product.description)}</p>` : ''}<span class="price">${esc(product.price || '到店咨询')}</span></div><div class="qty"><button onclick="Order.qty('${esc(product.id)}',-1)" ${Number(state.cart[product.id] || 0) ? '' : 'disabled'}>−</button><span>${Number(state.cart[product.id] || 0)}</span><button onclick="Order.qty('${esc(product.id)}',1)">+</button></div></article>`).join('') : '<div class="empty">商家暂时没有可点菜品。</div>'}</div><div class="bar"><div><b>${money(subtotal())}</b><span>${count ? `已选 ${count} 件` : '请选择菜品'}</span></div><button class="primary" ${count ? '' : 'disabled'} onclick="Order.cart()">加入购物车</button></div>`;
+    const activeOrder = isTakeout() && ordered ? `<button class="active-order" onclick="Order.orders()"><span><b>已点外卖</b><small>${ordered} 笔订单正在处理中</small></span><strong>查看详情 ›</strong></button>` : '';
+    app.innerHTML = `${top(isTakeout() ? '外卖点单' : '扫码点餐')}${hero()}${activeOrder}<div class="tabs">${categories().map(category => `<button class="${state.category === category ? 'on' : ''}" onclick="Order.category('${esc(category)}')">${esc(category)}</button>`).join('')}</div><div class="list">${rows.length ? rows.map(product => `<article class="product">${product.image ? `<img src="${esc(product.image)}" alt="">` : '<div class="product-placeholder"></div>'}<div class="product-main"><b>${esc(product.name || '未命名商品')}</b>${product.description ? `<p>${esc(product.description)}</p>` : ''}<span class="price">${esc(product.price || '到店咨询')}</span></div><div class="qty"><button onclick="Order.qty('${esc(product.id)}',-1)" ${Number(state.cart[product.id] || 0) ? '' : 'disabled'}>−</button><span>${Number(state.cart[product.id] || 0)}</span><button onclick="Order.qty('${esc(product.id)}',1)">+</button></div></article>`).join('') : '<div class="empty">商家暂时没有可点菜品。</div>'}</div><div class="bar"><div><b>${money(subtotal())}</b><span>${count ? `已选 ${count} 件` : '请选择菜品'}</span></div><button class="primary" ${count ? '' : 'disabled'} onclick="Order.cart()">加入购物车</button></div>`;
   }
 
   function renderCart() {
     const rows = cartRows();
-    app.innerHTML = `${top('购物车')}${hero()}<section class="section"><h2>确认已选内容</h2>${rows.map(product => `<div class="summary-line"><span>${esc(product.name)} × ${product.quantity}</span><b>${money(price(product.price) * product.quantity)}</b></div>`).join('')}<div class="summary-line total"><span>菜品小计</span><b>${money(subtotal())}</b></div></section><div class="actions"><button class="choice" onclick="Order.menu()">继续点菜</button><button class="primary" onclick="Order.details()">转到订单详情</button></div>`;
+    app.innerHTML = `${top('购物车')}${hero()}<section class="section"><h2>确认已选内容</h2>${rows.map(product => `<div class="summary-line"><span>${esc(product.name)} × ${product.quantity}</span><b>${money(price(product.price) * product.quantity)}</b></div>`).join('')}<div class="summary-line total"><span>菜品小计</span><b>${money(subtotal())}</b></div></section><div class="actions"><button class="choice" onclick="Order.menu()">继续点菜</button><button class="primary" onclick="Order.details()">${isTakeout() ? '转到订单详情' : '确认餐桌订单'}</button></div>`;
+  }
+
+  function renderDineinDetails() {
+    const loggedIn = Boolean(user()?.id);
+    const couponBlock = loggedIn
+      ? '<p class="muted">优惠券请在乐生活 App 的商家页面领取并使用。</p>'
+      : '<button class="coupon" onclick="Order.appCoupon()"><span><b>领取并使用优惠券</b><small>优惠券仅限乐生活 App 内领取和核销</small></span><strong>打开 App ›</strong></button>';
+    app.innerHTML = `${top('确认餐桌订单')}${hero()}<section class="section"><h2>${esc(state.dinein.tableName || '当前餐桌')}</h2><p class="muted">无需登录即可提交点餐。订单会直接发送给商家后厨。</p><label>备注</label><textarea id="dineinNote" maxlength="240" placeholder="例如：少辣、不要香菜或其他要求">${esc(state.dinein.note)}</textarea></section><section class="section"><h2>优惠券</h2>${couponBlock}</section><section class="section"><h2>订单信息汇总</h2>${cartRows().map(product => `<div class="summary-line"><span>${esc(product.name)} × ${product.quantity}</span><b>${money(price(product.price) * product.quantity)}</b></div>`).join('')}<div class="summary-line total"><span>菜品小计</span><b>${money(subtotal())}</b></div></section><button class="primary submit" onclick="Order.submit()">提交订单</button>`;
   }
 
   function renderDetails() {
+    if (!isTakeout()) { renderDineinDetails(); return; }
     const delivery = state.takeout.fulfillment === 'delivery';
     const cfg = settings();
     const minimum = new Date(Date.now() + cfg.standardMinutes * 60000).toISOString().slice(0, 16);
@@ -106,7 +119,14 @@
   }
 
   function renderSuccess() {
-    app.innerHTML = `${top('订单已提交')}<div class="success"><i>✓</i><h1>外卖订单已提交</h1><p class="muted">订单已发送给商家。预计${state.takeout.fulfillment === 'delivery' ? '送达' : '取餐'}时间可在“已点外卖”中查看。</p><button class="primary" onclick="Order.orders()">查看已点外卖</button><button class="link" onclick="Order.menu()">继续浏览菜单</button></div>`;
+    const dinein = !isTakeout();
+    app.innerHTML = `${top('订单已提交')}<div class="success"><i>✓</i><h1>${dinein ? '餐桌订单已提交' : '外卖订单已提交'}</h1><p class="muted">${dinein ? '订单已发送给商家，请留意上菜情况。' : `订单已发送给商家。预计${state.takeout.fulfillment === 'delivery' ? '送达' : '取餐'}时间可在“已点外卖”中查看。`}</p>${dinein ? '' : '<button class="primary" onclick="Order.orders()">查看已点外卖</button>'}<button class="link" onclick="Order.menu()">继续浏览菜单</button></div>`;
+  }
+
+  function renderTakeoutAppOnly() {
+    const ua = navigator.userAgent || '';
+    const device = /iPhone|iPad|iPod/i.test(ua) ? 'iPhone / iPad' : /Android/i.test(ua) ? 'Android' : '手机';
+    app.innerHTML = `${top('外卖点单')}<div class="success"><i>↓</i><h1>请下载乐生活 App 使用</h1><p class="muted">外卖点单、在线结算与优惠券仅在乐生活 App 内开放。已在网页登录的用户可继续使用网页外卖点单。</p><button class="primary" onclick="Order.downloadApp()">下载 ${esc(device)} 版 App</button><button class="link" onclick="Order.close()">返回商家主页</button></div>`;
   }
 
   function render() {
@@ -153,6 +173,17 @@
   async function submit() {
     persistFields();
     const rows = cartRows();
+    if (!isTakeout()) {
+      if (!rows.length) { alert('请先选择菜品。'); return; }
+      const response = await api('/rest/v1/rpc/merchant_dinein_guest_order_create', { method:'POST', body:JSON.stringify({
+        p_merchant_user_id: state.merchant.user_id,
+        p_table_code: state.dinein.tableCode,
+        p_items: rows.map(product => ({ product_id: product.id, quantity: product.quantity })),
+        p_note: state.dinein.note
+      }) });
+      if (!response.ok) { console.warn(await response.text()); alert('订单提交失败，请确认桌号后重试。'); return; }
+      state.orderId = await response.json(); state.cart = {}; nav('success'); return;
+    }
     const delivery = state.takeout.fulfillment === 'delivery';
     if (!rows.length) { alert('请先选择菜品。'); return; }
     if (!state.takeout.name || !state.takeout.phone || (delivery && !state.takeout.address)) { alert('请填写姓名、电话以及配送地址。'); return; }
@@ -181,24 +212,33 @@
   }
 
   window.Order = {
-    back, close, menu: () => nav('menu'), cart: () => nav('cart'), details: async () => { state.claims = await loadClaims(); nav('details'); }, orders: async () => { state.recentOrders = await loadRecentOrders(); nav('orders'); },
+    back, close, menu: () => nav('menu'), cart: () => nav('cart'), details: async () => { if (isTakeout()) state.claims = await loadClaims(); nav('details'); }, orders: async () => { state.recentOrders = await loadRecentOrders(); nav('orders'); },
     category: value => { state.category = value; render(); }, qty: (id, delta) => { const next = Math.max(0, Math.min(99, Number(state.cart[id] || 0) + Number(delta))); if (next) state.cart[id] = next; else delete state.cart[id]; render(); },
     fulfillment: value => { persistFields(); state.takeout.fulfillment = value; state.takeout.speed = 'standard'; render(); }, speed: value => { persistFields(); state.takeout.speed = value; render(); },
     coupon: id => { persistFields(); state.takeout.couponId = Number(state.takeout.couponId) === id ? null : id; render(); }, payment: value => { persistFields(); state.takeout.payment = value; render(); },
     tip: value => { persistFields(); state.takeout.tipPercent = value; state.takeout.customTip = ''; render(); }, customTip: () => { persistFields(); state.takeout.customTip = state.takeout.customTip || '0'; render(); }, setCustomTip: value => { persistFields(); state.takeout.customTip = value; render(); },
-    lookupAddress, useAddress: index => { const row = state.addressResults?.[index]; if (!row) return; state.takeout.address = row.formatted_address; state.takeout.note = ''; render(); }, submit
+    lookupAddress, useAddress: index => { const row = state.addressResults?.[index]; if (!row) return; state.takeout.address = row.formatted_address; state.takeout.note = ''; render(); },
+    appCoupon: () => alert('优惠券仅限乐生活 App 内领取和使用。请下载或打开乐生活 App 后再试。'),
+    downloadApp: () => alert('乐生活 App 的下载入口将在正式上架后按你的设备自动启用。'), submit
   };
 
   (async () => {
     const slug = query.get('merchant');
     if (!slug) { app.innerHTML = '<div class="empty">缺少商家信息。</div>'; return; }
-    if (!user()?.id) { app.innerHTML = '<div class="empty">登录后即可使用外卖点单。</div>'; return; }
+    if (isTakeout() && !user()?.id) { renderTakeoutAppOnly(); return; }
+    if (!isTakeout() && !state.dinein.tableCode) { app.innerHTML = '<div class="empty">缺少餐桌信息，请重新扫描餐桌二维码。</div>'; return; }
     const merchantResponse = await api(`/rest/v1/merchants?slug=eq.${encodeURIComponent(slug)}&verified=eq.true&select=*&limit=1`);
     const merchants = merchantResponse.ok ? await merchantResponse.json() : [];
     state.merchant = merchants[0];
     if (!state.merchant) { app.innerHTML = '<div class="empty">未找到可点餐商家。</div>'; return; }
+    if (!isTakeout()) {
+      const contextResponse = await api('/rest/v1/rpc/merchant_dinein_guest_context', { method:'POST', body:JSON.stringify({ p_merchant_slug: slug, p_table_code: state.dinein.tableCode }) });
+      const context = contextResponse.ok ? await contextResponse.json() : null;
+      if (!context || context.merchant_user_id !== state.merchant.user_id) { app.innerHTML = '<div class="empty">该餐桌二维码已失效，请联系商家。</div>'; return; }
+      state.dinein.tableName = context.table_name || '扫码点餐';
+    }
     state.products = Array.isArray(state.merchant.products) ? state.merchant.products : [];
-    state.recentOrders = await loadRecentOrders();
+    if (isTakeout()) state.recentOrders = await loadRecentOrders();
     render();
   })().catch(error => { console.error(error); app.innerHTML = '<div class="empty">点餐页面暂时无法打开，请稍后再试。</div>'; });
 })();

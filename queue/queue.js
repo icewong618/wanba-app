@@ -34,7 +34,7 @@
   }
   function renderQueued(){
     const ticket=state.ticket, items=cartRows();
-    app.innerHTML=`${top('排队成功')}${hero()}<div class="success"><i>✓</i><h1>排队成功</h1><p class="muted">你的排队编号</p><div class="code">${esc(ticket.queue_code)}</div><p class="muted">前方约 ${Number(ticket.people_ahead)||0} 组，预计等待 ${Number(ticket.estimated_wait_minutes)||0} 分钟。</p></div><section class="section"><h2>前方排队</h2>${boardHtml()}</section><section class="seat-card"><b>入座后可提交预点菜</b><p>可以先提前点菜；入座时扫描餐桌二维码，或在 App 中选择桌号后确认下单。</p><div class="actions"><button class="action" onclick="Queue.menu()">${items.length?'继续修改预点菜':'提前点菜'}</button><button class="action" onclick="Queue.seat()">入座扫码</button></div></section>`;
+    app.innerHTML=`${top('排队成功')}${hero()}<div class="success"><i>✓</i><h1>排队成功</h1><p class="muted">你的排队编号</p><div class="code">${esc(ticket.queue_code)}</div><p class="muted">前方约 ${Number(ticket.people_ahead)||0} 组，预计等待 ${Number(ticket.estimated_wait_minutes)||0} 分钟。</p></div><section class="seat-card"><b>入座后可提交预点菜</b><p>可以先提前点菜；入座时扫描餐桌二维码，或在 App 中选择桌号后确认下单。</p><div class="actions"><button class="action" onclick="Queue.menu()">${items.length?'继续修改预点菜':'提前点菜'}</button><button class="action" onclick="Queue.seat()">入座扫码</button></div></section><section class="section"><h2>前方排队</h2>${boardHtml()}</section>`;
   }
   function renderMenu(){
     const rows=products().filter(row=>state.category==='全部'||productCategories(row).includes(state.category)), count=cartRows().reduce((sum,row)=>sum+row.quantity,0);
