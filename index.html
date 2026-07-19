@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.312';
+const APP_VERSION = '5.313';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5392,11 +5392,32 @@ async function submitMerchantOrder(){
   }
 }
 function openMerchantTakeoutOrder(merchantUserId){ return openMerchantTakeoutPage(merchantUserId); }
+function isNativeAppRuntime(){
+  try {
+    return isEmbeddedAppEntry()
+      || !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  } catch(error){ return isEmbeddedAppEntry(); }
+}
+function closeMerchantEmbeddedOrder(){
+  const sheet=document.getElementById('merchantEmbeddedOrder');
+  if(!sheet) return;
+  sheet.remove();
+}
+function openMerchantEmbeddedOrder(url){
+  closeMerchantEmbeddedOrder();
+  const sheet=document.createElement('section');
+  sheet.id='merchantEmbeddedOrder';
+  sheet.className='merchant-fullscreen-sheet open';
+  sheet.innerHTML=`<div class="merchant-fullscreen-head"><button onclick="closeMerchantEmbeddedOrder()" aria-label="返回">‹</button><h3>外卖点单</h3><span style="width:38px;flex:0 0 38px;"></span></div><iframe src="${escAttr(url)}" title="外卖点单" style="width:100%;flex:1;border:0;background:#fff;" allow="payment"></iframe>`;
+  document.body.appendChild(sheet);
+}
 async function openMerchantTakeoutPage(merchantUserId){
   try {
     const merchant=await getMerchantOrderMerchant(merchantUserId);
     if(!merchant){showToast('暂时无法读取商家资料');return;}
-    window.location.href=merchantTakeoutUrl(merchant);
+    const url=merchantTakeoutUrl(merchant);
+    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
+    else window.location.href=url;
   } catch(error){
     console.warn('打开独立外卖点餐页失败:',error.message);
     showToast('点餐页面暂时无法打开，请稍后再试');
