@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.297';
+const APP_VERSION = '5.298';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5099,6 +5099,7 @@ function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
 function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/?order=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}`; }
+function merchantTakeoutUrl(m){ return `${window.location.origin}/?order=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
 async function getMerchantOrderMerchant(userId){
@@ -5131,7 +5132,7 @@ function merchantOrderQty(productId){ return Number(merchantOrderState().cart[St
 function changeMerchantOrderQty(productId, delta){ const state=merchantOrderState(); const next=Math.max(0,Math.min(99,merchantOrderQty(productId)+Number(delta||0))); if(next) state.cart[String(productId)]=next; else delete state.cart[String(productId)]; renderMerchantOrderMenu(); }
 function switchMerchantOrderCategory(category){ merchantOrderState().category=category||'全部'; renderMerchantOrderMenu(); }
 function merchantOrderCartRows(){ const state=merchantOrderState(); return merchantOrderProducts(state.merchant).filter(p=>merchantOrderQty(p.id)).map(p=>Object.assign({},p,{quantity:merchantOrderQty(p.id)})); }
-function renderMerchantOrderMenu(){
+function renderMerchantOrderMenuBase(){
   const body=document.getElementById('merchantOrderMenuBody'); const state=merchantOrderState(); if(!body||!state.merchant) return; const m=state.merchant;
   if(!state.table){
     body.innerHTML=`<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${m.logo?`<img src="${escAttr(m.logo)}" alt="">`:escHtml(initials(m.business_name||'店'))}</div><div><b>${escHtml(m.business_name||'商家点餐')}</b><span>请选择你所在的桌位</span></div></div></div><div class="order-notice">为保证订单送到正确的桌位，请选择桌号。到店结账，不会在此页面扣款。</div>${(state.tables||[]).length?state.tables.map(table=>`<button class="merchant-table-card" onclick="selectMerchantOrderTable('${escAttr(table.table_code)}')"><span style="width:42px;height:42px;border-radius:12px;background:var(--sage-light);color:var(--sage-dark);display:flex;align-items:center;justify-content:center;font-weight:900;">${uiIcon('store',18)}</span><span style="min-width:0;flex:1;text-align:left;"><b>${escHtml(table.table_name)}</b><span>点此开始点餐</span></span><span style="font-size:22px;color:var(--sage-dark);">›</span></button>`).join(''):'<div class="deals-empty-panel">这家店还没有设置餐桌二维码，请向店员咨询。</div>'}`;
@@ -5141,6 +5142,16 @@ function renderMerchantOrderMenu(){
   const visible=category==='全部'?products:products.filter(p=>merchantProductCategoryList(p).includes(category)); const cart=merchantOrderCartRows();
   const count=cart.reduce((sum,row)=>sum+row.quantity,0), total=cart.reduce((sum,row)=>sum+merchantOrderPriceNumber(row.price)*row.quantity,0);
   body.innerHTML=`<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${m.logo?`<img src="${escAttr(m.logo)}" alt="">`:escHtml(initials(m.business_name||'店'))}</div><div><b>${escHtml(m.business_name||'商家点餐')}</b><span>${escHtml(m.address||'乐生活扫码点餐')}</span></div></div><div class="order-table-pill">${uiIcon('store',14)} ${escHtml(state.table.table_name)} <button onclick="merchantOrderState().table=null;renderMerchantOrderMenu()" style="border:0;background:transparent;color:#fff;text-decoration:underline;font:800 11px inherit;padding:0;">更换</button></div></div><div class="order-notice">请确认桌号后再提交。此页面仅发送订单给商家，到店后按商家方式结账。</div>${state.activeOrderId?`<div class="order-notice" style="border-color:var(--sage);background:var(--sage-light);color:var(--sage-dark);">订单 ${escHtml(state.orderCode||'')} 已发送。需要加菜时继续选择菜品并提交即可。</div>`:''}${categories.length>1?`<div class="order-category-tabs"><button class="${category==='全部'?'on':''}" onclick="switchMerchantOrderCategory('全部')">全部</button>${categories.map(cat=>`<button class="${category===cat?'on':''}" onclick="switchMerchantOrderCategory('${escAttr(cat).replace(/'/g,"\\'")}')">${escHtml(cat)}</button>`).join('')}</div>`:''}<div class="order-menu-list">${visible.length?visible.map(p=>{const qty=merchantOrderQty(p.id);return `<div class="order-menu-item"><div class="order-menu-thumb">${p.image?`<img src="${escAttr(p.image)}" alt="">`:uiIcon('bag',28)}</div><div class="order-menu-main"><b>${escHtml(p.name||'未命名商品')}</b>${p.description?`<p>${escHtml(p.description)}</p>`:''}<strong>${escHtml(p.price||'到店咨询')}</strong></div><div class="order-qty"><button onclick="changeMerchantOrderQty('${escAttr(p.id)}',-1)" ${qty?'':'disabled'}>−</button>${qty?`<span>${qty}</span>`:''}<button class="add" onclick="changeMerchantOrderQty('${escAttr(p.id)}',1)">+</button></div></div>`}).join(''):'<div class="deals-empty-panel">商家还没有可点的菜单，请向店员咨询。</div>'}</div><div class="order-bottom-bar"><div class="summary"><b>${merchantOrderMoney(total)}</b><span>${count?`已选 ${count} 件`:'请选择菜品'}${state.activeOrderId?' · 本次加菜':''}</span></div><button ${count?'':'disabled'} onclick="submitMerchantOrder()">${state.activeOrderId?'确认加菜':'提交订单'}</button></div>`;
+}
+function renderMerchantOrderMenu(){
+  const state=merchantOrderState();
+  if(state.orderMode!=='takeout') return renderMerchantOrderMenuBase();
+  const body=document.getElementById('merchantOrderMenuBody'),merchant=state.merchant;
+  if(!body||!merchant)return;
+  const products=merchantOrderProducts(merchant),categories=merchantProductCategories(products),category=state.category||'全部';
+  const visible=category==='全部'?products:products.filter(product=>merchantProductCategoryList(product).includes(category));
+  const cart=merchantOrderCartRows(),count=cart.reduce((sum,row)=>sum+row.quantity,0),total=cart.reduce((sum,row)=>sum+merchantOrderPriceNumber(row.price)*row.quantity,0);
+  body.innerHTML=`<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${merchant.logo?`<img src="${escAttr(merchant.logo)}" alt="">`:escHtml(initials(merchant.business_name||'店'))}</div><div><b>${escHtml(merchant.business_name||'外卖点单')}</b><span>${escHtml(merchant.address||'乐生活外卖点单')}</span></div></div><div class="order-table-pill">${uiIcon('bag',14)} 外卖点单</div></div><div class="order-notice">选择菜品后，填写到店自提或送餐上门信息。</div>${merchantCustomerOrderSummaryHtml(state)}${categories.length>1?`<div class="order-category-tabs"><button class="${category==='全部'?'on':''}" onclick="switchMerchantOrderCategory('全部')">全部</button>${categories.map(cat=>`<button class="${category===cat?'on':''}" onclick="switchMerchantOrderCategory('${escAttr(cat).replace(/'/g,"\\'")}')">${escHtml(cat)}</button>`).join('')}</div>`:''}<div class="order-menu-list">${visible.length?visible.map(product=>{const quantity=merchantOrderQty(product.id);return `<div class="order-menu-item"><div class="order-menu-thumb">${product.image?`<img src="${escAttr(product.image)}" alt="">`:uiIcon('bag',28)}</div><div class="order-menu-main"><b>${escHtml(product.name||'未命名商品')}</b>${product.description?`<p>${escHtml(product.description)}</p>`:''}<strong>${escHtml(product.price||'到店咨询')}</strong></div><div class="order-qty"><button onclick="changeMerchantOrderQty('${escAttr(product.id)}',-1)" ${quantity?'':'disabled'}>−</button>${quantity?`<span>${quantity}</span>`:''}<button class="add" onclick="changeMerchantOrderQty('${escAttr(product.id)}',1)">+</button></div></div>`;}).join(''):'<div class="deals-empty-panel">商家还没有可点的菜单，请向店员咨询。</div>'}</div><div class="order-bottom-bar"><div class="summary"><b>${merchantOrderMoney(total)}</b><span>${count?`已选 ${count} 件`:'请选择菜品'}</span></div><button ${count?'':'disabled'} onclick="submitMerchantOrder()">填写结算信息</button></div>`;
 }
 async function submitMerchantOrder(){
   const state=merchantOrderState(), rows=merchantOrderCartRows(); if(!state.merchant||!state.table||!rows.length){showToast('请先选择菜品');return;}
@@ -5206,9 +5217,10 @@ async function loadMerchantOrderDetails(orderId){
 }
 async function loadMerchantCustomerActiveOrder(silent){
   const state = merchantOrderState();
-  if(!state.merchant || !state.table || !(session && session.user)) return;
+  if(!state.merchant || (!state.table && state.orderMode!=='takeout') || !(session && session.user)) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&table_id=eq.${Number(state.table.id)}&user_id=eq.${encodeURIComponent(session.user.id)}&status=in.(pending,confirmed,preparing,reminded,served)&select=*&order=updated_at.desc&limit=1`, { method:'GET' });
+    const orderFilter=state.orderMode==='takeout'?`order_type=eq.takeout`:`table_id=eq.${Number(state.table.id)}`;
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&${orderFilter}&user_id=eq.${encodeURIComponent(session.user.id)}&status=in.(pending,confirmed,preparing,reminded,served)&select=*&order=updated_at.desc&limit=1`, { method:'GET' });
     if(!res.ok) throw new Error(await res.text());
     const order = (await res.json())[0] || null;
     if(order){
@@ -5243,7 +5255,7 @@ function saveMerchantCustomerTableLock(merchantUserId,table){
 function clearMerchantCustomerTableLock(merchantUserId){
   localStorage.removeItem(merchantCustomerTableLockKey(merchantUserId));
 }
-async function openMerchantOrderEntry(merchantUserId, tableCode){
+async function openMerchantOrderEntry(merchantUserId, tableCode, orderMode){
   if(!(session && session.user)){ showToast('登录后即可扫码点餐'); openAuth('login'); return; }
   const sheet = document.getElementById('merchantOrderMenu');
   const body = document.getElementById('merchantOrderMenuBody');
@@ -5253,15 +5265,16 @@ async function openMerchantOrderEntry(merchantUserId, tableCode){
   try {
     const merchant = await getMerchantOrderMerchant(merchantUserId);
     if(!merchant) throw new Error('merchant_not_found');
-    const tables = await loadMerchantOrderTables(merchant.user_id, false);
+    const takeout=orderMode==='takeout';
+    const tables = takeout ? [] : await loadMerchantOrderTables(merchant.user_id, false);
     const requestedTable = tableCode ? tables.find(row => String(row.table_code) === String(tableCode).toLowerCase()) : null;
-    const tableLock = merchantCustomerTableLock(merchant.user_id);
+    const tableLock = takeout ? null : merchantCustomerTableLock(merchant.user_id);
     const lockedTable = tableLock ? tables.find(row => String(row.table_code) === String(tableLock.table_code)) : null;
     const table = lockedTable || requestedTable || null;
-    window._merchantOrderState = { merchant, table:table || null, tables, cart:{}, category:'全部', activeOrderId:null, orderCode:'', order:null, items:[], orders:[], managerStatus:'active' };
+    window._merchantOrderState = { merchant, table:table || null, tables, cart:{}, category:'全部', activeOrderId:null, orderCode:'', order:null, items:[], orders:[], managerStatus:'active', orderMode:takeout?'takeout':'dinein', takeout:{fulfillment:'pickup'} };
     if(table && !lockedTable) saveMerchantCustomerTableLock(merchant.user_id,table);
     if(lockedTable && requestedTable && String(lockedTable.table_code)!==String(requestedTable.table_code)) showToast(`当前点餐已锁定在${lockedTable.table_name}，如需换桌请点击“更换”。`);
-    if(table) await loadMerchantCustomerActiveOrder();
+    if(table || takeout) await loadMerchantCustomerActiveOrder();
     else renderMerchantOrderMenu();
   } catch(error){
     console.warn('打开扫码点餐失败:', error.message);
@@ -5323,7 +5336,7 @@ function renderMerchantOrderMenu(){
   const state = merchantOrderState();
   if(!body || !state.merchant) return;
   const merchant = state.merchant;
-  if(!state.table){
+  if(!state.table && state.orderMode!=='takeout'){
     body.innerHTML = `<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${merchant.logo ? `<img src="${escAttr(merchant.logo)}" alt="">` : escHtml(initials(merchant.business_name || '店'))}</div><div><b>${escHtml(merchant.business_name || '商家点餐')}</b><span>请选择你所在的桌位</span></div></div></div><div class="order-notice">为保证订单送到正确的桌位，请选择桌号。到店结账，不会在此页面扣款。</div>${(state.tables || []).length ? state.tables.map(table => `<button class="merchant-table-card" onclick="selectMerchantOrderTable('${escAttr(table.table_code)}')"><span style="width:42px;height:42px;border-radius:12px;background:var(--sage-light);color:var(--sage-dark);display:flex;align-items:center;justify-content:center;">${uiIcon('store',18)}</span><span style="min-width:0;flex:1;text-align:left;"><b>${escHtml(table.table_name)}</b><span>点此开始点餐</span></span><span style="font-size:22px;color:var(--sage-dark);">›</span></button>`).join('') : '<div class="deals-empty-panel">这家店还没有设置餐桌二维码，请向店员咨询。</div>'}`;
     return;
   }
@@ -5339,7 +5352,8 @@ function renderMerchantOrderMenu(){
 async function submitMerchantOrder(){
   const state = merchantOrderState();
   const rows = merchantOrderCartRows();
-  if(!state.merchant || !state.table || !rows.length){ showToast('请先选择菜品'); return; }
+  if(!state.merchant || (!state.table && state.orderMode!=='takeout') || !rows.length){ showToast('请先选择菜品'); return; }
+  if(state.orderMode==='takeout' && !state.activeOrderId){ openMerchantTakeoutCheckoutSetup(); return; }
   const note = window.prompt('备注（可选，例如少冰、不要辣）','');
   if(note === null) return;
   try {
@@ -5354,6 +5368,36 @@ async function submitMerchantOrder(){
     console.warn('提交点餐失败:', error.message);
     showToast(String(error.message || '').includes('product_unavailable') ? '有菜品已下架，请重新选择' : '提交失败，请稍后再试');
   }
+}
+function openMerchantTakeoutOrder(merchantUserId){ return openMerchantOrderEntry(merchantUserId,'','takeout'); }
+function showMerchantTakeoutLink(merchantUserId){
+  const merchant=(currentMerchant&&String(currentMerchant.user_id)===String(merchantUserId))?currentMerchant:window._merchantIdentityCache[merchantUserId];
+  if(!merchant){showToast('正在读取商家资料，请稍后再试');return;}
+  const url=merchantTakeoutUrl(merchant);
+  const sheet=document.getElementById('merchantTableManager'),body=document.getElementById('merchantTableManagerBody');
+  if(!sheet||!body){window.prompt('外卖点单链接：',url);return;}
+  sheet.classList.add('open');
+  body.innerHTML=`<div class="order-notice">顾客扫描此二维码后直接进入外卖点单，无需选择餐桌。</div><div class="merchant-table-card"><div class="merchant-table-qr">${memberCardQrHtml(url)}</div><div style="min-width:0;flex:1;"><b>外卖点单二维码</b><span>支持到店自提和送餐上门</span><button onclick="copyMerchantOrderTableLink('${escAttr(url).replace(/'/g,"\\'")}')" style="margin-top:9px;">复制外卖链接</button></div></div>`;
+}
+function setMerchantTakeoutFulfillment(value){
+  const state=merchantOrderState();state.takeout=Object.assign({},state.takeout||{},{fulfillment:value==='delivery'?'delivery':'pickup'});openMerchantTakeoutCheckoutSetup();
+}
+function openMerchantTakeoutCheckoutSetup(){
+  const state=merchantOrderState(),sheet=document.getElementById('merchantOrderCheckout'),body=document.getElementById('merchantOrderCheckoutBody');
+  if(!state.merchant||!body||!sheet)return;
+  const takeout=state.takeout||{fulfillment:'pickup'},delivery=takeout.fulfillment==='delivery',profile=profileForUser(session&&session.user&&session.user.id)||{};
+  sheet.classList.add('open');
+  body.innerHTML=`<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${state.merchant.logo?`<img src="${escAttr(state.merchant.logo)}" alt="">`:escHtml(initials(state.merchant.business_name||'店'))}</div><div><b>${escHtml(state.merchant.business_name||'外卖点单')}</b><span>确认取餐与结算信息</span></div></div></div><div class="order-category-tabs"><button class="${!delivery?'on':''}" onclick="setMerchantTakeoutFulfillment('pickup')">到店自提</button><button class="${delivery?'on':''}" onclick="setMerchantTakeoutFulfillment('delivery')">送餐上门</button></div><div class="merchant-mini-section"><b>联系人</b><div style="display:grid;gap:10px;margin-top:10px;"><input id="merchantTakeoutName" maxlength="40" placeholder="姓名（必填）" value="${escAttr(takeout.name||profile.name||myNick()||'')}"><input id="merchantTakeoutPhone" type="tel" maxlength="32" inputmode="tel" placeholder="电话（必填）" value="${escAttr(takeout.phone||'')}"></div></div>${delivery?`<div class="merchant-mini-section"><b>配送信息</b><div style="display:grid;gap:10px;margin-top:10px;"><textarea id="merchantTakeoutAddress" maxlength="240" placeholder="配送地址（必填）">${escHtml(takeout.address||'')}</textarea><select id="merchantTakeoutTimeMode" onchange="toggleMerchantTakeoutTime()"><option value="now" ${(takeout.time_mode||'now')==='now'?'selected':''}>尽快送达</option><option value="scheduled" ${takeout.time_mode==='scheduled'?'selected':''}>指定日期和时间</option></select><input id="merchantTakeoutDeliveryAt" type="datetime-local" style="display:${takeout.time_mode==='scheduled'?'block':'none'}" value="${escAttr(takeout.delivery_at||'')}"></div></div>`:''}<div class="merchant-mini-section"><b>订单内容</b><div class="merchant-order-lines" style="margin-top:9px;">${merchantOrderBatchHtml(merchantOrderCartRows().map(row=>({product_name:row.name,quantity:row.quantity,unit_price:merchantOrderPriceNumber(row.price)})))}</div><div class="merchant-order-line" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);"><b>菜品小计</b><b>${merchantOrderMoney(merchantOrderCartRows().reduce((sum,row)=>sum+merchantOrderPriceNumber(row.price)*row.quantity,0))}</b></div></div><button class="primary" onclick="submitMerchantTakeoutOrder()" style="width:100%;border:0;border-radius:10px;padding:12px;background:var(--sage);color:#fff;font:900 14px inherit;">${delivery?'进入在线支付':'确认并选择支付方式'}</button>`;
+}
+function toggleMerchantTakeoutTime(){const input=document.getElementById('merchantTakeoutDeliveryAt');if(input)input.style.display=document.getElementById('merchantTakeoutTimeMode')?.value==='scheduled'?'block':'none';}
+async function submitMerchantTakeoutOrder(){
+  const state=merchantOrderState(),rows=merchantOrderCartRows(),delivery=(state.takeout||{}).fulfillment==='delivery';
+  const name=document.getElementById('merchantTakeoutName')?.value.trim()||'',phone=document.getElementById('merchantTakeoutPhone')?.value.trim()||'',address=document.getElementById('merchantTakeoutAddress')?.value.trim()||'',timeMode=document.getElementById('merchantTakeoutTimeMode')?.value||'now',deliveryAt=document.getElementById('merchantTakeoutDeliveryAt')?.value||'';
+  if(!name||!phone){showToast('请填写姓名和电话');return;} if(delivery&&!address){showToast('请填写配送地址');return;} if(delivery&&timeMode==='scheduled'&&!deliveryAt){showToast('请选择送餐时间');return;}
+  try{
+    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_takeout_order_create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_merchant_user_id:state.merchant.user_id,p_items:rows.map(row=>({product_id:row.id,quantity:row.quantity})),p_customer_name:name,p_customer_phone:phone,p_fulfillment:delivery?'delivery':'pickup',p_delivery_address:delivery?address:'',p_delivery_at:delivery&&timeMode==='scheduled'?new Date(deliveryAt).toISOString():null})});
+    if(!res.ok)throw new Error(await res.text());const id=await res.json(),detail=await loadMerchantOrderDetails(id);Object.assign(state,{activeOrderId:id,order:detail.order,items:detail.items,cart:{},takeout:{fulfillment:delivery?'delivery':'pickup',name,phone,address,time_mode:timeMode,delivery_at:deliveryAt}});await loadMerchantCouponClaims(true);state.checkout={method:delivery?'online':'cash',selectedClaims:[],tip:0,customTipAmount:null};renderMerchantOrderCheckout();showToast(delivery?'外卖订单已提交，请完成在线支付':'订单已提交，请选择支付方式');
+  }catch(error){console.warn('外卖订单提交失败:',error.message);showToast('外卖订单提交失败，请稍后重试');}
 }
 async function openMerchantOrderManager(merchantUserId){
   const id = merchantUserId || merchantOrderManagerMerchantId();
@@ -5920,6 +5964,8 @@ function renderMerchantOrderCheckout(){
   if(!body || !state.merchant || !state.order) return;
   const settings = merchantOrderCheckoutSettings(state.merchant);
   const checkout = state.checkout || { method:'cash', selectedClaims:[], tip:0, customTipAmount:null };
+  const deliveryOnly = state.order.order_type === 'takeout' && state.order.fulfillment === 'delivery';
+  if(deliveryOnly) checkout.method = 'online';
   state.checkout = checkout;
   const rows = merchantOrderCheckoutClaims(state);
   const selectedRows = (checkout.selectedClaims || []).map(id => rows.find(row => Number(row.claim.id) === Number(id) && row.eligibility.eligible)).filter(Boolean);
@@ -5934,7 +5980,8 @@ function renderMerchantOrderCheckout(){
   const inPersonLabel = checkout.method === 'card' ? '刷卡' : '现金';
   const cashContent = `${couponPanel}<div class="merchant-mini-section"><div class="merchant-order-line"><span>菜品小计</span><b>${merchantOrderMoney(subtotal)}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>优惠券优惠</span><b style="color:var(--berry);">-${merchantOrderMoney(discount)}</b></div><div class="merchant-order-line" style="margin-top:8px;font-size:15px;"><b>应付合计</b><b style="color:var(--berry);">${merchantOrderMoney(afterCoupon)}</b></div></div><div class="order-notice">请到店使用${inPersonLabel}结算；商家核销优惠券后会按上方金额完成订单。</div>`;
   const onlineContent = `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 今日菜单合计</b><div class="merchant-order-lines" style="margin-top:10px;">${merchantOrderBatchHtml(state.items)}</div><div class="merchant-order-line" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);"><span>菜品小计</span><b>${merchantOrderMoney(subtotal)}</b></div></div>${couponPanel}<div class="merchant-mini-section"><b>小费</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${[0].concat(settings.tip_options).map(percent => `<button onclick="setMerchantOrderTip(${Number(percent)})" style="border:1px solid ${checkout.customTipAmount == null && Number(checkout.tip) === Number(percent) ? 'var(--sage)' : 'var(--line)'};background:${checkout.customTipAmount == null && Number(checkout.tip) === Number(percent) ? 'var(--sage-light)' : '#fff'};border-radius:9px;padding:8px 12px;font:800 12px inherit;">${Number(percent) ? `${Number(percent)}%` : '不加小费'}</button>`).join('')}<button onclick="setMerchantOrderCustomTip()" style="border:1px solid ${checkout.customTipAmount != null ? 'var(--sage)' : 'var(--line)'};background:${checkout.customTipAmount != null ? 'var(--sage-light)' : '#fff'};border-radius:9px;padding:8px 12px;font:800 12px inherit;">自定</button></div><div class="merchant-order-line" style="margin-top:12px;"><span>优惠券优惠</span><b style="color:var(--berry);">-${merchantOrderMoney(discount)}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>小费</span><b>${merchantOrderMoney(tip)}</b></div><div class="merchant-order-line" style="margin-top:8px;font-size:15px;"><b>应付合计</b><b style="color:var(--berry);">${merchantOrderMoney(total)}</b></div></div><div class="merchant-mini-section"><b>支付方式</b><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">${['Apple Pay','Google Pay','信用卡','商家礼品卡'].map(label => `<button disabled style="border:1px solid var(--line);border-radius:10px;background:#f5f4ef;color:var(--ink-faint);padding:11px;font:800 12px inherit;">${escHtml(label)}</button>`).join('')}</div><p style="margin-top:10px;font-size:11px;color:var(--ink-faint);">在线支付尚未接入，当前不会扣款，也不会提前核销优惠券。</p></div>`;
-  body.innerHTML = `<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${state.merchant.logo ? `<img src="${escAttr(state.merchant.logo)}" alt="">` : escHtml(initials(state.merchant.business_name || '店'))}</div><div><b>${escHtml(state.merchant.business_name || '订单结算')}</b><span>${escHtml(state.order.table_name || '')} · ${escHtml(state.order.order_code || '')}</span></div></div></div><div class="order-category-tabs"><button class="${checkout.method === 'cash' ? 'on' : ''}" onclick="setMerchantOrderCheckoutMethod('cash')">现金</button><button class="${checkout.method === 'card' ? 'on' : ''}" onclick="setMerchantOrderCheckoutMethod('card')">刷卡</button><button class="${checkout.method === 'online' ? 'on' : ''}" onclick="setMerchantOrderCheckoutMethod('online')">在线支付</button></div>${checkout.method === 'online' ? onlineContent : cashContent}`;
+  const paymentTabs=deliveryOnly?`<button class="on">在线支付</button>`:`<button class="${checkout.method === 'cash' ? 'on' : ''}" onclick="setMerchantOrderCheckoutMethod('cash')">现金</button><button class="${checkout.method === 'card' ? 'on' : ''}" onclick="setMerchantOrderCheckoutMethod('card')">刷卡</button><button class="${checkout.method === 'online' ? 'on' : ''}" onclick="setMerchantOrderCheckoutMethod('online')">在线支付</button>`;
+  body.innerHTML = `<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${state.merchant.logo ? `<img src="${escAttr(state.merchant.logo)}" alt="">` : escHtml(initials(state.merchant.business_name || '店'))}</div><div><b>${escHtml(state.merchant.business_name || '订单结算')}</b><span>${escHtml(state.order.table_name || '')} · ${escHtml(state.order.order_code || '')}</span></div></div></div><div class="order-category-tabs">${paymentTabs}</div>${checkout.method === 'online' ? onlineContent : cashContent}`;
 }
 function bindMerchantOrderPullRefresh(){
   const sheet = document.getElementById('merchantOrderMenu');
@@ -6939,7 +6986,7 @@ function merchantContentHtml(m, opts){
         <button onclick="callMerchantPhone('${escAttr(m.phone || '')}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:none;border-radius:10px;background:var(--sage);color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;">${uiIcon('phone',15)} Call</button>
         <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.address || m.business_name || '')}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px solid var(--line-strong);border-radius:10px;background:var(--card);color:var(--ink);font-size:13.5px;font-weight:700;text-decoration:none;">${uiIcon('map',15)} 导航</a>
       </div>
-      ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 扫码点餐</b><p>顾客可扫码选择餐桌、点菜和加菜。</p>${isOwnerPage ? `<button onclick="openMerchantOrderManager('${uidSafe}')" style="margin-top:10px;width:100%;border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('store',15)} 管理扫码点餐</button>` : `<button onclick="openMerchantOrderEntry('${uidSafe}')" style="margin-top:10px;width:100%;border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('bag',15)} 扫码点餐</button>`}</div>` : ''}
+      ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 点餐服务</b><p>扫码点餐可选择餐桌；外卖点单可选择自提或送餐上门。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;"><button onclick="openMerchantOrderManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('store',15)} 管理点餐订单</button><button onclick="showMerchantTakeoutLink('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px;background:#fff;color:var(--sage-dark);font:800 13px inherit;">${uiIcon('share',15)} 外卖二维码</button></div>` : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;"><button onclick="openMerchantOrderEntry('${uidSafe}')" style="border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('store',15)} 扫码点餐</button><button onclick="openMerchantTakeoutOrder('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px;background:#fff;color:var(--sage-dark);font:800 13px inherit;">${uiIcon('bag',15)} 外卖点单</button></div>`}</div>` : ''}
       <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
         <div style="display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;">${uiIcon('bag',15)} 会员优惠规则</div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
@@ -8426,8 +8473,9 @@ function routeMerchantOrderFromLocation(){
     const url = new URL(window.location.href);
     const slug = normalizeMerchantSlug(url.searchParams.get('order') || '');
     const table = String(url.searchParams.get('table') || '').trim().toLowerCase();
-    if(!slug || !/^[a-z0-9-]{3,48}$/.test(table)) return null;
-    return { slug, table };
+    const mode=String(url.searchParams.get('mode')||'').toLowerCase();
+    if(!slug || (mode!=='takeout' && !/^[a-z0-9-]{3,48}$/.test(table))) return null;
+    return { slug, table, mode };
   } catch(e){ return null; }
 }
 async function openMerchantOrderByRoute(route){
@@ -8442,7 +8490,7 @@ async function openMerchantOrderByRoute(route){
     if(!res.ok) throw new Error(await res.text());
     const row = (await res.json())[0];
     if(!row){ showToast('没有找到这家商店'); return false; }
-    await openMerchantOrderEntry(row.user_id, route.table);
+    await openMerchantOrderEntry(row.user_id, route.table, route.mode);
     return true;
   } catch(error){ showToast('点餐链接暂时打不开，请稍后重试'); return false; }
 }
@@ -17519,7 +17567,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Structured Coupon Rules & Whole Order Discounts】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Takeout Ordering & Coupon Payment Rules】`);
 </script>
 </body>
 </html>
