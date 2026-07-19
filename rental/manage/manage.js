@@ -90,7 +90,10 @@
       alert('车辆与已选择的服务已保存。');
     } catch(error) {
       console.warn('保存车辆失败:', error.message);
-      alert(error.message.includes('services') ? '增值服务保存失败，请确认服务仍处于启用状态后重试。' : '车辆保存失败，请稍后重试。');
+      const detail = String(error.message || '');
+      alert(detail.includes('vehicle_services') || detail.includes('invalid_service')
+        ? '服务保存失败，请刷新服务库后重新勾选。'
+        : '车辆保存失败，请稍后重试。');
     } finally { if(button) { button.disabled = false; button.textContent = '保存车辆'; } }
   }
 

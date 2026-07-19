@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.352';
+const APP_VERSION = '5.353';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7081,7 +7081,7 @@ async function saveMerchantEnabledFeatures(merchant, values){
   return clean;
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
-function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.352&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.353&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function closeMerchantRentalManager(){ document.getElementById('merchantRentalManager')?.classList.remove('open'); }
 async function openMerchantRentalPage(merchantUserId){
   try {
@@ -7102,7 +7102,7 @@ async function openMerchantManagementCenter(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/merchant/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&admin_v=5.352&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/merchant/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&admin_v=5.353&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){
@@ -7116,7 +7116,7 @@ async function openMerchantRentalManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/rental/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&manage_v=5.352&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/rental/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&manage_v=5.353&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){
@@ -18099,7 +18099,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Routing and Category Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental Service Save Fix】`);
 </script>
 </body>
 </html>
