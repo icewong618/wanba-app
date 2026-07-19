@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.326';
+const APP_VERSION = '5.327';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -9196,6 +9196,7 @@ function openMerchantEditSheet(){
       </div>
       <div style="font-size:10.5px;color:var(--ink-faint);line-height:1.45;margin-top:8px;">商家确认一次消费时，会自动增加消费次数并赠送设定的积分。</div>
     </div>
+    <div id="merchantProfileSaveStatus" role="status" style="min-height:18px;margin:0 0 8px;color:var(--ink-soft);font-size:12px;"></div>
     <div style="display:flex;gap:10px;">
       <button type="button" id="merchantProfileSaveButton" style="flex:1;padding:12px;border-radius:10px;background:var(--sage);color:#fff;border:none;cursor:pointer;font-weight:600;font-size:13px;">✓ 保存</button>
       <button onclick="closeMerchantEditSheet()" style="flex:1;padding:12px;border-radius:10px;background:var(--bg-alt);color:var(--ink);border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:13px;">✕ 取消</button>
@@ -9211,6 +9212,12 @@ function openMerchantEditSheet(){
   document.getElementById('merchantEditSheet')?.classList.add('open');
 }
 function closeMerchantEditSheet(){ document.getElementById('merchantEditSheet')?.classList.remove('open'); }
+function setMerchantProfileSaveStatus(message, tone){
+  const status = document.getElementById('merchantProfileSaveStatus');
+  if(!status) return;
+  status.textContent = message || '';
+  status.style.color = tone === 'error' ? 'var(--berry-dark)' : tone === 'good' ? 'var(--sage-dark)' : 'var(--ink-soft)';
+}
 window._merchantGeocodeCandidates = [];
 async function findMerchantAddressCandidates(){
   if(!(session && session.access_token && currentMerchant && currentMerchant.user_id === session.user.id)){
@@ -9301,23 +9308,27 @@ function onMerchantImageSelected(event, type){
 }
 /* 保存商家资料：以店长账号为唯一键直接更新或新建，兼容浏览器和原生 App。 */
 async function saveMerchantProfile(){
-  if(!(session && session.user)){ showToast('请先登录'); return; }
+  setMerchantProfileSaveStatus('正在确认登录状态…');
+  if(!(session && session.user)) await loadSession();
+  if(!(session && session.user)){ setMerchantProfileSaveStatus('请先登录后再保存。', 'error'); showToast('请先登录'); return; }
+  if(!session.access_token && session.refresh_token) await refreshSession();
   const saveButton = document.getElementById('merchantProfileSaveButton');
   if(saveButton){ saveButton.disabled = true; saveButton.textContent = '正在保存…'; }
   try {
+  setMerchantProfileSaveStatus('正在检查商家资料…');
   const perksInput = document.getElementById('mBizPerks');
   const slugInput = document.getElementById('mBizSlug');
-  if(!perksInput || !slugInput){ showToast('编辑页面尚未准备完成，请关闭后重新打开。'); return; }
+  if(!perksInput || !slugInput){ setMerchantProfileSaveStatus('编辑页面尚未准备完成，请关闭后重新打开。', 'error'); showToast('编辑页面尚未准备完成，请关闭后重新打开。'); return; }
   const perks = perksInput.value.split(',').map(s => s.trim()).filter(Boolean).slice(0,4);
   const slug = normalizeMerchantSlug(slugInput.value);
   slugInput.value = slug;
   const previousSlug = normalizeMerchantSlug(currentMerchant && currentMerchant.slug);
   const slugMessage = merchantSlugInputMessage(slug);
-  if(slugMessage){ setMerchantSlugStatus(slugMessage, 'warn'); showToast(slugMessage); return; }
+  if(slugMessage){ setMerchantSlugStatus(slugMessage, 'warn'); setMerchantProfileSaveStatus(slugMessage, 'error'); showToast(slugMessage); return; }
   const cooldownDays = merchantSlugCooldownDays(currentMerchant, slug);
   if(cooldownDays){
     const message = `链接每 365 天只能修改一次，还需 ${cooldownDays} 天后可以更改。`;
-    setMerchantSlugStatus(message, 'warn'); showToast(message); return;
+    setMerchantSlugStatus(message, 'warn'); setMerchantProfileSaveStatus(message, 'error'); showToast(message); return;
   }
   // Editing ordinary business information must not depend on a second network lookup
   // when the merchant keeps the link they already own.
@@ -9332,12 +9343,12 @@ async function saveMerchantProfile(){
   }
   if(!slugCheck.available || slugCheck.slug !== slug){
     const message = '这个链接已经被使用，或暂时无法核对，请换一个后再保存。';
-    setMerchantSlugStatus(message, 'warn'); showToast(message); return;
+    setMerchantSlugStatus(message, 'warn'); setMerchantProfileSaveStatus(message, 'error'); showToast(message); return;
   }
   const externalLinks = document.getElementById('mBizExternalLinks').value
     .split(/\n|,/).map(s => s.trim()).filter(Boolean).slice(0, 5);
   const intro = document.getElementById('mBizIntro').value.trim();
-  if(intro.length > 50){ showToast('商家介绍最多 50 个字'); return; }
+  if(intro.length > 50){ setMerchantProfileSaveStatus('商家介绍最多 50 个字。', 'error'); showToast('商家介绍最多 50 个字'); return; }
   const tierSilver = Math.max(1, parseInt(document.getElementById('mBizTierSilver').value, 10) || 100);
   const tierGold = Math.max(tierSilver + 1, parseInt(document.getElementById('mBizTierGold').value, 10) || 300);
   const tierBlack = Math.max(tierGold + 1, parseInt(document.getElementById('mBizTierBlack').value, 10) || 600);
@@ -9366,6 +9377,7 @@ async function saveMerchantProfile(){
   };
     // Upsert is deliberately used here instead of PATCH-then-POST. It works consistently
     // in browser and native WebView, even when a successful update has no response body.
+    setMerchantProfileSaveStatus('正在保存到云端…');
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?on_conflict=user_id`, {
       method: 'POST',
       headers:{ 'Content-Type':'application/json', 'Prefer':'resolution=merge-duplicates,return=representation' },
@@ -9379,6 +9391,7 @@ async function saveMerchantProfile(){
       else if(errorText.includes('merchant_slug_invalid')) showToast('链接只能使用英文、数字和短横线。');
       else if(errorText.includes('duplicate key') || errorText.includes('merchants_slug_unique_idx')) showToast('这个链接已经被其他商家使用。');
       else showToast(`保存失败（${res.status}），请稍后重试`);
+      setMerchantProfileSaveStatus(`保存失败（${res.status}）。`, 'error');
       return;
     }
     let rows = [];
@@ -9391,8 +9404,10 @@ async function saveMerchantProfile(){
     const weekPage = document.getElementById('page-week');
     if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
     if(activePostId) renderPostModal();
-    showToast(previousSlug && previousSlug !== slug ? '✓ 微网站链接已修改，365 天内不能再次修改' : '✓ 商家资料已保存');
-  } catch(e){ console.warn('商家资料保存失败:', e.message); showToast('保存失败：' + (e.message || '请稍后重试')); }
+    const savedMessage = previousSlug && previousSlug !== slug ? '微网站链接已修改，365 天内不能再次修改。' : '商家资料已保存。';
+    setMerchantProfileSaveStatus(savedMessage, 'good');
+    showToast(`✓ ${savedMessage}`);
+  } catch(e){ console.warn('商家资料保存失败:', e.message); setMerchantProfileSaveStatus('保存失败：' + (e.message || '请稍后重试'), 'error'); showToast('保存失败：' + (e.message || '请稍后重试')); }
   finally { if(saveButton){ saveButton.disabled = false; saveButton.textContent = '✓ 保存'; } }
 }
 
