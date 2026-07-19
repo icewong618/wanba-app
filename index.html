@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.340';
+const APP_VERSION = '5.350';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7095,6 +7095,20 @@ async function openMerchantRentalPage(merchantUserId){
 function merchantRentalCanManage(merchantUserId){
   return String(merchantUserId || '') === String(activeMerchantWorkspaceId() || '') && (isMerchantWorkspaceOwner() || merchantWorkspaceHasPermission('order_manage'));
 }
+async function openMerchantManagementCenter(merchantUserId){
+  const id = merchantUserId || activeMerchantWorkspaceId();
+  if(!id || String(id) !== String(activeMerchantWorkspaceId() || '')){ showToast('请先进入自己的商家主页'); return; }
+  try {
+    const merchant = await getMerchantOrderMerchant(id);
+    if(!merchant) throw new Error('merchant_not_found');
+    const url = `https://escoopcity.com/merchant/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&admin_v=5.350`;
+    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
+    else window.location.href = url;
+  } catch(error){
+    console.warn('打开商家管理后台失败:', error.message);
+    showToast('商家管理后台暂时无法打开，请稍后再试');
+  }
+}
 async function openMerchantRentalManager(merchantUserId){
   const id = merchantUserId || activeMerchantWorkspaceId();
   if(!id || !merchantRentalCanManage(id)){ showToast('你没有这家商家的租车管理权限'); return; }
@@ -7389,6 +7403,7 @@ function merchantContentHtml(m, opts){
         <div class="profile-menu merchant-owner-menu" id="merchantOwnerMenu">
           <button onclick="copyMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}复制微网站链接</button>
           <button onclick="shareMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}转发店铺</button>
+          <button onclick="openMerchantManagementCenter('${uidSafe}')">${uiIcon('settings',15)}商家管理后台</button>
           <button onclick="openMerchantFeatureCenter()">${uiIcon('store',15)}功能中心</button>
           <button onclick="closeProfileMenu();openMerchantEditSheet()">${uiIcon('edit',15)}编辑商家资料</button>
           <button onclick="closeProfileMenu();openMerchantTeamManager()">${uiIcon('user',15)}团队与矩阵账号</button>
@@ -18031,6 +18046,27 @@ if(initialHomePage){
 }
 bootApp();
 
+// 独立商家管理后台返回主站时，用这个轻量路由打开既有工作台，避免复制两套业务逻辑。
+async function launchMerchantAdminAction(){
+  const params = new URLSearchParams(window.location.search);
+  const action = params.get('merchant_admin');
+  const merchantId = params.get('merchant_id');
+  if(!action || !merchantId || !(session && session.user)) return;
+  const clear = () => { try { const next = new URL(window.location.href); next.searchParams.delete('merchant_admin'); next.searchParams.delete('merchant_id'); next.searchParams.delete('from'); window.history.replaceState({},'',next.pathname + next.search + next.hash); } catch(error) {} };
+  // Wait for bootApp to finish restoring the session and merchant workspace.
+  await new Promise(resolve => setTimeout(resolve, 700));
+  clear();
+  if(action === 'orders') return openMerchantOrderManager(merchantId);
+  if(action === 'takeout') return openMerchantTakeoutManager(merchantId);
+  if(action === 'members') return openMerchantMemberManager(merchantId);
+  if(action === 'team') return openMerchantTeamManager();
+  if(action === 'features') return openMerchantFeatureCenter();
+  if(action === 'content') return openMerchantPublishDashboard();
+  if(action === 'rental') return openMerchantRentalManager(merchantId);
+  if(action === 'store' || action === 'public') return switchTab('profile');
+}
+launchMerchantAdminAction();
+
 // 定时刷新仅在首页可见时执行，减少后台页面的无效网络请求。
 setInterval(() => {
   const activeTab = document.querySelector('.nav-btn.active');
@@ -18054,7 +18090,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Standalone Rental Management】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Management Center】`);
 </script>
 </body>
 </html>
