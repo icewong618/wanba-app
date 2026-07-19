@@ -3,7 +3,7 @@
   const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app = document.getElementById('rentalApp');
   const query = new URLSearchParams(location.search);
-  const state = { merchant:null, vehicles:[], selected:null, quote:null, screen:'list', startsAt:'', endsAt:'', name:'', phone:'', email:'', note:'', selectedAddons:[], paymentMethod:'apple_pay', error:'' };
+  const state = { merchant:null, vehicles:[], bookings:[], selected:null, booking:null, quote:null, screen:'list', startsAt:'', endsAt:'', name:'', phone:'', email:'', note:'', selectedAddons:[], paymentMethod:'apple_pay', editingBookingId:'', error:'' };
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const money = value => `$${Number(value || 0).toFixed(2)}`;
   const user = () => JSON.parse(localStorage.getItem('wanba_session') || 'null')?.user || null;
@@ -17,6 +17,8 @@
   const fuel = value => ({'纯电':'电动','电动':'电动','柴油':'柴油','混动':'混动','汽油':'汽油'}[String(value||'')] || '汽油');
   const addons = () => Array.isArray(state.selected?.addons) ? state.selected.addons : [];
   const selectedAddonRows = () => addons().filter(item => state.selectedAddons.includes(String(item.id)));
+  const bookingStatus = value => ({ pending:'等待商家确认', confirmed:'已确认', active:'租用中', overdue:'逾期未还', returned:'已完成', cancelled:'已取消', rejected:'未获确认' }[String(value || '')] || '等待商家确认');
+  const canChangeBooking = booking => ['pending','confirmed'].includes(String(booking?.status || '')) && new Date(booking?.starts_at || 0).getTime() > Date.now();
   const formTimes = () => { const start=document.getElementById('rentalStart')?.value, end=document.getElementById('rentalEnd')?.value; if(start) state.startsAt=new Date(start).toISOString(); if(end) state.endsAt=new Date(end).toISOString(); };
   const address = () => state.selected?.pickup_address || state.merchant?.address || '由商家确认取还车地点';
   const map = () => `<div class="rental-map"><span>取还车地点</span><b>${esc(address())}</b><i>●</i></div>`;
@@ -31,7 +33,23 @@
   const summary = () => state.quote ? `<section class="price-card"><div><span>车辆租金</span><b>${money(state.quote.base_amount)}</b></div>${Number(state.quote.addon_amount||0)?`<div><span>附加服务</span><b>${money(state.quote.addon_amount)}</b></div>`:''}<div><span>预估税费</span><b>${money(0)}</b></div><div class="total"><span>预估总额</span><b>${money(state.quote.total_amount)}</b></div></section>` : '';
   function renderList(){
     const start=state.startsAt?toLocalInput(state.startsAt):toLocalInput(); const end=state.endsAt?toLocalInput(state.endsAt):toLocalInput(new Date(Date.now()+25*3600000));
-    app.innerHTML=`${top('租车预约')}<section class="rental-hero"><h1>${esc(state.merchant?.business_name||'乐生活租车')}</h1><p>${esc(state.merchant?.address||'请选择取还时间后查看可预约车辆')}</p></section><section class="time-filter"><label>取车时间<input id="rentalStart" type="datetime-local" value="${esc(start)}" min="${toLocalInput()}"></label><label>还车时间<input id="rentalEnd" type="datetime-local" value="${esc(end)}" min="${toLocalInput(new Date(Date.now()+3600000))}"></label><button onclick="Rental.refreshList()">查询车辆</button></section><div class="vehicle-list">${state.vehicles.length?state.vehicles.map(vehicle=>`<article class="vehicle">${photo(vehicle)}<div class="vehicle-main"><div class="vehicle-head"><div><h2>${esc(vehicle.name)}</h2><p>${esc([vehicle.year,vehicle.make,vehicle.model].filter(Boolean).join(' '))}</p></div><b>${rate(vehicle)}</b></div><div class="chips"><span>${esc(vehicle.vehicle_type||'车辆')}</span><span>${vehicle.seats||5} 座</span><span>${esc(vehicle.transmission||'自动挡')}</span><span>${esc(fuel(vehicle.fuel_type))}</span></div><button onclick="Rental.select('${esc(vehicle.id)}')">查看车辆</button></div></article>`).join(''):'<div class="empty">这家商家还没有发布可预约车辆。</div>'}</div>`;
+    app.innerHTML=`${top('租车预约')}<section class="rental-hero"><div class="rental-hero-row"><div><h1>${esc(state.merchant?.business_name||'乐生活租车')}</h1><p>${esc(state.merchant?.address||'请选择取还时间后查看可预约车辆')}</p></div>${user()?'<button onclick="Rental.bookings()">我的预约</button>':''}</div></section><section class="time-filter"><label>取车时间<input id="rentalStart" type="datetime-local" value="${esc(start)}" min="${toLocalInput()}"></label><label>还车时间<input id="rentalEnd" type="datetime-local" value="${esc(end)}" min="${toLocalInput(new Date(Date.now()+3600000))}"></label><button onclick="Rental.refreshList()">查询车辆</button></section><div class="vehicle-list">${state.vehicles.length?state.vehicles.map(vehicle=>`<article class="vehicle">${photo(vehicle)}<div class="vehicle-main"><div class="vehicle-head"><div><h2>${esc(vehicle.name)}</h2><p>${esc([vehicle.year,vehicle.make,vehicle.model].filter(Boolean).join(' '))}</p></div><b>${rate(vehicle)}</b></div><div class="chips"><span>${esc(vehicle.vehicle_type||'车辆')}</span><span>${vehicle.seats||5} 座</span><span>${esc(vehicle.transmission||'自动挡')}</span><span>${esc(fuel(vehicle.fuel_type))}</span></div><button onclick="Rental.select('${esc(vehicle.id)}')">查看车辆</button></div></article>`).join(''):'<div class="empty">这家商家还没有发布可预约车辆。</div>'}</div>`;
+  }
+
+  function renderBookings(){
+    const active = state.bookings.filter(booking => !['returned','cancelled','rejected'].includes(String(booking.status || '')));
+    const history = state.bookings.filter(booking => ['returned','cancelled','rejected'].includes(String(booking.status || '')));
+    const card = booking => `<button class="booking-card" onclick="Rental.booking('${esc(booking.id)}')"><div><span class="booking-status ${esc(booking.status || 'pending')}">${esc(bookingStatus(booking.status))}</span><b>${esc(booking.vehicle?.name || '租车预约')}</b><small>${esc(booking.merchant?.business_name || '')} · ${displayDate(booking.starts_at)}</small></div><strong>${money(booking.total_amount)}</strong><em>›</em></button>`;
+    app.innerHTML=`${top('我的预约')}<section class="rental-hero"><h1>我的租车预约</h1><p>预约修改后会重新计算金额，并等待商家再次确认。</p></section><div class="section-title">进行中</div>${active.length?active.map(card).join(''):'<div class="empty compact">暂无进行中的租车预约。</div>'}<div class="section-title">历史预约</div>${history.length?history.map(card).join(''):'<div class="empty compact">暂无历史预约。</div>'}`;
+  }
+
+  function renderBookingDetail(){
+    const booking = state.booking;
+    if(!booking) return renderBookings();
+    const vehicle = booking.vehicle || {};
+    const extras = Array.isArray(booking.rental_addons) ? booking.rental_addons : [];
+    const editable = canChangeBooking(booking);
+    app.innerHTML=`${top('预约详情')}<section class="review-head"><div>${photo(vehicle)}</div><p><b>${esc(vehicle.name || '租车预约')}</b><span>${esc(booking.merchant?.business_name || '')}</span></p><span class="booking-status ${esc(booking.status || 'pending')}">${esc(bookingStatus(booking.status))}</span></section><section class="rental-section"><h2>${esc(booking.booking_code || '')}</h2><p class="detail-line">▣ ${displayDate(booking.starts_at)}<small>至 ${displayDate(booking.ends_at)}</small></p><p class="detail-line">⌖ ${esc(vehicle.pickup_address || booking.merchant?.address || '由商家确认取还车地点')}</p></section><section class="rental-section"><h2>金额明细</h2><div class="price-card"><div><span>车辆租金</span><b>${money(booking.base_amount)}</b></div>${extras.map(item=>`<div><span>${esc(item.name || '附加服务')}</span><b>${money(item.amount ?? item.price)}</b></div>`).join('')}<div><span>押金</span><b>${money(booking.deposit_amount)}</b></div><div class="total"><span>预估总额</span><b>${money(booking.total_amount)}</b></div></div><p class="payment-note">支付方式：${esc(({apple_pay:'Apple Pay',google_pay:'Google Pay',card:'信用卡',gift:'商家礼品卡'})[booking.payment_method] || '等待商家确认')}</p></section><section class="help-list"><button onclick="Rental.help()">☎ 寻求帮助 <span>›</span></button><button onclick="Rental.faq()">ⓘ 常见问题 <span>›</span></button></section>${editable?`<div class="action-grid"><button class="danger" onclick="Rental.cancelBooking('${esc(booking.id)}')">取消预约</button><button class="secondary" onclick="Rental.editBooking('${esc(booking.id)}')">修改预约</button></div>`:''}`;
   }
   function renderVehicle(){
     const v=state.selected; if(!v) return renderList();
@@ -41,24 +59,73 @@
   }
   function renderContact(){
     const profile=user(); const v=state.selected;
-    app.innerHTML=`${top('查看预约')}<section class="review-head"><div>${photo(v)}</div><p><b>${esc(v.name)}</b><span>${esc([v.year,v.make,v.model].filter(Boolean).join(' '))}</span></p></section><section class="rental-section"><h2>预约开始时间</h2><p class="detail-line">▣ ${displayDate(state.startsAt)}<small>至 ${displayDate(state.endsAt)}</small></p><label>租车人姓名<input id="rentalName" maxlength="80" value="${esc(state.name||profile?.user_metadata?.display_name||profile?.user_metadata?.name||'')}" placeholder="姓名（必填）"></label><label>联系电话<input id="rentalPhone" maxlength="40" inputmode="tel" value="${esc(state.phone)}" placeholder="电话（必填）"></label><label>邮箱（选填）<input id="rentalEmail" maxlength="120" type="email" value="${esc(state.email||profile?.email||'')}" placeholder="用于接收预约信息"></label><label>备注（选填）<textarea id="rentalNote" maxlength="400" placeholder="例如：航班号、取车时间或其他需求">${esc(state.note)}</textarea></label></section>${summary()}<section class="rental-section"><h2>自助取车和还车</h2>${map()}<p class="detail-line">⌖ ${esc(address())}<small>取还车地点与到店流程将由商家确认。</small></p></section><section class="help-list"><button onclick="Rental.help()">☎ 寻求帮助 <span>›</span></button><button onclick="Rental.faq()">ⓘ 常见问题 <span>›</span></button></section><div class="action-grid"><button class="danger" onclick="Rental.cancel()">取消预约</button><button class="secondary" onclick="Rental.modify()">修改预约</button></div><button class="primary confirm-booking" onclick="Rental.review()">确认预约</button>`;
+    app.innerHTML=`${top(state.editingBookingId ? '修改预约' : '查看预约')}<section class="review-head"><div>${photo(v)}</div><p><b>${esc(v.name)}</b><span>${esc([v.year,v.make,v.model].filter(Boolean).join(' '))}</span></p></section><section class="rental-section"><h2>预约开始时间</h2><p class="detail-line">▣ ${displayDate(state.startsAt)}<small>至 ${displayDate(state.endsAt)}</small></p><label>租车人姓名<input id="rentalName" maxlength="80" value="${esc(state.name||profile?.user_metadata?.display_name||profile?.user_metadata?.name||'')}" placeholder="姓名（必填）"></label><label>联系电话<input id="rentalPhone" maxlength="40" inputmode="tel" value="${esc(state.phone)}" placeholder="电话（必填）"></label><label>邮箱（选填）<input id="rentalEmail" maxlength="120" type="email" value="${esc(state.email||profile?.email||'')}" placeholder="用于接收预约信息"></label><label>备注（选填）<textarea id="rentalNote" maxlength="400" placeholder="例如：航班号、取车时间或其他需求">${esc(state.note)}</textarea></label></section>${summary()}<section class="rental-section"><h2>自助取车和还车</h2>${map()}<p class="detail-line">⌖ ${esc(address())}<small>取还车地点与到店流程将由商家确认。</small></p></section><section class="help-list"><button onclick="Rental.help()">☎ 寻求帮助 <span>›</span></button><button onclick="Rental.faq()">ⓘ 常见问题 <span>›</span></button></section>${state.editingBookingId ? '' : '<div class="action-grid"><button class="danger" onclick="Rental.cancel()">取消预约</button><button class="secondary" onclick="Rental.modify()">修改预约</button></div>'}<button class="primary confirm-booking" onclick="Rental.review()">${state.editingBookingId ? '确认修改预约' : '确认预约'}</button>`;
   }
   function renderPayment(){
     const methods=[['apple_pay','Apple Pay','使用 Apple Pay 支付预估总额'],['google_pay','Google Pay','使用 Google Pay 支付预估总额'],['card','信用卡','使用信用卡支付预估总额'],['gift','商家礼品卡','使用商家礼品卡支付预估总额']];
-    app.innerHTML=`${top('支付预约')}<section class="payment-banner"><b>确认支付内容</b><span>${esc(state.selected.name)} · ${displayDate(state.startsAt)} 至 ${displayDate(state.endsAt)}</span></section>${summary()}<section class="rental-section"><h2>支付方式</h2>${methods.map(([id,title,detail])=>`<button class="pay-method ${state.paymentMethod===id?'selected':''}" onclick="Rental.pickPayment('${id}')"><span><b>${title}</b><small>${detail}</small></span><i>${state.paymentMethod===id?'✓':''}</i></button>`).join('')}<p class="payment-note">当前为预约支付流程界面。正式扣款、押金预授权和退款将在商家开通支付服务后启用；提交后商家会确认你的预约。</p></section><button class="primary sticky-action" onclick="Rental.submit()">确认并提交 ${money(state.quote?.total_amount)}</button>`;
+    app.innerHTML=`${top(state.editingBookingId ? '确认修改' : '支付预约')}<section class="payment-banner"><b>确认支付内容</b><span>${esc(state.selected.name)} · ${displayDate(state.startsAt)} 至 ${displayDate(state.endsAt)}</span></section>${summary()}<section class="rental-section"><h2>支付方式</h2>${methods.map(([id,title,detail])=>`<button class="pay-method ${state.paymentMethod===id?'selected':''}" onclick="Rental.pickPayment('${id}')"><span><b>${title}</b><small>${detail}</small></span><i>${state.paymentMethod===id?'✓':''}</i></button>`).join('')}<p class="payment-note">当前为预约确认流程。正式扣款、押金预授权和退款将在商家开通支付服务后启用；提交后商家会确认你的预约。</p></section><button class="primary sticky-action" onclick="Rental.submit()">${state.editingBookingId ? '确认修改并重新计价' : '确认并提交'} ${money(state.quote?.total_amount)}</button>`;
   }
   function renderSuccess(booking){ app.innerHTML=`${top('预约已提交')}<div class="success"><i>✓</i><h1>预约已提交</h1><b>${esc(booking.booking_code||'')}</b><p>商家将确认你的预约和付款安排。</p><section class="price-card"><div><span>车辆租金</span><b>${money(booking.base_amount)}</b></div>${Number(booking.addon_amount||0)?`<div><span>附加服务</span><b>${money(booking.addon_amount)}</b></div>`:''}<div class="total"><span>预估总额</span><b>${money(booking.total_amount)}</b></div></section><button class="primary" onclick="Rental.list()">返回车辆列表</button></div>`; }
   async function quote(){ formTimes(); state.error=''; try { const response=await api('/rest/v1/rpc/merchant_rental_quote',{method:'POST',body:JSON.stringify({p_vehicle_id:state.selected.id,p_starts_at:state.startsAt,p_ends_at:state.endsAt,p_addon_ids:state.selectedAddons})}); const data=await response.json(); if(!response.ok)throw new Error(String(data?.message||data?.hint||'该时间暂不可预约')); state.quote=data; renderVehicle(); } catch(error){ state.quote=null; state.error=error.message.includes('vehicle')?'该车辆在这段时间不可预约，请换一个时间。':error.message.includes('invalid')?'请确认取车和还车时间。':'暂时无法计算，请稍后重试。'; renderVehicle(); } }
   function toggleAddon(id, checked){ state.selectedAddons=checked?[...new Set(state.selectedAddons.concat(String(id)))]:state.selectedAddons.filter(value=>value!==String(id)); quote(); }
   function contact(){ state.screen='contact'; renderContact(); }
   function review(){ state.name=document.getElementById('rentalName')?.value.trim()||''; state.phone=document.getElementById('rentalPhone')?.value.trim()||''; state.email=document.getElementById('rentalEmail')?.value.trim()||''; state.note=document.getElementById('rentalNote')?.value.trim()||''; if(!state.name||!state.phone){ alert('请填写姓名和电话。'); return; } state.screen='payment'; renderPayment(); }
-  async function submit(){ const response=await api('/rest/v1/rpc/merchant_rental_create_booking',{method:'POST',body:JSON.stringify({p_vehicle_id:state.selected.id,p_starts_at:state.startsAt,p_ends_at:state.endsAt,p_customer_name:state.name,p_customer_phone:state.phone,p_customer_email:state.email||null,p_note:state.note||null,p_addon_ids:state.selectedAddons})}); const data=await response.json(); if(!response.ok){ alert(data?.message?.includes('unavailable')?'该时段刚被其他预约占用，请重新选择时间。':'预约提交失败，请稍后重试。'); return; } renderSuccess(data); }
+  async function submit(){
+    const updating = Boolean(state.editingBookingId);
+    const endpoint = updating ? 'merchant_rental_customer_update_booking' : 'merchant_rental_create_booking';
+    const body = updating
+      ? { p_booking_id:state.editingBookingId, p_starts_at:state.startsAt, p_ends_at:state.endsAt, p_addon_ids:state.selectedAddons, p_customer_name:state.name, p_customer_phone:state.phone, p_customer_email:state.email||null, p_note:state.note||null }
+      : { p_vehicle_id:state.selected.id, p_starts_at:state.startsAt, p_ends_at:state.endsAt, p_customer_name:state.name, p_customer_phone:state.phone, p_customer_email:state.email||null, p_note:state.note||null, p_addon_ids:state.selectedAddons };
+    const response = await api(`/rest/v1/rpc/${endpoint}`, { method:'POST', body:JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok){
+      const message = String(data?.message || '');
+      alert(message.includes('unavailable') ? '该时段刚被其他预约占用，请重新选择时间。' : message.includes('cannot') ? '这笔预约目前不能修改，请联系商家协助处理。' : '预约提交失败，请稍后重试。');
+      return;
+    }
+    state.editingBookingId = '';
+    await loadBookings();
+    renderSuccess(data);
+  }
   function refreshList(){ formTimes(); renderList(); }
-  function select(id){ state.selected=state.vehicles.find(v=>String(v.id)===String(id))||null; state.quote=null; state.error=''; state.selectedAddons=[]; state.screen='vehicle'; renderVehicle(); }
-  function back(){ if(state.screen==='payment'){state.screen='contact';renderContact();} else if(state.screen==='contact'){state.screen='vehicle';renderVehicle();} else if(state.screen==='vehicle'){state.screen='list';renderList();} else close(); }
+  function select(id){ state.selected=state.vehicles.find(v=>String(v.id)===String(id))||null; state.quote=null; state.error=''; state.selectedAddons=[]; state.editingBookingId=''; state.screen='vehicle'; renderVehicle(); }
+  function back(){ if(state.screen==='payment'){state.screen='contact';renderContact();} else if(state.screen==='contact'){state.screen='vehicle';renderVehicle();} else if(state.screen==='vehicle'){state.screen='list';state.editingBookingId='';renderList();} else if(state.screen==='booking-detail'){state.screen='bookings';renderBookings();} else if(state.screen==='bookings'){state.screen='list';renderList();} else close(); }
   function modify(){ state.screen='vehicle'; renderVehicle(); }
   function cancel(){ if(confirm('确定取消本次尚未提交的预约吗？')) { state.screen='list'; state.selected=null; state.quote=null; state.selectedAddons=[]; renderList(); } }
-  async function load(){ const slug=query.get('merchant'); if(!slug){ app.innerHTML='<div class="empty">缺少商家信息。</div>'; return; } try { const res=await api('/rest/v1/rpc/merchant_rental_public_catalog',{method:'POST',body:JSON.stringify({p_slug:slug})}); const data=await res.json(); if(!res.ok||!data?.merchant)throw new Error('not_found'); state.merchant=data.merchant; state.vehicles=Array.isArray(data.vehicles)?data.vehicles:[]; renderList(); } catch(e){ app.innerHTML=`${top('车辆预约')}<div class="empty">暂时无法读取租车服务，请稍后再试。</div>`; } }
-  window.Rental={close,back,refreshList,select,quote,toggleAddon,contact,review,pickPayment:id=>{state.paymentMethod=id;renderPayment();},submit,modify,cancel,list:()=>{state.screen='list';state.selected=null;state.quote=null;renderList();},help:()=>alert(`请联系 ${state.merchant?.business_name||'商家'}：${state.merchant?.phone||'商家暂未填写电话'}`),faq:()=>alert('常见问题：预约提交后由商家确认；请在取车前携带有效驾照与预约信息。')};
+  async function loadBookings(){
+    if(!user()) { state.bookings=[]; return; }
+    try {
+      const response = await api('/rest/v1/rpc/merchant_rental_customer_bookings', { method:'POST', body:'{}' });
+      const data = await response.json();
+      state.bookings = response.ok && Array.isArray(data) ? data : [];
+    } catch(error) { state.bookings=[]; }
+  }
+  function openBooking(id){ state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='booking-detail'; renderBookingDetail(); }
+  async function cancelBooking(id){
+    if(!confirm('确定取消这笔预约吗？取消后需要重新选择车辆和时间。')) return;
+    const response=await api('/rest/v1/rpc/merchant_rental_customer_cancel_booking',{method:'POST',body:JSON.stringify({p_booking_id:id})});
+    if(!response.ok){ alert('这笔预约目前无法取消，请联系商家协助处理。'); return; }
+    await loadBookings(); state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; renderBookingDetail();
+  }
+  async function editBooking(id){
+    const booking=state.bookings.find(item=>String(item.id)===String(id));
+    if(!booking || !canChangeBooking(booking)){ alert('这笔预约目前不能修改，请联系商家协助处理。'); return; }
+    // The booking snapshot is intentionally compact; use the live catalog entry
+    // when available so a customer can still adjust its enabled add-on services.
+    state.selected=state.vehicles.find(item=>String(item.id)===String(booking.vehicle_id))||booking.vehicle;
+    state.startsAt=booking.starts_at;
+    state.endsAt=booking.ends_at;
+    state.name=booking.customer_name||'';
+    state.phone=booking.customer_phone||'';
+    state.email=booking.customer_email||'';
+    state.note=booking.operator_note||'';
+    state.selectedAddons=(Array.isArray(booking.rental_addons)?booking.rental_addons:[]).map(item=>String(item.id)).filter(Boolean);
+    state.editingBookingId=id;
+    state.quote={base_amount:booking.base_amount,addon_amount:Number(booking.total_amount||0)-Number(booking.base_amount||0),total_amount:booking.total_amount,deposit_amount:booking.deposit_amount,addons:booking.rental_addons||[]};
+    state.screen='vehicle';
+    renderVehicle();
+  }
+  async function load(){ const slug=query.get('merchant'); if(!slug){ app.innerHTML='<div class="empty">缺少商家信息。</div>'; return; } try { const res=await api('/rest/v1/rpc/merchant_rental_public_catalog',{method:'POST',body:JSON.stringify({p_slug:slug})}); const data=await res.json(); if(!res.ok||!data?.merchant)throw new Error('not_found'); state.merchant=data.merchant; state.vehicles=Array.isArray(data.vehicles)?data.vehicles:[]; await loadBookings(); renderList(); } catch(e){ app.innerHTML=`${top('车辆预约')}<div class="empty">暂时无法读取租车服务，请稍后再试。</div>`; } }
+  window.Rental={close,back,refreshList,select,quote,toggleAddon,contact,review,pickPayment:id=>{state.paymentMethod=id;renderPayment();},submit,modify,cancel,bookings:async()=>{await loadBookings();state.screen='bookings';renderBookings();},booking:openBooking,cancelBooking,editBooking,list:()=>{state.screen='list';state.selected=null;state.quote=null;state.editingBookingId='';renderList();},help:()=>alert(`请联系 ${state.merchant?.business_name||'商家'}：${state.merchant?.phone||'商家暂未填写电话'}`),faq:()=>alert('常见问题：预约提交后由商家确认；请在取车前携带有效驾照与预约信息。')};
   load();
 })();
