@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.319';
+const APP_VERSION = '5.320';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5117,7 +5117,7 @@ window._merchantOrderState = window._merchantOrderState || { merchant:null, tabl
 function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
-function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.319`; }
+function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.320`; }
 function merchantTakeoutUrl(m){ return `https://escoopcity.com/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.316`; }
 function merchantQueueUrl(m){ return `https://escoopcity.com/queue/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.317`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
@@ -5134,6 +5134,14 @@ async function loadMerchantOrderTables(merchantUserId, includeInactive){
   const filter = includeInactive ? '' : '&is_active=eq.true';
   const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_tables?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}${filter}&select=*&order=table_name.asc`, {method:'GET'});
   if(!res.ok) throw new Error(await res.text()); return await res.json();
+}
+async function applyMerchantOrderTableAvailability(tables, merchantUserId){
+  try{
+    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_table_availability`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_merchant_user_id:merchantUserId})});
+    if(!res.ok) throw new Error(await res.text());
+    const occupied=new Set((await res.json()).filter(row=>row.is_occupied).map(row=>String(row.table_code)));
+    return (tables||[]).map(table=>Object.assign({},table,{is_occupied:occupied.has(String(table.table_code))}));
+  }catch(error){console.warn('读取餐桌占用状态失败:',error.message);return tables||[];}
 }
 async function openMerchantOrderEntry(merchantUserId, tableCode){
   if(!(session && session.user)){ showToast('登录后即可扫码点餐'); openAuth('login'); return; }
@@ -5287,7 +5295,7 @@ async function openMerchantOrderEntry(merchantUserId, tableCode, orderMode){
     const merchant = await getMerchantOrderMerchant(merchantUserId);
     if(!merchant) throw new Error('merchant_not_found');
     const takeout=orderMode==='takeout';
-    const tables = takeout ? [] : await loadMerchantOrderTables(merchant.user_id, false);
+    const tables = takeout ? [] : await applyMerchantOrderTableAvailability(await loadMerchantOrderTables(merchant.user_id, false),merchant.user_id);
     const requestedTable = tableCode ? tables.find(row => String(row.table_code) === String(tableCode).toLowerCase()) : null;
     const tableLock = takeout ? null : merchantCustomerTableLock(merchant.user_id);
     const lockedTable = tableLock ? tables.find(row => String(row.table_code) === String(tableLock.table_code)) : null;
@@ -5308,6 +5316,7 @@ async function selectMerchantOrderTable(code){
   const state = merchantOrderState();
   const nextTable = (state.tables || []).find(row => String(row.table_code) === String(code)) || null;
   if(!nextTable) return;
+  if(nextTable.is_occupied && String(nextTable.table_code)!==String(state.table&&state.table.table_code)){showToast('该桌正在用餐，暂时不能更换。');return;}
   const existingLock = merchantCustomerTableLock(state.merchant&&state.merchant.user_id);
   if(existingLock && String(existingLock.table_code)!==String(nextTable.table_code)){
     if(state.activeOrderId || state.order){showToast('该桌已经正式下单，需要服务员协助换桌。');return;}
@@ -5360,7 +5369,7 @@ function renderMerchantOrderMenu(){
   const merchant = state.merchant;
   const isTakeout = state.orderMode === 'takeout';
   if(!state.table && state.orderMode!=='takeout'){
-    body.innerHTML = `<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${merchant.logo ? `<img src="${escAttr(merchant.logo)}" alt="">` : escHtml(initials(merchant.business_name || '店'))}</div><div><b>${escHtml(merchant.business_name || '商家点餐')}</b><span>请选择你所在的桌位</span></div></div></div><div class="order-notice">为保证订单送到正确的桌位，请选择桌号。到店结账，不会在此页面扣款。</div>${(state.tables || []).length ? state.tables.map(table => `<button class="merchant-table-card" onclick="selectMerchantOrderTable('${escAttr(table.table_code)}')"><span style="width:42px;height:42px;border-radius:12px;background:var(--sage-light);color:var(--sage-dark);display:flex;align-items:center;justify-content:center;">${uiIcon('store',18)}</span><span style="min-width:0;flex:1;text-align:left;"><b>${escHtml(table.table_name)}</b><span>点此开始点餐</span></span><span style="font-size:22px;color:var(--sage-dark);">›</span></button>`).join('') : '<div class="deals-empty-panel">这家店还没有设置餐桌二维码，请向店员咨询。</div>'}`;
+    body.innerHTML = `<div class="order-merchant-hero"><div class="order-merchant-title"><div class="logo">${merchant.logo ? `<img src="${escAttr(merchant.logo)}" alt="">` : escHtml(initials(merchant.business_name || '店'))}</div><div><b>${escHtml(merchant.business_name || '商家点餐')}</b><span>请选择你所在的桌位</span></div></div></div><div class="order-notice">为保证订单送到正确的桌位，请选择桌号。正在用餐的桌位不能更换进入。</div>${(state.tables || []).length ? state.tables.map(table => table.is_occupied ? `<button class="merchant-table-card" disabled style="opacity:.52;cursor:not-allowed;"><span style="width:42px;height:42px;border-radius:12px;background:#f3e7e5;color:var(--berry);display:flex;align-items:center;justify-content:center;">${uiIcon('store',18)}</span><span style="min-width:0;flex:1;text-align:left;"><b>${escHtml(table.table_name)}</b><span>正在用餐</span></span><span style="font-size:12px;color:var(--berry);font-weight:900;">已占用</span></button>` : `<button class="merchant-table-card" onclick="selectMerchantOrderTable('${escAttr(table.table_code)}')"><span style="width:42px;height:42px;border-radius:12px;background:var(--sage-light);color:var(--sage-dark);display:flex;align-items:center;justify-content:center;">${uiIcon('store',18)}</span><span style="min-width:0;flex:1;text-align:left;"><b>${escHtml(table.table_name)}</b><span>点此开始点餐</span></span><span style="font-size:22px;color:var(--sage-dark);">›</span></button>`).join('') : '<div class="deals-empty-panel">这家店还没有设置餐桌二维码，请向店员咨询。</div>'}`;
     return;
   }
   const products = merchantOrderProducts(merchant);
@@ -5389,7 +5398,8 @@ async function submitMerchantOrder(){
     showToast('订单已发送给商家');
   } catch(error){
     console.warn('提交点餐失败:', error.message);
-    showToast(String(error.message || '').includes('product_unavailable') ? '有菜品已下架，请重新选择' : '提交失败，请稍后再试');
+    const message=String(error.message||'');
+    showToast(message.includes('merchant_order_table_occupied') ? '该桌正在用餐，请选择其他桌号' : message.includes('product_unavailable') ? '有菜品已下架，请重新选择' : '提交失败，请稍后再试');
   }
 }
 function openMerchantTakeoutOrder(merchantUserId){ return openMerchantTakeoutPage(merchantUserId); }
@@ -17690,7 +17700,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Guest QR Dine-In & App-Only Takeout】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Occupied Table Lock】`);
 </script>
 </body>
 </html>

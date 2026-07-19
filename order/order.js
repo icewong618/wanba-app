@@ -181,7 +181,7 @@
         p_items: rows.map(product => ({ product_id: product.id, quantity: product.quantity })),
         p_note: state.dinein.note
       }) });
-      if (!response.ok) { console.warn(await response.text()); alert('订单提交失败，请确认桌号后重试。'); return; }
+      if (!response.ok) { const detail=await response.text(); console.warn(detail); alert(detail.includes('merchant_order_table_occupied') ? '该桌正在用餐，请联系服务员。' : '订单提交失败，请确认桌号后重试。'); return; }
       state.orderId = await response.json(); state.cart = {}; nav('success'); return;
     }
     const delivery = state.takeout.fulfillment === 'delivery';
