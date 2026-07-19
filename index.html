@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.299';
+const APP_VERSION = '5.300';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5103,11 +5103,12 @@ function merchantTakeoutUrl(m){ return `${window.location.origin}/?order=${encod
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
 async function getMerchantOrderMerchant(userId){
-  if(currentMerchant && String(currentMerchant.user_id) === String(userId)) return currentMerchant;
-  if(window._merchantIdentityCache && window._merchantIdentityCache[userId]) return window._merchantIdentityCache[userId];
+  if(currentMerchant && String(currentMerchant.user_id) === String(userId) && Array.isArray(currentMerchant.products || currentMerchant.store_products)) return currentMerchant;
+  const cached=window._merchantIdentityCache && window._merchantIdentityCache[userId];
+  if(cached && Array.isArray(cached.products || cached.store_products)) return cached;
   const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(userId)}&verified=eq.true&select=*&limit=1`, {method:'GET'});
-  if(!res.ok) throw new Error(await res.text());
-  const m = (await res.json())[0]; if(m) setMerchantIdentityCache(m.user_id, m); return m;
+  if(!res.ok){ if(cached) return cached; throw new Error(await res.text()); }
+  const m = (await res.json())[0]; if(m) setMerchantIdentityCache(m.user_id, m); return m || cached || null;
 }
 async function loadMerchantOrderTables(merchantUserId, includeInactive){
   const filter = includeInactive ? '' : '&is_active=eq.true';
@@ -17568,7 +17569,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Takeout Menu Loading Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Menu Data Fallback Fix】`);
 </script>
 </body>
 </html>
