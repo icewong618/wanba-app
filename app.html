@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.324';
+const APP_VERSION = '5.325';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -9293,9 +9293,12 @@ function onMerchantImageSelected(event, type){
   };
   reader.readAsDataURL(file);
 }
-/* 保存商家资料：先PATCH已有行，没有行再POST新建（和关注表同一套路） */
+/* 保存商家资料：以店长账号为唯一键直接更新或新建，兼容浏览器和原生 App。 */
 async function saveMerchantProfile(){
   if(!(session && session.user)){ showToast('请先登录'); return; }
+  const saveButton = document.querySelector('#merchantEditSheet button[onclick="saveMerchantProfile()"]');
+  if(saveButton){ saveButton.disabled = true; saveButton.textContent = '正在保存…'; }
+  try {
   const perksInput = document.getElementById('mBizPerks');
   const slugInput = document.getElementById('mBizSlug');
   if(!perksInput || !slugInput){ showToast('编辑页面尚未准备完成，请关闭后重新打开。'); return; }
@@ -9355,32 +9358,25 @@ async function saveMerchantProfile(){
     location_updated_at: (currentMerchant && currentMerchant.location_updated_at) || null,
     updated_at: new Date().toISOString()
   };
-  try {
-    const merchantEndpoint = `${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(session.user.id)}`;
-    const res = await authedFetch(merchantEndpoint, {
-      method: 'PATCH', body: JSON.stringify(payload)
+    // Upsert is deliberately used here instead of PATCH-then-POST. It works consistently
+    // in browser and native WebView, even when a successful update has no response body.
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?on_conflict=user_id`, {
+      method: 'POST',
+      headers:{ 'Content-Type':'application/json', 'Prefer':'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(Object.assign({ user_id:session.user.id }, payload))
     });
     if(!res.ok){
       const errorText = await res.text();
+      console.warn('商家资料保存接口失败:', res.status, errorText);
       if(errorText.includes('merchant_slug_change_cooldown')) showToast('链接每 365 天只能修改一次。');
       else if(errorText.includes('merchant_slug_reserved')) showToast('这个链接为系统保留地址，请换一个。');
       else if(errorText.includes('merchant_slug_invalid')) showToast('链接只能使用英文、数字和短横线。');
       else if(errorText.includes('duplicate key') || errorText.includes('merchants_slug_unique_idx')) showToast('这个链接已经被其他商家使用。');
-      else showToast('保存失败，请重试');
+      else showToast(`保存失败（${res.status}），请稍后重试`);
       return;
     }
     let rows = [];
     try { rows = await res.json(); } catch(e) { rows = []; }
-    // A successful PATCH may return 204/no body on some WebViews. It is still saved;
-    // never turn that success into a duplicate INSERT attempt.
-    if(!rows.length){
-      const verifyRes = await authedFetch(`${merchantEndpoint}&select=user_id,business_name,slug,updated_at&limit=1`, { method:'GET' });
-      if(!verifyRes.ok){
-        console.warn('商家资料保存后核对失败:', await verifyRes.text());
-      } else {
-        rows = await verifyRes.json();
-      }
-    }
     currentMerchant = Object.assign({}, currentMerchant, payload, rows[0] || {});
     setMerchantIdentityCache(session.user.id, currentMerchant);
     closeMerchantEditSheet();
@@ -9390,7 +9386,8 @@ async function saveMerchantProfile(){
     if(weekPage && weekPage.classList.contains('active')) renderWeekFeed();
     if(activePostId) renderPostModal();
     showToast(previousSlug && previousSlug !== slug ? '✓ 微网站链接已修改，365 天内不能再次修改' : '✓ 商家资料已保存');
-  } catch(e){ console.warn('商家资料保存失败:', e.message); showToast('保存失败：' + e.message); }
+  } catch(e){ console.warn('商家资料保存失败:', e.message); showToast('保存失败：' + (e.message || '请稍后重试')); }
+  finally { if(saveButton){ saveButton.disabled = false; saveButton.textContent = '✓ 保存'; } }
 }
 
 function merchantApplicationStatusLabel(status){
