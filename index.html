@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.310';
+const APP_VERSION = '5.311';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5372,7 +5372,17 @@ async function submitMerchantOrder(){
     showToast(String(error.message || '').includes('product_unavailable') ? '有菜品已下架，请重新选择' : '提交失败，请稍后再试');
   }
 }
-function openMerchantTakeoutOrder(merchantUserId){ return openMerchantOrderEntry(merchantUserId,'','takeout'); }
+function openMerchantTakeoutOrder(merchantUserId){ return openMerchantTakeoutPage(merchantUserId); }
+async function openMerchantTakeoutPage(merchantUserId){
+  try {
+    const merchant=await getMerchantOrderMerchant(merchantUserId);
+    if(!merchant){showToast('暂时无法读取商家资料');return;}
+    window.location.href=merchantTakeoutUrl(merchant);
+  } catch(error){
+    console.warn('打开独立外卖点餐页失败:',error.message);
+    showToast('点餐页面暂时无法打开，请稍后再试');
+  }
+}
 function openMerchantTakeoutCart(){
   const state=merchantOrderState(), rows=merchantOrderCartRows();
   if(!state.merchant||!rows.length){showToast('请先选择菜品');return;}
