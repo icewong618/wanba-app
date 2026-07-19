@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.325';
+const APP_VERSION = '5.326';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -9197,11 +9197,17 @@ function openMerchantEditSheet(){
       <div style="font-size:10.5px;color:var(--ink-faint);line-height:1.45;margin-top:8px;">商家确认一次消费时，会自动增加消费次数并赠送设定的积分。</div>
     </div>
     <div style="display:flex;gap:10px;">
-      <button onclick="saveMerchantProfile()" style="flex:1;padding:12px;border-radius:10px;background:var(--sage);color:#fff;border:none;cursor:pointer;font-weight:600;font-size:13px;">✓ 保存</button>
+      <button type="button" id="merchantProfileSaveButton" style="flex:1;padding:12px;border-radius:10px;background:var(--sage);color:#fff;border:none;cursor:pointer;font-weight:600;font-size:13px;">✓ 保存</button>
       <button onclick="closeMerchantEditSheet()" style="flex:1;padding:12px;border-radius:10px;background:var(--bg-alt);color:var(--ink);border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:13px;">✕ 取消</button>
     </div>
   `;
   merchantSlugCheckState = { slug, available:true };
+  const saveButton = document.getElementById('merchantProfileSaveButton');
+  if(saveButton) saveButton.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    saveMerchantProfile();
+  });
   document.getElementById('merchantEditSheet')?.classList.add('open');
 }
 function closeMerchantEditSheet(){ document.getElementById('merchantEditSheet')?.classList.remove('open'); }
@@ -9296,7 +9302,7 @@ function onMerchantImageSelected(event, type){
 /* 保存商家资料：以店长账号为唯一键直接更新或新建，兼容浏览器和原生 App。 */
 async function saveMerchantProfile(){
   if(!(session && session.user)){ showToast('请先登录'); return; }
-  const saveButton = document.querySelector('#merchantEditSheet button[onclick="saveMerchantProfile()"]');
+  const saveButton = document.getElementById('merchantProfileSaveButton');
   if(saveButton){ saveButton.disabled = true; saveButton.textContent = '正在保存…'; }
   try {
   const perksInput = document.getElementById('mBizPerks');
