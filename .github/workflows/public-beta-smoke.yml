@@ -29,4 +29,4 @@ jobs:
         env:
           PUBLIC_BETA_URL: https://escoopcity.com
           PUBLIC_BETA_MERCHANT_PATH: /sichuan-garden-la
-        run: EXPECTED_VERSION="$(node -p \"require('./version.json').version\")" node scripts/public-beta-smoke.mjs
+        run: EXPECTED_VERSION="$(node -p "require('./version.json').version")" node scripts/public-beta-smoke.mjs
