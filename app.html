@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.298';
+const APP_VERSION = '5.299';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5274,7 +5274,8 @@ async function openMerchantOrderEntry(merchantUserId, tableCode, orderMode){
     window._merchantOrderState = { merchant, table:table || null, tables, cart:{}, category:'全部', activeOrderId:null, orderCode:'', order:null, items:[], orders:[], managerStatus:'active', orderMode:takeout?'takeout':'dinein', takeout:{fulfillment:'pickup'} };
     if(table && !lockedTable) saveMerchantCustomerTableLock(merchant.user_id,table);
     if(lockedTable && requestedTable && String(lockedTable.table_code)!==String(requestedTable.table_code)) showToast(`当前点餐已锁定在${lockedTable.table_name}，如需换桌请点击“更换”。`);
-    if(table || takeout) await loadMerchantCustomerActiveOrder();
+    if(takeout){ renderMerchantOrderMenu(); return; }
+    if(table) await loadMerchantCustomerActiveOrder();
     else renderMerchantOrderMenu();
   } catch(error){
     console.warn('打开扫码点餐失败:', error.message);
@@ -17567,7 +17568,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Takeout Ordering & Coupon Payment Rules】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Takeout Menu Loading Fix】`);
 </script>
 </body>
 </html>
