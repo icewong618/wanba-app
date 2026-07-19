@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.313';
+const APP_VERSION = '5.314';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5118,7 +5118,7 @@ function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
 function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}`; }
-function merchantTakeoutUrl(m){ return `${window.location.origin}/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout`; }
+function merchantTakeoutUrl(m){ return `https://escoopcity.com/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.314`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
 async function getMerchantOrderMerchant(userId){
