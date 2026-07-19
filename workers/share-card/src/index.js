@@ -181,7 +181,11 @@ async function readPublicProfile(userId, env) {
 function githubRawRequest(request, url, env, merchantPage) {
   const upstream = new URL(env.CONTENT_ORIGIN);
   const repositoryPath = upstream.pathname.replace(/\/$/, '');
-  const requestedPath = merchantPage ? '/index.html' : (url.pathname === '/' ? '/index.html' : url.pathname);
+  // jsDelivr serves a repository directory listing for paths such as /order/.
+  // Resolve directory URLs to their actual entry document before proxying.
+  const requestedPath = merchantPage
+    ? '/index.html'
+    : (url.pathname === '/' || url.pathname.endsWith('/') ? `${url.pathname}index.html` : url.pathname);
   upstream.pathname = `${repositoryPath}${requestedPath}`;
   // Keep browser cache-busting parameters out of the source URL, but use a
   // Worker revision token so newly committed static files do not inherit an old 404.
