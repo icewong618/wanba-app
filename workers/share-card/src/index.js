@@ -326,7 +326,7 @@ export default {
       canonical: `${env.SITE_ORIGIN}/?user=${encodeURIComponent(user.user_id)}`
     } : postMeta;
 
-    const htmlPage = Boolean(merchant || post || user) || url.pathname === '/' || /\.html$/i.test(url.pathname);
+    const htmlPage = Boolean(merchant || post || user) || url.pathname === '/' || url.pathname.endsWith('/') || /\.html$/i.test(url.pathname);
     try {
       const originResponse = await fetch(githubRawRequest(request, url, env, Boolean(merchant || post || user)));
       if (!originResponse.ok && cacheKey) {
