@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.329';
+const APP_VERSION = '5.330';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4882,6 +4882,9 @@ function switchMerchantSection(userId, section){
   window._merchantSectionByUserId[userId] = section;
   const m = (currentMerchant && currentMerchant.user_id === userId) ? currentMerchant : window._merchantIdentityCache[userId];
   rerenderMerchantSection(m);
+  if(section === 'store' && m && merchantEnabledFeatures(m).includes('rental')){
+    setTimeout(() => loadMerchantRentalStoreCatalog(m, true), 0);
+  }
 }
 function merchantOwnerButton(label, handler){
   return `<button onclick="${handler}" style="width:100%;margin-bottom:10px;border-radius:999px;background:var(--sage);color:#fff;padding:10px 12px;font-size:13px;font-weight:900;">${label}</button>`;
@@ -4893,9 +4896,10 @@ function merchantRentalStoreRate(vehicle){
   if(vehicle?.pricing_mode === 'both') return `${merchantRentalMoney(vehicle.hourly_rate)}/小时起`;
   return `${merchantRentalMoney(vehicle?.daily_rate)}/天`;
 }
-async function loadMerchantRentalStoreCatalog(m){
+async function loadMerchantRentalStoreCatalog(m, force){
   const key = merchantRentalStoreKey(m);
-  if(!key || window._merchantRentalStoreCatalog[key]?.loading) return;
+  const previous = window._merchantRentalStoreCatalog[key];
+  if(!key || previous?.loading || (!force && previous && !previous.error)) return;
   window._merchantRentalStoreCatalog[key] = { loading:true, vehicles:[] };
   try {
     const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_public_catalog`, {
@@ -4917,6 +4921,9 @@ function merchantRentalStoreHtml(m, isOwnerPage){
   if(!catalog){
     setTimeout(() => loadMerchantRentalStoreCatalog(m), 0);
     return '<div class="deals-empty-panel">正在读取车辆库...</div>';
+  }
+  if(catalog.error){
+    return `<div class="deals-empty-panel">车辆库暂时无法读取。<button style="margin:12px auto 0;display:block;" onclick="loadMerchantRentalStoreCatalog(window._merchantIdentityCache['${String(m.user_id || '').replace(/'/g,'')}'] || currentMerchant, true)">重新读取</button></div>`;
   }
   const vehicles = Array.isArray(catalog.vehicles) ? catalog.vehicles : [];
   const userId = String(m.user_id || '').replace(/'/g, '');
@@ -7493,6 +7500,7 @@ async function joinMerchantMembership(merchantUserId){
     });
     if(!res.ok) throw new Error(await res.text());
     await loadMerchantMemberships(merchantUserId, true);
+    await loadUserMembershipCards(true);
     refreshMerchantPublicByUserId(merchantUserId);
     if(currentMerchant && currentMerchant.user_id === merchantUserId) renderMerchantPage();
     showToast('已加入商家会员');
@@ -7511,6 +7519,7 @@ async function leaveMerchantMembership(merchantUserId){
     const res = await authedFetch(url, { method:'DELETE' });
     if(!res.ok) throw new Error(await res.text());
     await loadMerchantMemberships(merchantUserId, true);
+    await loadUserMembershipCards(true);
     refreshMerchantPublicByUserId(merchantUserId);
     showToast('已取消会员');
   } catch(e){
