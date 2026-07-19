@@ -1978,6 +1978,15 @@
   <div class="merchant-fullscreen-body" id="merchantFeatureCenterBody"></div>
 </div>
 
+<div id="merchantRentalManager" class="merchant-fullscreen-sheet">
+  <div class="merchant-fullscreen-head">
+    <button onclick="closeMerchantRentalManager()" aria-label="关闭">×</button>
+    <h3>租车预约管理</h3>
+    <button onclick="renderMerchantRentalManager()" aria-label="刷新" style="font-size:18px;">↻</button>
+  </div>
+  <div class="merchant-fullscreen-body" id="merchantRentalManagerBody"></div>
+</div>
+
 <div id="merchantProductEditor" class="merchant-fullscreen-sheet">
   <div class="merchant-fullscreen-head">
     <button onclick="closeMerchantProductEditor()" aria-label="关闭">×</button>
@@ -2964,6 +2973,7 @@ const ICONS = {
   heart:'<path d="M20.5 8.5c0 5-8.5 10.5-8.5 10.5S3.5 13.5 3.5 8.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 8.5 2.5z"></path>',
   phone:'<path d="M22 16.5v3a2 2 0 0 1-2.2 2 19 19 0 0 1-8.3-3A18.7 18.7 0 0 1 5.5 12 19 19 0 0 1 2.5 3.7 2 2 0 0 1 4.5 1.5h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L8.2 9.2a15 15 0 0 0 6.6 6.6l1.2-1.2a2 2 0 0 1 1.8-.6l3 .5a2 2 0 0 1 1.7 2z"></path>',
   map:'<path d="M12 21s7-5.5 7-12a7 7 0 0 0-14 0c0 6.5 7 12 7 12z"></path><circle cx="12" cy="9" r="2.5"></circle>',
+  car:'<path d="M3 16v-4l2-5h14l2 5v4"></path><path d="M5 16h14"></path><path d="M7 12h10"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle>',
   upload:'<path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path><path d="M5 20h14"></path>',
   video:'<rect x="3" y="6" width="13" height="12" rx="2"></rect><path d="M16 10l5-3v10l-5-3z"></path>',
   alert:'<path d="M12 3l10 18H2z"></path><path d="M12 9v5M12 17h.01"></path>',
@@ -3207,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.321';
+const APP_VERSION = '5.322';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5422,7 +5432,7 @@ function openMerchantEmbeddedOrder(url){
   sheet.innerHTML=`<iframe src="${escAttr(url)}" title="外卖点单" style="width:100%;height:100%;border:0;background:#fff;" allow="payment"></iframe>`;
   document.body.appendChild(sheet);
 }
-window.addEventListener('message',event=>{ if(event?.data?.type==='leshenghuo-close-takeout') closeMerchantEmbeddedOrder(); });
+window.addEventListener('message',event=>{ if(['leshenghuo-close-takeout','leshenghuo-close-rental'].includes(event?.data?.type)) closeMerchantEmbeddedOrder(); });
 async function openMerchantTakeoutPage(merchantUserId){
   try {
     const merchant=await getMerchantOrderMerchant(merchantUserId);
@@ -6962,6 +6972,7 @@ const MERCHANT_FEATURE_CATALOG = [
   { id:'booking', title:'预约', icon:'calendar', live:true, phone:true, description:'自定义可预约时间、服务内容、技师、美容师或包间类型。' },
   { id:'event_registration', title:'活动报名', icon:'calendar', live:true, phone:true, description:'设置日期、总人数、每账号人数限制和剩余报名名额。' },
   { id:'ticketing', title:'票务与核销', icon:'ticket', live:true, phone:true, description:'创建票种与座位图，购票后生成二维码，到场即可核销。' },
+  { id:'rental', title:'租车预约', icon:'car', live:true, phone:true, description:'展示车辆、按日或小时预约、人工确认、取还车记录与运营状态。' },
   { id:'queue', title:'排队取号', icon:'user', live:false, phone:true, description:'用户线上取号、查看前方人数，商家可按顺序叫号。' },
   { id:'quote', title:'咨询报价', icon:'message', live:false, phone:true, description:'用户提交需求和联系方式，商家后台统一回复与跟进。' },
   { id:'attendance', title:'签到', icon:'check', live:false, phone:true, description:'课程、活动或团课到场签到，可结合会员或二维码使用。' },
@@ -6994,6 +7005,106 @@ async function saveMerchantEnabledFeatures(merchant, values){
   return clean;
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
+function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.322`; }
+function closeMerchantRentalManager(){ document.getElementById('merchantRentalManager')?.classList.remove('open'); }
+async function openMerchantRentalPage(merchantUserId){
+  try {
+    const merchant = await getMerchantOrderMerchant(merchantUserId);
+    if(!merchant) throw new Error('merchant_not_found');
+    const url = merchantRentalUrl(merchant);
+    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
+    else window.location.href = url;
+  } catch(error){ console.warn('打开租车预约失败:', error.message); showToast('租车预约暂时无法打开，请稍后再试'); }
+}
+function merchantRentalCanManage(merchantUserId){
+  return String(merchantUserId || '') === String(activeMerchantWorkspaceId() || '') && (isMerchantWorkspaceOwner() || merchantWorkspaceHasPermission('order_manage'));
+}
+async function openMerchantRentalManager(merchantUserId){
+  const id = merchantUserId || activeMerchantWorkspaceId();
+  if(!id || !merchantRentalCanManage(id)){ showToast('你没有这家商家的租车管理权限'); return; }
+  const sheet = document.getElementById('merchantRentalManager');
+  if(!sheet) return;
+  sheet.dataset.merchantUserId = id;
+  sheet.classList.add('open');
+  await renderMerchantRentalManager();
+}
+function merchantRentalMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
+function merchantRentalStatusText(status){ return ({available:'可预约',reserved:'已保留',rented:'租用中',maintenance:'维修中',cleaning:'清洁中',inactive:'已下架',pending:'待确认',confirmed:'已确认',rejected:'已拒绝',cancelled:'已取消',active:'取车中',returned:'已归还',overdue:'逾期'}[status] || status || '待确认'); }
+function merchantRentalDate(value){ return value ? new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'}).format(new Date(value)) : '未填写'; }
+function merchantRentalPhotos(value){ return Array.isArray(value) ? value.filter(Boolean) : []; }
+async function renderMerchantRentalManager(){
+  const sheet = document.getElementById('merchantRentalManager');
+  const body = document.getElementById('merchantRentalManagerBody');
+  const merchantUserId = sheet?.dataset.merchantUserId || activeMerchantWorkspaceId();
+  if(!body || !merchantUserId) return;
+  body.innerHTML = '<div class="deals-empty-panel">正在读取车辆与预约...</div>';
+  try {
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_manager_list`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_merchant_user_id:merchantUserId}) });
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
+    const bookings = Array.isArray(data?.bookings) ? data.bookings : [];
+    window._merchantRentalData = { vehicles, bookings };
+    const vehicleCards = vehicles.length ? vehicles.map(vehicle => {
+      const photo = merchantRentalPhotos(vehicle.photos)[0];
+      const rate = vehicle.pricing_mode === 'hour' ? `${merchantRentalMoney(vehicle.hourly_rate)}/小时` : vehicle.pricing_mode === 'both' ? `${merchantRentalMoney(vehicle.hourly_rate)}/小时起` : `${merchantRentalMoney(vehicle.daily_rate)}/天`;
+      return `<div class="merchant-order-card"><div style="display:flex;gap:10px;align-items:center;"><div style="width:66px;height:52px;flex:0 0 66px;border-radius:9px;background:var(--sage-light);overflow:hidden;display:grid;place-items:center;">${photo ? `<img src="${escAttr(photo)}" alt="" style="width:100%;height:100%;object-fit:cover;">` : uiIcon('car',22)}</div><div style="min-width:0;flex:1;"><b>${escHtml(vehicle.name)}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-soft);">${escHtml([vehicle.year,vehicle.make,vehicle.model,`${vehicle.seats || 5}座`].filter(Boolean).join(' · '))}</span><span style="display:block;margin-top:3px;font-size:12px;color:var(--berry);font-weight:800;">${rate} · 押金 ${merchantRentalMoney(vehicle.deposit_amount)}</span></div><i class="merchant-order-state">${escHtml(merchantRentalStatusText(vehicle.status))}</i></div><div class="merchant-order-card-actions"><button class="primary" onclick="openMerchantRentalVehicleEditor('${escAttr(vehicle.id)}')">编辑车辆</button><button onclick="merchantRentalSetVehicleStatus('${escAttr(vehicle.id)}','${vehicle.status === 'inactive' ? 'available' : 'inactive'}')">${vehicle.status === 'inactive' ? '重新上架' : '下架'}</button></div></div>`;
+    }).join('') : '<div class="deals-empty-panel">还没有车辆。先添加一辆车，顾客即可查看并提交预约。</div>';
+    const active = bookings.filter(row => !['returned','rejected','cancelled'].includes(row.status));
+    const bookingCards = active.length ? active.map(booking => {
+      const vehicle = vehicles.find(row => String(row.id) === String(booking.vehicle_id)) || {};
+      const actions = booking.status === 'pending' ? `<button class="primary" onclick="merchantRentalSetBookingStatus('${escAttr(booking.id)}','confirmed')">确认预约</button><button onclick="merchantRentalSetBookingStatus('${escAttr(booking.id)}','rejected')">拒绝</button>` : booking.status === 'confirmed' ? `<button class="primary" onclick="merchantRentalSetBookingStatus('${escAttr(booking.id)}','active')">确认取车</button><button onclick="merchantRentalSetBookingStatus('${escAttr(booking.id)}','cancelled')">取消预约</button>` : booking.status === 'active' || booking.status === 'overdue' ? `<button class="primary" onclick="merchantRentalSetBookingStatus('${escAttr(booking.id)}','returned')">确认归还</button><button onclick="merchantRentalSetBookingStatus('${escAttr(booking.id)}','overdue')">标记逾期</button>` : '';
+      return `<div class="merchant-order-card"><div class="merchant-order-card-head"><div><b>${escHtml(vehicle.name || '车辆')} · ${escHtml(booking.booking_code || '')}</b><span>${escHtml(booking.customer_name)} · ${escHtml(booking.customer_phone)}</span></div><i class="merchant-order-state">${escHtml(merchantRentalStatusText(booking.status))}</i></div><div class="merchant-order-lines"><div class="merchant-order-line"><span>${merchantRentalDate(booking.starts_at)} 至 ${merchantRentalDate(booking.ends_at)}</span><b>${merchantRentalMoney(booking.total_amount)}</b></div><div class="merchant-order-line"><span>押金 ${merchantRentalMoney(booking.deposit_amount)} · ${escHtml(booking.payment_status === 'paid' ? '已收款' : '待付款')} · ${escHtml(booking.deposit_status === 'authorized' ? '押金已预授权' : '押金待处理')}</span></div>${booking.operator_note ? `<div style="margin-top:8px;color:var(--ink-soft);font-size:12px;">备注：${escHtml(booking.operator_note)}</div>` : ''}</div>${actions ? `<div class="merchant-order-card-actions">${actions}</div>` : ''}</div>`;
+    }).join('') : '<div class="deals-empty-panel">目前没有待处理的预约。</div>';
+    body.innerHTML = `<div class="merchant-order-top-actions"><button class="primary" onclick="openMerchantRentalVehicleEditor()">${uiIcon('car',17)} 添加车辆</button><button onclick="renderMerchantRentalManager()">${uiIcon('refresh',17)} 刷新</button></div><div class="order-notice">顾客预约会先进入待确认。线上付款、押金预授权与自动退款将在支付服务接入后启用；目前请按实际收款情况更新状态。</div><div class="merchant-order-status-tabs"><button class="on">车辆 ${vehicles.length}</button><button onclick="document.getElementById('merchantRentalBookings').scrollIntoView({behavior:'smooth'})">预约 ${active.length}</button></div><section><div class="deals-section-header" style="margin:12px 0 8px;">车辆管理 <span>可预约 / 清洁 / 维修</span></div>${vehicleCards}</section><section id="merchantRentalBookings" style="margin-top:20px;"><div class="deals-section-header" style="margin:0 0 8px;">预约处理 <span>按取车时间排序</span></div>${bookingCards}</section>`;
+  } catch(error){ console.warn('租车管理读取失败:', error.message); body.innerHTML = '<div class="deals-empty-panel">租车功能暂时无法读取，请确认已运行 v5.322 数据库更新。</div>'; }
+}
+function openMerchantRentalVehicleEditor(vehicleId){
+  const body = document.getElementById('merchantRentalManagerBody');
+  const vehicle = vehicleId ? (window._merchantRentalData?.vehicles || []).find(row => String(row.id) === String(vehicleId)) : {};
+  if(!body) return;
+  const photos = merchantRentalPhotos(vehicle?.photos);
+  window._merchantRentalEditingPhotos = photos.slice();
+  body.innerHTML = `<div class="merchant-order-top-actions"><button onclick="renderMerchantRentalManager()">← 返回车辆管理</button></div><div class="merchant-form-field"><label>车辆名称</label><input id="rentalVehicleName" maxlength="80" value="${escAttr(vehicle?.name || '')}" placeholder="例如：2024 Toyota Camry"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div class="merchant-form-field"><label>品牌</label><input id="rentalVehicleMake" maxlength="50" value="${escAttr(vehicle?.make || '')}" placeholder="Toyota"></div><div class="merchant-form-field"><label>车型</label><input id="rentalVehicleModel" maxlength="50" value="${escAttr(vehicle?.model || '')}" placeholder="Camry"></div><div class="merchant-form-field"><label>年份</label><input id="rentalVehicleYear" inputmode="numeric" value="${escAttr(vehicle?.year || '')}" placeholder="2024"></div><div class="merchant-form-field"><label>座位数</label><input id="rentalVehicleSeats" inputmode="numeric" value="${escAttr(vehicle?.seats || 5)}"></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div class="merchant-form-field"><label>变速箱</label><select id="rentalVehicleTransmission"><option ${vehicle?.transmission === '自动挡' ? 'selected' : ''}>自动挡</option><option ${vehicle?.transmission === '手动挡' ? 'selected' : ''}>手动挡</option></select></div><div class="merchant-form-field"><label>燃料</label><select id="rentalVehicleFuel"><option ${vehicle?.fuel_type === '汽油' ? 'selected' : ''}>汽油</option><option ${vehicle?.fuel_type === '混动' ? 'selected' : ''}>混动</option><option ${vehicle?.fuel_type === '纯电' ? 'selected' : ''}>纯电</option><option ${vehicle?.fuel_type === '柴油' ? 'selected' : ''}>柴油</option></select></div></div><div class="merchant-form-field"><label>租赁方式</label><select id="rentalVehiclePricing"><option value="day" ${vehicle?.pricing_mode === 'day' ? 'selected' : ''}>按天</option><option value="hour" ${vehicle?.pricing_mode === 'hour' ? 'selected' : ''}>按小时</option><option value="both" ${vehicle?.pricing_mode === 'both' ? 'selected' : ''}>按小时和天</option></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div class="merchant-form-field"><label>日租价格</label><input id="rentalVehicleDayRate" inputmode="decimal" value="${escAttr(vehicle?.daily_rate || 0)}" placeholder="0"></div><div class="merchant-form-field"><label>小时价格</label><input id="rentalVehicleHourRate" inputmode="decimal" value="${escAttr(vehicle?.hourly_rate || 0)}" placeholder="0"></div><div class="merchant-form-field"><label>最少小时数</label><input id="rentalVehicleMinHours" inputmode="numeric" value="${escAttr(vehicle?.minimum_hours || 1)}"></div><div class="merchant-form-field"><label>取车押金</label><input id="rentalVehicleDeposit" inputmode="decimal" value="${escAttr(vehicle?.deposit_amount || 0)}" placeholder="0"></div></div><div class="merchant-form-field"><label>取车地点</label><input id="rentalVehiclePickup" maxlength="180" value="${escAttr(vehicle?.pickup_address || currentMerchant?.address || '')}" placeholder="默认使用店铺地址"></div><div class="merchant-form-field"><label>车辆状态</label><select id="rentalVehicleStatus">${[['available','可预约'],['cleaning','清洁中'],['maintenance','维修中'],['inactive','下架']].map(row => `<option value="${row[0]}" ${vehicle?.status === row[0] ? 'selected' : ''}>${row[1]}</option>`).join('')}</select></div><div class="merchant-form-field"><label>车辆介绍</label><textarea id="rentalVehicleDescription" maxlength="600" placeholder="例如：适合家庭出行，含倒车影像和 CarPlay。">${escHtml(vehicle?.description || '')}</textarea></div><div class="merchant-form-field"><label>车辆图片</label><input id="rentalVehiclePhotos" type="file" accept="image/*" multiple onchange="previewMerchantRentalVehiclePhotos(this.files)"><div id="rentalVehiclePhotoPreview" style="display:flex;gap:8px;overflow:auto;margin-top:8px;">${photos.map((url,index) => `<div style="position:relative;width:84px;height:64px;flex:0 0 84px;"><img src="${escAttr(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;"><button onclick="removeMerchantRentalVehiclePhoto(${index})" style="position:absolute;right:-4px;top:-5px;width:20px;height:20px;border:0;border-radius:50%;background:var(--berry);color:#fff;line-height:1;">×</button></div>`).join('')}</div><div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">图片会压缩后上传，第一张将作为车辆封面。</div></div><button class="merchant-reward-redeem-btn" style="margin-top:14px;" onclick="saveMerchantRentalVehicle('${escAttr(vehicle?.id || '')}')">保存车辆</button>`;
+}
+function renderMerchantRentalVehiclePhotoPreview(){
+  const wrap = document.getElementById('rentalVehiclePhotoPreview');
+  if(!wrap) return;
+  wrap.innerHTML = (window._merchantRentalEditingPhotos || []).map((url,index) => `<div style="position:relative;width:84px;height:64px;flex:0 0 84px;"><img src="${escAttr(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;"><button onclick="removeMerchantRentalVehiclePhoto(${index})" style="position:absolute;right:-4px;top:-5px;width:20px;height:20px;border:0;border-radius:50%;background:var(--berry);color:#fff;line-height:1;">×</button></div>`).join('');
+}
+async function previewMerchantRentalVehiclePhotos(files){
+  const list = Array.from(files || []).slice(0, 8);
+  if(!list.length) return;
+  const convert = file => new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => compressImage(reader.result, resolve, reject, 0.76, 1440); reader.onerror = reject; reader.readAsDataURL(file); });
+  try { const values = await Promise.all(list.map(convert)); window._merchantRentalEditingPhotos = (window._merchantRentalEditingPhotos || []).concat(values).slice(0, 8); renderMerchantRentalVehiclePhotoPreview(); }
+  catch(error){ showToast('图片处理失败，请换一张图片'); }
+}
+function removeMerchantRentalVehiclePhoto(index){ window._merchantRentalEditingPhotos.splice(index,1); renderMerchantRentalVehiclePhotoPreview(); }
+async function saveMerchantRentalVehicle(vehicleId){
+  const merchantUserId = document.getElementById('merchantRentalManager')?.dataset.merchantUserId || activeMerchantWorkspaceId();
+  const get = id => document.getElementById(id)?.value?.trim() || '';
+  const name = get('rentalVehicleName');
+  if(!name){ showToast('请填写车辆名称'); return; }
+  try {
+    const uploadedPhotos = [];
+    for(const source of (window._merchantRentalEditingPhotos || [])) uploadedPhotos.push(await uploadMediaDataUrl(source, 'products'));
+    const payload = { id:vehicleId || undefined, name, make:get('rentalVehicleMake'), model:get('rentalVehicleModel'), year:get('rentalVehicleYear'), seats:get('rentalVehicleSeats'), transmission:get('rentalVehicleTransmission'), fuel_type:get('rentalVehicleFuel'), pricing_mode:get('rentalVehiclePricing'), daily_rate:get('rentalVehicleDayRate'), hourly_rate:get('rentalVehicleHourRate'), minimum_hours:get('rentalVehicleMinHours'), deposit_amount:get('rentalVehicleDeposit'), pickup_address:get('rentalVehiclePickup'), status:get('rentalVehicleStatus'), description:get('rentalVehicleDescription'), photos:uploadedPhotos };
+    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_vehicle`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_merchant_user_id:merchantUserId,p_vehicle:payload}) });
+    if(!res.ok) throw new Error(await res.text());
+    showToast('车辆已保存'); await renderMerchantRentalManager();
+  } catch(error){ console.warn('保存租车车辆失败:', error.message); showToast('保存失败，请检查租车数据库更新与图片上传状态'); }
+}
+async function merchantRentalSetVehicleStatus(vehicleId,status){
+  const vehicle = (window._merchantRentalData?.vehicles || []).find(row => String(row.id) === String(vehicleId));
+  if(!vehicle) return;
+  vehicle.status = status;
+  const merchantUserId = document.getElementById('merchantRentalManager')?.dataset.merchantUserId || activeMerchantWorkspaceId();
+  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_vehicle`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_merchant_user_id:merchantUserId,p_vehicle:vehicle}) }); if(!res.ok) throw new Error(await res.text()); showToast(status === 'inactive' ? '车辆已下架' : '车辆已重新上架'); renderMerchantRentalManager(); } catch(error){ showToast('车辆状态更新失败'); }
+}
+async function merchantRentalSetBookingStatus(bookingId,status){
+  const note = status === 'rejected' || status === 'cancelled' ? (window.prompt('填写说明（选填）','') || '') : '';
+  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_set_booking_status`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_booking_id:bookingId,p_status:status,p_note:note,p_payment_status:null,p_deposit_status:null}) }); if(!res.ok) throw new Error(await res.text()); showToast(`预约已${merchantRentalStatusText(status)}`); renderMerchantRentalManager(); } catch(error){ console.warn('更新租车预约失败:', error.message); showToast('更新失败，请确认该车辆没有时间冲突'); }
+}
 function openMerchantFeatureCenter(){
   if(!(session && session.user && currentMerchant && String(currentMerchant.user_id) === String(session.user.id))){ showToast('只有店长可以管理商家功能'); return; }
   closeProfileMenu();
@@ -7063,6 +7174,7 @@ function merchantContentHtml(m, opts){
   const merchantHoursText = formatMerchantHoursForDisplay(m.business_hours);
   const merchantFeatures = merchantEnabledFeatures(m);
   const tableOrderEnabled = merchantFeatures.includes('table_order');
+  const rentalEnabled = merchantFeatures.includes('rental');
   const sectionBody = section === 'store'
     ? merchantStoreHtml(m, isOwnerPage)
     : section === 'coupons'
@@ -7120,6 +7232,7 @@ function merchantContentHtml(m, opts){
         <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.address || m.business_name || '')}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px solid var(--line-strong);border-radius:10px;background:var(--card);color:var(--ink);font-size:13.5px;font-weight:700;text-decoration:none;">${uiIcon('map',15)} 导航</a>
       </div>
       ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 点餐服务</b><p>扫码点餐可选择餐桌；外卖点单可选择自提或送餐上门；扫码排队可提前点菜。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 点餐订单</button><button onclick="openMerchantTakeoutManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖订单</button><button onclick="openMerchantQueueManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>` : `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderEntry('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 5px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 扫码点餐</button><button onclick="openMerchantTakeoutOrder('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖点单</button><button onclick="openMerchantQueuePage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>`}</div>` : ''}
+      ${rentalEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('car',14)} 租车预约</b><p>按日或小时预约，商家确认后安排取车；押金和付款状态由商家统一管理。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantRentalManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('settings',14)} 车辆与预约</button><button onclick="openMerchantRentalPage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 查看预约页</button></div>` : `<button onclick="openMerchantRentalPage('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('car',14)} 查看车辆并预约</button>`}</div>` : ''}
       <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
         <div style="display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;">${uiIcon('bag',15)} 会员优惠规则</div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
@@ -17700,7 +17813,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Queue Self-Service】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental Booking Module】`);
 </script>
 </body>
 </html>
