@@ -42,18 +42,10 @@ Deno.serve(async (req) => {
   const user = userData.user;
   if (userError || !user) return jsonResponse({ error: "Login expired, please sign in again" }, 401);
 
-  const { data: merchant, error: merchantError } = await client
-    .from("merchants")
-    .select("user_id, verified")
-    .eq("user_id", user.id)
-    .eq("verified", true)
-    .maybeSingle();
-  if (merchantError || !merchant) return jsonResponse({ error: "Only verified merchants can search store locations" }, 403);
-
   try {
     const body = await req.json();
     const address = String(body?.address || "").trim();
-    if (address.length < 5) return jsonResponse({ error: "Please enter a complete store address" }, 400);
+    if (address.length < 5) return jsonResponse({ error: "Please enter a complete address" }, 400);
     if (address.length > 240) return jsonResponse({ error: "Address is too long" }, 400);
 
     const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");

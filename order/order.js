@@ -1,49 +1,204 @@
 (() => {
-  const URL='https://ptxdxepmggmjcndgukjk.supabase.co';
-  const KEY='sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
-  const app=document.getElementById('orderApp');
-  const query=new URLSearchParams(location.search);
-  const state={merchant:null,products:[],category:'全部',cart:{},screen:'menu',mode:query.get('mode')==='takeout'?'takeout':'dinein',table:null,takeout:{fulfillment:'pickup',speed:'standard',name:'',phone:'',address:'',scheduledAt:'',couponId:null,payment:'apple_pay'}};
-  const esc=value=>String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-  const money=value=>`$${Number(value||0).toFixed(2)}`;
-  const api=async(path,options={})=>{const session=JSON.parse(localStorage.getItem('wanba_session')||'null');const headers=Object.assign({'apikey':KEY,'Content-Type':'application/json'},options.headers||{});if(session?.access_token)headers.Authorization=`Bearer ${session.access_token}`;else headers.Authorization=`Bearer ${KEY}`;return fetch(`${URL}${path}`,Object.assign({},options,{headers}));};
-  const user=()=>JSON.parse(localStorage.getItem('wanba_session')||'null')?.user||null;
-  const cartRows=()=>state.products.filter(p=>Number(state.cart[p.id]||0)>0).map(p=>Object.assign({},p,{quantity:Number(state.cart[p.id])}));
-  const subtotal=()=>cartRows().reduce((sum,p)=>sum+price(p.price)*p.quantity,0);
-  const price=value=>Number(String(value||'').match(/\d+(?:\.\d{1,2})?/)?.[0]||0);
-  const products=()=>state.products.filter(p=>p.active!==false&&p.orderable!==false);
-  const categories=()=>['全部',...new Set(products().flatMap(p=>Array.isArray(p.categories)?p.categories:(p.category?[p.category]:[])).filter(Boolean))];
-  const settings=()=>{const raw=state.merchant?.order_checkout_settings||{};return {priorityFee:Number(raw.takeout_priority_fee??3.99),standardMinutes:Number(raw.takeout_standard_minutes??40),pickupMinutes:Number(raw.takeout_pickup_minutes??20)};};
-  const qty=(id,delta)=>{const next=Math.max(0,Math.min(99,Number(state.cart[id]||0)+delta));if(next)state.cart[id]=next;else delete state.cart[id];render();};
-  const nav=screen=>{state.screen=screen;render();window.scrollTo(0,0);};
-  const back=()=>{if(state.screen==='cart')nav('menu');else if(state.screen==='details')nav('cart');else history.length>1?history.back():location.assign('/');};
-  const top=title=>`<div class="top"><button onclick="Order.back()">‹</button><b>${esc(title)}</b></div>`;
-  const hero=()=>`<section class="hero"><h1>${esc(state.merchant?.business_name||'乐生活点餐')}</h1><p>${esc(state.merchant?.address||'')}</p></section>`;
-  function renderMenu(){const rows=products().filter(p=>state.category==='全部'||(Array.isArray(p.categories)?p.categories:[p.category]).includes(state.category));const count=cartRows().reduce((sum,p)=>sum+p.quantity,0);app.innerHTML=`${top(state.mode==='takeout'?'外卖点单':'扫码点餐')}${hero()}<div class="tabs">${categories().map(c=>`<button class="${state.category===c?'on':''}" onclick="Order.category('${esc(c)}')">${esc(c)}</button>`).join('')}</div><div class="list">${rows.length?rows.map(p=>`<article class="product">${p.image?`<img src="${esc(p.image)}" alt="">`:'<div style="width:68px;height:68px;border-radius:10px;background:var(--light)"></div>'}<div class="product-main"><b>${esc(p.name||'未命名商品')}</b>${p.description?`<p>${esc(p.description)}</p>`:''}<span class="price">${esc(p.price||'到店咨询')}</span></div><div class="qty"><button onclick="Order.qty('${esc(p.id)}',-1)">−</button><span>${Number(state.cart[p.id]||0)}</span><button onclick="Order.qty('${esc(p.id)}',1)">+</button></div></article>`).join(''):'<div class="empty">商家暂时没有可点菜品。</div>'}</div><div class="bar"><div><b>${money(subtotal())}</b><span>${count?`已选 ${count} 件`:'请选择菜品'}</span></div><button class="primary" ${count?'':'disabled'} onclick="Order.cart()">加入购物车</button></div>`;}
-  function renderCart(){const rows=cartRows();app.innerHTML=`${top('购物车')}${hero()}<section class="section"><h2>确认已选内容</h2>${rows.map(p=>`<div class="summary-line"><span>${esc(p.name)} × ${p.quantity}</span><b>${money(price(p.price)*p.quantity)}</b></div>`).join('')}<div class="summary-line total"><span>菜品小计</span><b>${money(subtotal())}</b></div></section><div class="actions"><button class="choice" onclick="Order.menu()">继续点菜</button><button class="primary" onclick="Order.details()">转到订单详情</button></div>`;}
-  function fieldValues(){state.takeout.name=document.getElementById('customerName')?.value.trim()||state.takeout.name;state.takeout.phone=document.getElementById('customerPhone')?.value.trim()||state.takeout.phone;state.takeout.address=document.getElementById('deliveryAddress')?.value.trim()||state.takeout.address;state.takeout.scheduledAt=document.getElementById('scheduledAt')?.value||state.takeout.scheduledAt;}
-  function renderDetails(){
-    if(state.mode==='dinein') return renderDineinDetails();
-    const cfg=settings(),delivery=state.takeout.fulfillment==='delivery',min=new Date(Date.now()+cfg.standardMinutes*60000).toISOString().slice(0,16),fee=delivery&&state.takeout.speed==='priority'?cfg.priorityFee:0;const selected=state.claims?.find(c=>Number(c.id)===Number(state.takeout.couponId));const discount=selected?couponDiscount(selected.coupon_snapshot||{},subtotal()):0;const total=Math.max(0,subtotal()-discount)+fee;const coupons=(state.claims||[]).map(c=>{const s=c.coupon_snapshot||{};return `<button class="coupon ${Number(state.takeout.couponId)===Number(c.id)?'on':''}" onclick="Order.coupon(${Number(c.id)})"><b>${esc(s.title||'优惠券')}</b><span class="muted">${esc(s.description||'')}</span></button>`;}).join('')||'<p class="muted">没有可使用的已领取优惠券。</p>';app.innerHTML=`${top('订单详情')}${hero()}<div class="tabs"><button class="${!delivery?'on':''}" onclick="Order.fulfillment('pickup')">到店自取</button><button class="${delivery?'on':''}" onclick="Order.fulfillment('delivery')">派送</button></div><section class="section"><h2>联系人</h2><label>姓名</label><input id="customerName" maxlength="40" value="${esc(state.takeout.name||user()?.user_metadata?.name||'')}" placeholder="姓名（必填）"><label>电话</label><input id="customerPhone" inputmode="tel" maxlength="32" value="${esc(state.takeout.phone)}" placeholder="电话（必填）">${delivery?`<label>配送地址</label><textarea id="deliveryAddress" maxlength="240" placeholder="地址（必填）">${esc(state.takeout.address)}</textarea>`:`<div class="address-card"><b>自取地点</b><br>${esc(state.merchant?.address||'请向商家确认地址')}<br>预计 ${cfg.pickupMinutes} 分钟可取餐 · 营业时间请以店铺主页为准</div>`}</section><section class="section"><h2>${delivery?'派送时间':'取餐时间'}</h2><div class="choice-grid">${delivery?`<button class="choice ${state.takeout.speed==='priority'?'on':''}" onclick="Order.speed('priority')"><b>优先派送</b><span>优先处理 +${money(cfg.priorityFee)}</span></button>`:''}<button class="choice ${state.takeout.speed==='standard'?'on':''}" onclick="Order.speed('standard')"><b>标准${delivery?'派送':'自取'}</b><span>${delivery?`约 ${cfg.standardMinutes}-${cfg.standardMinutes+15} 分钟`:`约 ${cfg.pickupMinutes} 分钟`}</span></button><button class="choice ${state.takeout.speed==='scheduled'?'on':''}" onclick="Order.speed('scheduled')"><b>预约时间</b><span>选择指定时间</span></button></div>${state.takeout.speed==='scheduled'?`<label>预约时间</label><input id="scheduledAt" type="datetime-local" min="${min}" value="${esc(state.takeout.scheduledAt)}">`:''}</section><section class="section"><h2>订单信息汇总</h2>${cartRows().map(p=>`<div class="summary-line"><span>${esc(p.name)} × ${p.quantity}</span><b>${money(price(p.price)*p.quantity)}</b></div>`).join('')}<div class="summary-line"><span>菜品小计</span><b>${money(subtotal())}</b></div>${fee?`<div class="summary-line"><span>优先派送费</span><b>${money(fee)}</b></div>`:''}<div class="summary-line"><span>优惠券优惠</span><b class="danger">-${money(discount)}</b></div><div class="summary-line total"><span>应付合计</span><b>${money(total)}</b></div></section><section class="section"><h2>使用优惠券</h2>${coupons}</section><section class="section"><h2>在线支付方式</h2><div class="payment">${[['apple_pay','Apple Pay'],['google_pay','Google Pay'],['card','信用卡'],['gift_card','商家礼品卡']].map(([id,label])=>`<button class="${state.takeout.payment===id?'on':''}" onclick="Order.payment('${id}')">${label}</button>`).join('')}</div><div class="notice">在线支付接口正在接入。本次可提交订单资料，但不会真实扣款或提前核销优惠券。</div></section><button class="primary" style="width:100%;margin-top:16px" onclick="Order.submit()">提交订单并前往支付</button>`;
+  const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
+  const app = document.getElementById('orderApp');
+  const query = new URLSearchParams(location.search);
+  const state = {
+    merchant: null, products: [], category: '全部', cart: {}, claims: [], recentOrders: [], screen: 'menu',
+    mode: query.get('mode') === 'takeout' ? 'takeout' : 'dinein',
+    takeout: { fulfillment: 'delivery', speed: 'standard', name: '', phone: '', address: '', note: '', scheduledAt: '', couponId: null, payment: 'apple_pay', tipPercent: 0, customTip: '' }
+  };
+
+  const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
+  const money = value => `$${Number(value || 0).toFixed(2)}`;
+  const price = value => Number(String(value || '').match(/\d+(?:\.\d{1,2})?/)?.[0] || 0);
+  const user = () => JSON.parse(localStorage.getItem('wanba_session') || 'null')?.user || null;
+  const api = async (path, options = {}) => {
+    const session = JSON.parse(localStorage.getItem('wanba_session') || 'null');
+    const headers = Object.assign({ apikey: SUPABASE_KEY, 'Content-Type': 'application/json' }, options.headers || {});
+    headers.Authorization = `Bearer ${session?.access_token || SUPABASE_KEY}`;
+    return fetch(`${SUPABASE_URL}${path}`, Object.assign({}, options, { headers }));
+  };
+  const products = () => state.products.filter(product => product.active !== false && product.orderable !== false);
+  const cartRows = () => state.products.filter(product => Number(state.cart[product.id] || 0) > 0).map(product => Object.assign({}, product, { quantity: Number(state.cart[product.id]) }));
+  const subtotal = () => cartRows().reduce((sum, product) => sum + price(product.price) * product.quantity, 0);
+  const categories = () => ['全部', ...new Set(products().flatMap(product => Array.isArray(product.categories) ? product.categories : (product.category ? [product.category] : [])).filter(Boolean))];
+  const settings = () => {
+    const raw = state.merchant?.order_checkout_settings || {};
+    return { priorityFee: Number(raw.takeout_priority_fee ?? 3.99), standardMinutes: Number(raw.takeout_standard_minutes ?? 40), pickupMinutes: Number(raw.takeout_pickup_minutes ?? 20) };
+  };
+  const formatTime = value => value ? new Intl.DateTimeFormat('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'America/Los_Angeles' }).format(new Date(value)) : '等待商家确认';
+  const nav = screen => { state.screen = screen; render(); window.scrollTo(0, 0); };
+  const persistFields = () => {
+    const get = id => document.getElementById(id)?.value;
+    state.takeout.name = (get('customerName') ?? state.takeout.name).trim();
+    state.takeout.phone = (get('customerPhone') ?? state.takeout.phone).trim();
+    state.takeout.address = (get('deliveryAddress') ?? state.takeout.address).trim();
+    state.takeout.note = (get('deliveryNote') ?? state.takeout.note).trim();
+    state.takeout.scheduledAt = get('scheduledAt') ?? state.takeout.scheduledAt;
+  };
+  const close = () => {
+    if (window.parent !== window) window.parent.postMessage({ type: 'leshenghuo-close-takeout' }, '*');
+    else if (history.length > 1) history.back();
+    else location.assign('/');
+  };
+  const back = () => {
+    if (state.screen === 'cart') nav('menu');
+    else if (state.screen === 'details') nav('cart');
+    else if (state.screen === 'orders' || state.screen === 'success') nav('menu');
+    else close();
+  };
+  const top = title => `<header class="top"><button class="back" onclick="Order.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button class="close" onclick="Order.close()" aria-label="关闭">×</button></header>`;
+  const hero = () => `<section class="hero"><h1>${esc(state.merchant?.business_name || '乐生活点餐')}</h1><p>${esc(state.merchant?.address || '')}</p></section>`;
+  const productCategories = product => Array.isArray(product.categories) ? product.categories : (product.category ? [product.category] : []);
+  const fulfillmentLabel = () => state.takeout.fulfillment === 'delivery' ? '派送' : '到店自取';
+  const tipAmount = () => {
+    const base = Math.max(0, subtotal() - discountAmount() + deliveryFee());
+    return state.takeout.customTip !== '' ? Math.max(0, Number(state.takeout.customTip) || 0) : base * Number(state.takeout.tipPercent || 0) / 100;
+  };
+  const deliveryFee = () => state.takeout.fulfillment === 'delivery' && state.takeout.speed === 'priority' ? settings().priorityFee : 0;
+  const selectedClaim = () => state.claims.find(claim => Number(claim.id) === Number(state.takeout.couponId));
+  const couponRule = claim => claim?.coupon_snapshot?.pricing_rule || {};
+  const couponDiscount = (claim, total) => {
+    const rule = couponRule(claim), type = String(rule.type || ''), amount = Math.max(0, Number(rule.value || 0)), threshold = Math.max(0, Number(rule.min_spend || 0));
+    if (type === 'whole_percent') return total * Math.min(amount, 100) / 100;
+    if (type === 'whole_fixed') return amount;
+    if (total < threshold) return 0;
+    if (type === 'percent') return total * Math.min(amount, 100) / 100;
+    if (type === 'tiered_fixed') return amount * (rule.repeat && threshold > 0 ? Math.floor(total / threshold) : 1);
+    if (type === 'fixed') return amount;
+    return 0;
+  };
+  const paymentAllowed = claim => {
+    const methods = claim?.coupon_snapshot?.payment_methods;
+    if (!Array.isArray(methods) || !methods.length) return true;
+    return methods.some(method => ['online', 'card'].includes(String(method)));
+  };
+  const usableClaim = claim => paymentAllowed(claim) && couponDiscount(claim, subtotal()) > 0;
+  const discountAmount = () => Math.min(subtotal(), couponDiscount(selectedClaim(), subtotal()));
+  const totalAmount = () => Math.max(0, subtotal() - discountAmount() + deliveryFee() + tipAmount());
+
+  function renderMenu() {
+    const rows = products().filter(product => state.category === '全部' || productCategories(product).includes(state.category));
+    const count = cartRows().reduce((sum, product) => sum + product.quantity, 0);
+    const ordered = state.recentOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length;
+    app.innerHTML = `${top('外卖点单')}${hero()}${ordered ? `<button class="active-order" onclick="Order.orders()"><span><b>已点外卖</b><small>${ordered} 笔订单正在处理中</small></span><strong>查看详情 ›</strong></button>` : ''}<div class="tabs">${categories().map(category => `<button class="${state.category === category ? 'on' : ''}" onclick="Order.category('${esc(category)}')">${esc(category)}</button>`).join('')}</div><div class="list">${rows.length ? rows.map(product => `<article class="product">${product.image ? `<img src="${esc(product.image)}" alt="">` : '<div class="product-placeholder"></div>'}<div class="product-main"><b>${esc(product.name || '未命名商品')}</b>${product.description ? `<p>${esc(product.description)}</p>` : ''}<span class="price">${esc(product.price || '到店咨询')}</span></div><div class="qty"><button onclick="Order.qty('${esc(product.id)}',-1)" ${Number(state.cart[product.id] || 0) ? '' : 'disabled'}>−</button><span>${Number(state.cart[product.id] || 0)}</span><button onclick="Order.qty('${esc(product.id)}',1)">+</button></div></article>`).join('') : '<div class="empty">商家暂时没有可点菜品。</div>'}</div><div class="bar"><div><b>${money(subtotal())}</b><span>${count ? `已选 ${count} 件` : '请选择菜品'}</span></div><button class="primary" ${count ? '' : 'disabled'} onclick="Order.cart()">加入购物车</button></div>`;
   }
-  function renderDineinDetails(){
-    const table=state.table;
-    if(!table){app.innerHTML=`${top('订单详情')}<div class="empty">未找到可用餐桌，请重新扫描餐桌二维码。</div>`;return;}
-    app.innerHTML=`${top('订单详情')}${hero()}<section class="section"><h2>餐桌确认</h2><div class="address-card"><b>${esc(table.table_name||'当前餐桌')}</b><br>订单将发送至该桌对应的商家点餐后台。</div></section><section class="section"><h2>订单信息汇总</h2>${cartRows().map(p=>`<div class="summary-line"><span>${esc(p.name)} × ${p.quantity}</span><b>${money(price(p.price)*p.quantity)}</b></div>`).join('')}<div class="summary-line total"><span>菜品小计</span><b>${money(subtotal())}</b></div></section><label>备注（可选）</label><textarea id="dineinNote" maxlength="180" placeholder="例如：少辣、不要香菜"></textarea><button class="primary" style="width:100%;margin-top:16px" onclick="Order.submit()">提交订单</button>`;
+
+  function renderCart() {
+    const rows = cartRows();
+    app.innerHTML = `${top('购物车')}${hero()}<section class="section"><h2>确认已选内容</h2>${rows.map(product => `<div class="summary-line"><span>${esc(product.name)} × ${product.quantity}</span><b>${money(price(product.price) * product.quantity)}</b></div>`).join('')}<div class="summary-line total"><span>菜品小计</span><b>${money(subtotal())}</b></div></section><div class="actions"><button class="choice" onclick="Order.menu()">继续点菜</button><button class="primary" onclick="Order.details()">转到订单详情</button></div>`;
   }
-  function couponDiscount(coupon,total){const r=coupon.pricing_rule||{};if(r.type==='whole_percent')return total*Number(r.value||0)/100;if(r.type==='whole_fixed')return Number(r.value||0);if(r.type==='percent'&&total>=Number(r.min_spend||0))return total*Number(r.value||0)/100;if(r.type==='tiered_fixed'&&total>=Number(r.min_spend||0)){const n=r.repeat?Math.floor(total/Number(r.min_spend||1)):1;return n*Number(r.value||0);}if(total>=Number(r.min_spend||0))return Number(r.value||0);return 0;}
-  async function claims(){const u=user();if(!u?.id)return [];const res=await api(`/rest/v1/merchant_coupon_claims?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&user_id=eq.${encodeURIComponent(u.id)}&status=eq.claimed&select=*&order=claimed_at.desc`);return res.ok?await res.json():[];}
-  async function submit(){
-    const rows=cartRows();
-    if(state.mode==='dinein'){
-      if(!state.table){alert('未找到可用餐桌，请重新扫描二维码。');return;}
-      const res=await api('/rest/v1/rpc/merchant_order_create',{method:'POST',body:JSON.stringify({p_merchant_user_id:state.merchant.user_id,p_table_code:state.table.table_code,p_items:rows.map(p=>({product_id:p.id,quantity:p.quantity})),p_note:document.getElementById('dineinNote')?.value.trim()||'',p_existing_order_id:null})});
-      if(!res.ok){alert('订单提交失败，请稍后再试。');return;}state.orderId=await res.json();nav('success');return;
+
+  function renderDetails() {
+    const delivery = state.takeout.fulfillment === 'delivery';
+    const cfg = settings();
+    const minimum = new Date(Date.now() + cfg.standardMinutes * 60000).toISOString().slice(0, 16);
+    const eligible = state.claims.filter(usableClaim);
+    if (state.takeout.couponId && !eligible.some(claim => Number(claim.id) === Number(state.takeout.couponId))) state.takeout.couponId = null;
+    const couponHtml = eligible.length ? eligible.map(claim => { const snapshot = claim.coupon_snapshot || {}; const active = Number(state.takeout.couponId) === Number(claim.id); return `<button class="coupon ${active ? 'on' : ''}" onclick="Order.coupon(${Number(claim.id)})"><span><b>${esc(snapshot.title || '优惠券')}</b><small>${esc(snapshot.description || '下单时可使用')}</small></span><strong>-${money(couponDiscount(claim, subtotal()))}</strong></button>`; }).join('') : '<p class="muted">当前没有可用于这笔外卖订单的优惠券。</p>';
+    app.innerHTML = `${top('订单详情')}${hero()}<section class="fulfillment"><button class="${delivery ? 'on' : ''}" onclick="Order.fulfillment('delivery')"><b>派送</b><span>送餐上门</span></button><button class="${!delivery ? 'on' : ''}" onclick="Order.fulfillment('pickup')"><b>到店自取</b><span>到店取餐</span></button></section><section class="section"><h2>联系人</h2><label>姓名</label><input id="customerName" maxlength="40" value="${esc(state.takeout.name || user()?.user_metadata?.display_name || user()?.user_metadata?.name || '')}" placeholder="姓名（必填）"><label>电话</label><input id="customerPhone" inputmode="tel" maxlength="32" value="${esc(state.takeout.phone)}" placeholder="电话（必填）">${delivery ? `<label>配送地址</label><div class="address-input"><textarea id="deliveryAddress" maxlength="240" placeholder="请输入完整配送地址（必填）">${esc(state.takeout.address)}</textarea><button onclick="Order.lookupAddress()">查找地址</button></div><div id="addressMatches"></div><label>备注</label><textarea id="deliveryNote" maxlength="240" placeholder="例如：门铃号、楼层或特殊要求">${esc(state.takeout.note)}</textarea>` : `<div class="address-card"><b>自取地点</b><br>${esc(state.merchant?.address || '请向商家确认地址')}<br>预计 ${cfg.pickupMinutes} 分钟可取餐</div><label>备注</label><textarea id="deliveryNote" maxlength="240" placeholder="例如：取餐人姓名或特殊要求">${esc(state.takeout.note)}</textarea>`}</section><section class="section"><h2>${delivery ? '派送时间' : '取餐时间'}</h2><div class="choice-grid">${delivery ? `<button class="choice ${state.takeout.speed === 'priority' ? 'on' : ''}" onclick="Order.speed('priority')"><b>优先派送</b><span>优先处理 +${money(cfg.priorityFee)}</span></button>` : ''}<button class="choice ${state.takeout.speed === 'standard' ? 'on' : ''}" onclick="Order.speed('standard')"><b>标准${delivery ? '派送' : '自取'}</b><span>${delivery ? `约 ${cfg.standardMinutes}-${cfg.standardMinutes + 15} 分钟` : `约 ${cfg.pickupMinutes} 分钟`}</span></button><button class="choice ${state.takeout.speed === 'scheduled' ? 'on' : ''}" onclick="Order.speed('scheduled')"><b>预约时间</b><span>选择指定时间</span></button></div>${state.takeout.speed === 'scheduled' ? `<label>预约时间</label><input id="scheduledAt" type="datetime-local" min="${minimum}" value="${esc(state.takeout.scheduledAt)}">` : ''}</section><section class="section"><h2>使用优惠券</h2>${couponHtml}<div class="tip"><b>小费</b><div class="tip-buttons">${[0, 15, 18, 20].map(percent => `<button class="${state.takeout.customTip === '' && Number(state.takeout.tipPercent) === percent ? 'on' : ''}" onclick="Order.tip(${percent})">${percent ? `${percent}%` : '不加小费'}</button>`).join('')}<button class="${state.takeout.customTip !== '' ? 'on' : ''}" onclick="Order.customTip()">自定</button></div>${state.takeout.customTip !== '' ? `<input id="customTip" inputmode="decimal" value="${esc(state.takeout.customTip)}" placeholder="输入小费金额" onchange="Order.setCustomTip(this.value)">` : ''}</div></section><section class="section"><h2>订单信息汇总</h2>${cartRows().map(product => `<div class="summary-line"><span>${esc(product.name)} × ${product.quantity}</span><b>${money(price(product.price) * product.quantity)}</b></div>`).join('')}<div class="summary-line"><span>菜品小计</span><b>${money(subtotal())}</b></div>${deliveryFee() ? `<div class="summary-line"><span>优先派送费</span><b>${money(deliveryFee())}</b></div>` : ''}<div class="summary-line"><span>优惠券优惠</span><b class="danger">-${money(discountAmount())}</b></div><div class="summary-line"><span>小费</span><b>${money(tipAmount())}</b></div><div class="summary-line total"><span>应付合计</span><b>${money(totalAmount())}</b></div></section><section class="section"><h2>在线支付方式</h2><div class="payment">${[['apple_pay','Apple Pay'],['google_pay','Google Pay'],['card','信用卡'],['gift_card','商家礼品卡']].map(([id,label]) => `<button class="${state.takeout.payment === id ? 'on' : ''}" onclick="Order.payment('${id}')">${label}</button>`).join('')}</div><div class="notice">支付服务即将接入。提交后商家会收到订单；优惠和金额会在正式付款前再次确认。</div></section><button class="primary submit" onclick="Order.submit()">提交订单并前往支付</button>`;
+  }
+
+  function renderOrders() {
+    const orders = state.recentOrders;
+    app.innerHTML = `${top('已点外卖')}${orders.length ? `<div class="order-history">${orders.map(order => `<article class="history-card"><div class="history-heading"><span><b>${esc(order.order_code || '外卖订单')}</b><small>${formatTime(order.created_at)} 下单</small></span><em>${esc(order.status === 'completed' ? '已完成' : order.status === 'cancelled' ? '已取消' : '处理中')}</em></div><p><b>${order.fulfillment === 'delivery' ? '派送地址' : '到店自取'}</b>　${esc(order.delivery_address || state.merchant?.address || '')}</p><p><b>预计${order.fulfillment === 'delivery' ? '送达' : '取餐'}</b>　${formatTime(order.estimated_at || order.delivery_at || new Date(new Date(order.created_at).getTime() + settings().standardMinutes * 60000).toISOString())}</p><div class="summary-line"><span>订单金额</span><b>${money(order.subtotal)}</b></div><button class="contact-driver" disabled>联系外卖员（即将开放）</button></article>`).join('')}</div>` : '<div class="empty">暂时没有进行中的外卖订单。</div>'}`;
+  }
+
+  function renderSuccess() {
+    app.innerHTML = `${top('订单已提交')}<div class="success"><i>✓</i><h1>外卖订单已提交</h1><p class="muted">订单已发送给商家。预计${state.takeout.fulfillment === 'delivery' ? '送达' : '取餐'}时间可在“已点外卖”中查看。</p><button class="primary" onclick="Order.orders()">查看已点外卖</button><button class="link" onclick="Order.menu()">继续浏览菜单</button></div>`;
+  }
+
+  function render() {
+    try {
+      if (!state.merchant) return;
+      if (state.screen === 'cart') renderCart();
+      else if (state.screen === 'details') renderDetails();
+      else if (state.screen === 'orders') renderOrders();
+      else if (state.screen === 'success') renderSuccess();
+      else renderMenu();
+    } catch (error) {
+      console.error(error);
+      app.innerHTML = '<div class="empty">点餐页面暂时无法打开，请稍后再试。</div>';
     }
-    fieldValues();const d=state.takeout.fulfillment==='delivery';if(!state.takeout.name||!state.takeout.phone||d&&!state.takeout.address){alert('请填写姓名、电话以及配送地址。');return;}if(state.takeout.speed==='scheduled'&&!state.takeout.scheduledAt){alert('请选择预约时间。');return;}
-    const res=await api('/rest/v1/rpc/merchant_takeout_order_create',{method:'POST',body:JSON.stringify({p_merchant_user_id:state.merchant.user_id,p_items:rows.map(p=>({product_id:p.id,quantity:p.quantity})),p_customer_name:state.takeout.name,p_customer_phone:state.takeout.phone,p_fulfillment:d?'delivery':'pickup',p_delivery_address:d?state.takeout.address:'',p_delivery_at:state.takeout.speed==='scheduled'?new Date(state.takeout.scheduledAt).toISOString():null,p_note:`支付方式:${state.takeout.payment}; ${state.takeout.speed==='priority'?'优先派送':''}`})});if(!res.ok){alert('订单提交失败，请稍后再试。');return;}state.orderId=await res.json();nav('success');}
-  function renderSuccess(){app.innerHTML=`${top('订单已提交')}<div class="success"><i>✓</i><h1>订单已提交</h1><p class="muted">订单已发送给商家。在线支付接入后将在这里继续完成付款。</p><button class="primary" onclick="location.assign('/')">返回乐生活</button></div>`;}
-  async function render(){try{if(!state.merchant)return; if(state.screen==='menu')renderMenu();else if(state.screen==='cart')renderCart();else if(state.screen==='details')renderDetails();else renderSuccess();}catch(e){app.innerHTML=`<div class="empty">页面暂时无法打开，请稍后再试。</div>`;console.error(e);}}
-  window.Order={back,category:v=>{state.category=v;render();},qty,cart:()=>nav('cart'),menu:()=>nav('menu'),details:async()=>{state.claims=await claims();nav('details');},fulfillment:v=>{fieldValues();state.takeout.fulfillment=v;state.takeout.speed='standard';render();},speed:v=>{fieldValues();state.takeout.speed=v;render();},coupon:id=>{state.takeout.couponId=Number(state.takeout.couponId)===id?null:id;render();},payment:id=>{fieldValues();state.takeout.payment=id;render();},submit};
-  (async()=>{const slug=query.get('merchant');if(!slug){app.innerHTML='<div class="empty">缺少商家信息。</div>';return;}const res=await api(`/rest/v1/merchants?slug=eq.${encodeURIComponent(slug)}&verified=eq.true&select=*&limit=1`);const rows=res.ok?await res.json():[];state.merchant=rows[0];if(!state.merchant){app.innerHTML='<div class="empty">未找到可点餐商家。</div>';return;}state.products=Array.isArray(state.merchant.products)?state.merchant.products:[];if(state.mode==='dinein'){const code=query.get('table');const tableRes=await api(`/rest/v1/merchant_order_tables?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&table_code=eq.${encodeURIComponent(code||'')}&is_active=eq.true&select=*&limit=1`);const tables=tableRes.ok?await tableRes.json():[];state.table=tables[0]||null;}render();})().catch(error=>{console.error(error);app.innerHTML='<div class="empty">点餐页面暂时无法打开，请稍后再试。</div>';});
+  }
+
+  async function loadClaims() {
+    const currentUser = user();
+    if (!currentUser?.id) return [];
+    const response = await api(`/rest/v1/merchant_coupon_claims?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&user_id=eq.${encodeURIComponent(currentUser.id)}&status=eq.claimed&select=*&order=claimed_at.desc`);
+    return response.ok ? response.json() : [];
+  }
+  async function loadRecentOrders() {
+    const currentUser = user();
+    if (!currentUser?.id) return [];
+    const response = await api(`/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&user_id=eq.${encodeURIComponent(currentUser.id)}&order_type=eq.takeout&select=*&order=created_at.desc&limit=20`);
+    return response.ok ? response.json() : [];
+  }
+  async function lookupAddress() {
+    persistFields();
+    if (state.takeout.address.length < 5) { alert('请先输入完整配送地址。'); return; }
+    const matches = document.getElementById('addressMatches');
+    if (matches) matches.innerHTML = '<p class="muted">正在查找地址...</p>';
+    try {
+      const response = await api('/functions/v1/merchant-geocode', { method:'POST', body:JSON.stringify({ address: state.takeout.address }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || '地址查询失败');
+      const rows = Array.isArray(data.results) ? data.results : [];
+      if (!rows.length) { if (matches) matches.innerHTML = '<p class="muted">没有找到匹配地址，请检查后手动填写。</p>'; return; }
+      if (matches) matches.innerHTML = `<div class="address-results">${rows.map((row, index) => `<button onclick="Order.useAddress(${index})">${esc(row.formatted_address)}</button>`).join('')}</div>`;
+      state.addressResults = rows;
+    } catch (error) { if (matches) matches.innerHTML = `<p class="muted">${esc(error.message || '地址查询失败，请稍后再试。')}</p>`; }
+  }
+  async function submit() {
+    persistFields();
+    const rows = cartRows();
+    const delivery = state.takeout.fulfillment === 'delivery';
+    if (!rows.length) { alert('请先选择菜品。'); return; }
+    if (!state.takeout.name || !state.takeout.phone || (delivery && !state.takeout.address)) { alert('请填写姓名、电话以及配送地址。'); return; }
+    if (state.takeout.speed === 'scheduled' && !state.takeout.scheduledAt) { alert('请选择预约时间。'); return; }
+    const now = new Date();
+    const estimateMinutes = state.takeout.speed === 'priority' ? Math.max(15, settings().standardMinutes - 15) : (delivery ? settings().standardMinutes : settings().pickupMinutes);
+    const estimateAt = state.takeout.speed === 'scheduled' ? new Date(state.takeout.scheduledAt).toISOString() : new Date(now.getTime() + estimateMinutes * 60000).toISOString();
+    const response = await api('/rest/v1/rpc/merchant_takeout_order_submit', { method:'POST', body:JSON.stringify({
+      p_merchant_user_id: state.merchant.user_id,
+      p_items: rows.map(product => ({ product_id: product.id, quantity: product.quantity })),
+      p_customer_name: state.takeout.name,
+      p_customer_phone: state.takeout.phone,
+      p_fulfillment: delivery ? 'delivery' : 'pickup',
+      p_delivery_address: delivery ? state.takeout.address : '',
+      p_delivery_at: state.takeout.speed === 'scheduled' ? new Date(state.takeout.scheduledAt).toISOString() : null,
+      p_customer_note: state.takeout.note,
+      p_estimated_at: estimateAt,
+      p_requested_payment_method: state.takeout.payment,
+      p_tip_amount: Number(tipAmount().toFixed(2)),
+      p_quoted_discount_amount: Number(discountAmount().toFixed(2)),
+      p_coupon_claim_ids: selectedClaim() ? [Number(selectedClaim().id)] : []
+    }) });
+    if (!response.ok) { console.warn(await response.text()); alert('订单提交失败，请稍后再试。'); return; }
+    state.orderId = await response.json();
+    state.cart = {}; state.recentOrders = await loadRecentOrders(); nav('success');
+  }
+
+  window.Order = {
+    back, close, menu: () => nav('menu'), cart: () => nav('cart'), details: async () => { state.claims = await loadClaims(); nav('details'); }, orders: async () => { state.recentOrders = await loadRecentOrders(); nav('orders'); },
+    category: value => { state.category = value; render(); }, qty: (id, delta) => { const next = Math.max(0, Math.min(99, Number(state.cart[id] || 0) + Number(delta))); if (next) state.cart[id] = next; else delete state.cart[id]; render(); },
+    fulfillment: value => { persistFields(); state.takeout.fulfillment = value; state.takeout.speed = 'standard'; render(); }, speed: value => { persistFields(); state.takeout.speed = value; render(); },
+    coupon: id => { persistFields(); state.takeout.couponId = Number(state.takeout.couponId) === id ? null : id; render(); }, payment: value => { persistFields(); state.takeout.payment = value; render(); },
+    tip: value => { persistFields(); state.takeout.tipPercent = value; state.takeout.customTip = ''; render(); }, customTip: () => { persistFields(); state.takeout.customTip = state.takeout.customTip || '0'; render(); }, setCustomTip: value => { persistFields(); state.takeout.customTip = value; render(); },
+    lookupAddress, useAddress: index => { const row = state.addressResults?.[index]; if (!row) return; state.takeout.address = row.formatted_address; render(); }, submit
+  };
+
+  (async () => {
+    const slug = query.get('merchant');
+    if (!slug) { app.innerHTML = '<div class="empty">缺少商家信息。</div>'; return; }
+    if (!user()?.id) { app.innerHTML = '<div class="empty">登录后即可使用外卖点单。</div>'; return; }
+    const merchantResponse = await api(`/rest/v1/merchants?slug=eq.${encodeURIComponent(slug)}&verified=eq.true&select=*&limit=1`);
+    const merchants = merchantResponse.ok ? await merchantResponse.json() : [];
+    state.merchant = merchants[0];
+    if (!state.merchant) { app.innerHTML = '<div class="empty">未找到可点餐商家。</div>'; return; }
+    state.products = Array.isArray(state.merchant.products) ? state.merchant.products : [];
+    state.recentOrders = await loadRecentOrders();
+    render();
+  })().catch(error => { console.error(error); app.innerHTML = '<div class="empty">点餐页面暂时无法打开，请稍后再试。</div>'; });
 })();
