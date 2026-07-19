@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.316';
+const APP_VERSION = '5.317';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5119,6 +5119,7 @@ function merchantOrderPriceNumber(value){ const match = String(value || '').matc
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
 function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}`; }
 function merchantTakeoutUrl(m){ return `https://escoopcity.com/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.316`; }
+function merchantQueueUrl(m){ return `https://escoopcity.com/queue/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.317`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
 async function getMerchantOrderMerchant(userId){
@@ -5422,6 +5423,18 @@ async function openMerchantTakeoutPage(merchantUserId){
   } catch(error){
     console.warn('打开独立外卖点餐页失败:',error.message);
     showToast('点餐页面暂时无法打开，请稍后再试');
+  }
+}
+async function openMerchantQueuePage(merchantUserId){
+  try {
+    const merchant=await getMerchantOrderMerchant(merchantUserId);
+    if(!merchant){showToast('暂时无法读取商家资料');return;}
+    const url=merchantQueueUrl(merchant);
+    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
+    else window.location.href=url;
+  } catch(error){
+    console.warn('打开扫码排队页失败:',error.message);
+    showToast('排队页面暂时无法打开，请稍后再试');
   }
 }
 function openMerchantTakeoutCart(){
@@ -6402,6 +6415,35 @@ async function openMerchantTakeoutManager(merchantUserId){
   const sheet=document.getElementById('merchantOrderManager');if(!sheet)return;
   sheet.dataset.merchantUserId=id;sheet.dataset.orderType='takeout';document.getElementById('merchantOrderManagerTitle').textContent='外卖订单';sheet.classList.add('open');startMerchantOrderAutoRefresh('manager');await renderMerchantOrderManager();
 }
+async function openMerchantQueueManager(merchantUserId){
+  const id=merchantUserId||merchantOrderManagerMerchantId();
+  if(!id||!merchantWorkspaceCanEnterOrderBackend()){showToast('你没有这家商店的点餐后台权限');return;}
+  const sheet=document.getElementById('merchantOrderManager');if(!sheet)return;
+  sheet.dataset.merchantUserId=id;sheet.dataset.orderType='queue';document.getElementById('merchantOrderManagerTitle').textContent='扫码排队';sheet.classList.add('open');await renderMerchantQueueManager();
+}
+async function renderMerchantQueueManager(){
+  const body=document.getElementById('merchantOrderManagerBody'),merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId();
+  if(!body||!merchantUserId)return;body.innerHTML='<div class="deals-empty-panel">正在读取排队信息...</div>';
+  try{
+    const [merchant,res]=await Promise.all([getMerchantOrderMerchant(merchantUserId),authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_waitlist_manager_list`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_merchant_user_id:merchantUserId})})]);
+    if(!res.ok)throw new Error(await res.text());
+    const rows=await res.json(),queued=rows.filter(row=>row.status==='queued'),finished=rows.filter(row=>row.status!=='queued'),url=merchantQueueUrl(merchant);
+    body.innerHTML=`<div class="merchant-table-card" style="margin-bottom:12px;justify-content:center;"><div class="merchant-table-qr">${memberCardQrHtml(url)}</div><div style="display:grid;gap:8px;"><button onclick="renderMerchantQueueManager()">生成二维码</button><button onclick="saveMerchantQueueQrImage('${escAttr(url).replace(/'/g,"\\'")}')">保存二维码</button></div></div><div class="merchant-order-top-actions"><button onclick="renderMerchantQueueManager()">${uiIcon('refresh',17)} 刷新排队</button></div><div class="order-notice">扫码可直接排队。公开页只显示人数与编号；姓名、电话、预点菜仅供店内管理。</div><div class="merchant-order-status-tabs"><button class="on">排队中 (${queued.length})</button><button onclick="this.closest('#merchantOrderManagerBody').querySelectorAll('.merchant-waitlist-finished').forEach(el=>el.hidden=!el.hidden)">已处理 (${finished.length})</button></div>${queued.length?queued.map(merchantWaitlistCardHtml).join(''):'<div class="deals-empty-panel">目前没有排队中的顾客。</div>'}${finished.length?`<div class="merchant-waitlist-finished" hidden>${finished.map(merchantWaitlistCardHtml).join('')}</div>`:''}`;
+  }catch(error){console.warn('排队管理读取失败:',error.message);body.innerHTML='<div class="deals-empty-panel">排队信息暂时无法读取，请确认已运行 v5.317 数据库更新。</div>';}
+}
+function merchantWaitlistCardHtml(row){
+  const status={queued:'排队中',seated:'已入座',cancelled:'已取消',expired:'已过期'}[row.status]||row.status;
+  const preorder=Array.isArray(row.preorder_items)?row.preorder_items:[];
+  return `<div class="merchant-order-card"><div class="merchant-order-card-head"><div><b>${Number(row.party_size||0)} 人 · ${escHtml(row.queue_code||'')}</b><span>${escHtml(row.customer_name||'')} · ${escHtml(row.customer_phone||'')} · ${row.created_at?new Date(row.created_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''}</span></div><i class="merchant-order-state">${status}</i></div><div style="font-size:12px;color:var(--ink-soft);">排队序号 ${Number(row.queue_number||0)} · 预计等待 ${Number(row.estimated_wait_minutes||0)} 分钟${preorder.length?` · 已预点 ${preorder.length} 种菜品`:''}</div>${row.status==='queued'?`<div class="merchant-order-card-actions"><button class="primary" onclick="setMerchantWaitlistStatus('${String(row.id)}','seated')">安排入座</button><button onclick="setMerchantWaitlistStatus('${String(row.id)}','cancelled')">取消排队</button></div>`:''}</div>`;
+}
+async function setMerchantWaitlistStatus(id,status){
+  try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_waitlist_set_status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_waitlist_id:id,p_status:status,p_table_id:null})});if(!res.ok)throw new Error(await res.text());showToast(status==='seated'?'已安排入座':'已取消排队');renderMerchantQueueManager();}catch(error){showToast('更新排队状态失败，请稍后重试');}
+}
+function saveMerchantQueueQrImage(url){
+  const svg=memberCardQrHtml(url),blob=new Blob([svg],{type:'image/svg+xml'}),blobUrl=URL.createObjectURL(blob),image=new Image();
+  image.onload=()=>{const canvas=document.createElement('canvas'),size=1600,ctx=canvas.getContext('2d');canvas.width=size;canvas.height=size;ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.drawImage(image,160,160,1280,1280);URL.revokeObjectURL(blobUrl);canvas.toBlob(file=>{if(!file){showToast('二维码保存失败');return;}const link=document.createElement('a');link.href=URL.createObjectURL(file);link.download='乐生活-扫码排队二维码.png';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);showToast('已生成大尺寸二维码，可保存到相册或打印');},'image/png');};
+  image.onerror=()=>{URL.revokeObjectURL(blobUrl);showToast('二维码生成失败，请重试');};image.src=blobUrl;
+}
 function merchantOrderManagerStatus(status){merchantOrderState().managerStatus=status||'processing';renderMerchantOrderManager();}
 async function renderMerchantOrderManager(silent){
   const body=document.getElementById('merchantOrderManagerBody'),merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId();if(!body||!merchantUserId)return;if(!silent)body.innerHTML='<div class="deals-empty-panel">正在读取订单...</div>';
@@ -7067,7 +7109,7 @@ function merchantContentHtml(m, opts){
         <button onclick="callMerchantPhone('${escAttr(m.phone || '')}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:none;border-radius:10px;background:var(--sage);color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;">${uiIcon('phone',15)} Call</button>
         <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.address || m.business_name || '')}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px solid var(--line-strong);border-radius:10px;background:var(--card);color:var(--ink);font-size:13.5px;font-weight:700;text-decoration:none;">${uiIcon('map',15)} 导航</a>
       </div>
-      ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 点餐服务</b><p>扫码点餐可选择餐桌；外卖点单可选择自提或送餐上门。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;"><button onclick="openMerchantOrderManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('store',15)} 管理点餐订单</button><button onclick="openMerchantTakeoutManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px;background:#fff;color:var(--sage-dark);font:800 13px inherit;">${uiIcon('bag',15)} 外卖订单</button></div>` : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;"><button onclick="openMerchantOrderEntry('${uidSafe}')" style="border:none;border-radius:10px;padding:10px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('store',15)} 扫码点餐</button><button onclick="openMerchantTakeoutOrder('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px;background:#fff;color:var(--sage-dark);font:800 13px inherit;">${uiIcon('bag',15)} 外卖点单</button></div>`}</div>` : ''}
+      ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 点餐服务</b><p>扫码点餐可选择餐桌；外卖点单可选择自提或送餐上门；扫码排队可提前点菜。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 点餐订单</button><button onclick="openMerchantTakeoutManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖订单</button><button onclick="openMerchantQueueManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>` : `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderEntry('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 5px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 扫码点餐</button><button onclick="openMerchantTakeoutOrder('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖点单</button><button onclick="openMerchantQueuePage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>`}</div>` : ''}
       <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
         <div style="display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;">${uiIcon('bag',15)} 会员优惠规则</div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
@@ -17648,7 +17690,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Takeout Order Polish】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - QR Waitlist & Preorder】`);
 </script>
 </body>
 </html>
