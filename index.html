@@ -1990,7 +1990,7 @@
 <div id="merchantOrderManager" class="merchant-fullscreen-sheet">
   <div class="merchant-fullscreen-head">
     <button onclick="closeMerchantOrderManager()" aria-label="关闭">×</button>
-    <h3>扫码点餐</h3>
+    <h3 id="merchantOrderManagerTitle">扫码点餐</h3>
     <span style="width:38px;height:38px;"></span>
   </div>
   <div class="merchant-fullscreen-body" id="merchantOrderManagerBody"></div>
@@ -3207,7 +3207,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.315';
+const APP_VERSION = '5.316';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5118,7 +5118,7 @@ function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
 function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}`; }
-function merchantTakeoutUrl(m){ return `https://escoopcity.com/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.315`; }
+function merchantTakeoutUrl(m){ return `https://escoopcity.com/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.316`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
 async function getMerchantOrderMerchant(userId){
@@ -6394,13 +6394,13 @@ async function openMerchantOrderManager(merchantUserId){
   const id=merchantUserId||merchantOrderManagerMerchantId();
   if(!id||!merchantWorkspaceCanEnterOrderBackend()){showToast('你没有这家商店的点餐后台权限');return;}
   const sheet=document.getElementById('merchantOrderManager');if(!sheet)return;
-  sheet.dataset.merchantUserId=id;sheet.dataset.orderType='dinein';sheet.classList.add('open');startMerchantOrderAutoRefresh('manager');await renderMerchantOrderManager();
+  sheet.dataset.merchantUserId=id;sheet.dataset.orderType='dinein';document.getElementById('merchantOrderManagerTitle').textContent='扫码点餐';sheet.classList.add('open');startMerchantOrderAutoRefresh('manager');await renderMerchantOrderManager();
 }
 async function openMerchantTakeoutManager(merchantUserId){
   const id=merchantUserId||merchantOrderManagerMerchantId();
   if(!id||!merchantWorkspaceCanEnterOrderBackend()){showToast('你没有这家商店的点餐后台权限');return;}
   const sheet=document.getElementById('merchantOrderManager');if(!sheet)return;
-  sheet.dataset.merchantUserId=id;sheet.dataset.orderType='takeout';sheet.classList.add('open');startMerchantOrderAutoRefresh('manager');await renderMerchantOrderManager();
+  sheet.dataset.merchantUserId=id;sheet.dataset.orderType='takeout';document.getElementById('merchantOrderManagerTitle').textContent='外卖订单';sheet.classList.add('open');startMerchantOrderAutoRefresh('manager');await renderMerchantOrderManager();
 }
 function merchantOrderManagerStatus(status){merchantOrderState().managerStatus=status||'processing';renderMerchantOrderManager();}
 async function renderMerchantOrderManager(silent){
@@ -6413,12 +6413,13 @@ async function renderMerchantOrderManager(silent){
   }catch(error){console.warn('订单管理读取失败:',error.message);if(!silent)body.innerHTML='<div class="deals-empty-panel">订单读取失败，请稍后重试。</div>';}
 }
 function merchantTakeoutOrderQrHtml(merchant){
-  const url=merchantTakeoutUrl(merchant),note=String(merchant?.order_checkout_settings?.takeout_qr_note||'扫码进入外卖点单，可选择派送或到店自取');
-  return `<div class="merchant-table-card" style="margin-bottom:12px;"><div class="merchant-table-qr">${memberCardQrHtml(url)}</div><div style="min-width:0;flex:1;"><b>外卖订单</b><span>顾客扫码后直接进入外卖点单</span><input id="merchantTakeoutQrNote" maxlength="80" value="${escAttr(note)}" placeholder="二维码说明" style="margin-top:9px;"><div style="display:flex;gap:7px;margin-top:8px;"><button onclick="copyMerchantOrderTableLink('${escAttr(url).replace(/'/g,"\\'")}')">复制链接</button><button onclick="saveMerchantTakeoutQrNote()">保存说明</button></div></div></div>`;
+  const url=merchantTakeoutUrl(merchant);
+  return `<div class="merchant-table-card" style="margin-bottom:12px;justify-content:center;"><div class="merchant-table-qr" id="merchantTakeoutQrCode">${memberCardQrHtml(url)}</div><div style="display:grid;gap:8px;"><button onclick="renderMerchantOrderManager(true)">生成二维码</button><button onclick="saveMerchantTakeoutQrImage('${escAttr(url).replace(/'/g,"\\'")}')">保存二维码</button></div></div>`;
 }
-async function saveMerchantTakeoutQrNote(){
-  const merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId(),note=document.getElementById('merchantTakeoutQrNote')?.value.trim()||'';
-  try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_takeout_qr_settings_update`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_merchant_user_id:merchantUserId,p_qr_note:note})});if(!res.ok)throw new Error(await res.text());showToast('二维码说明已保存');renderMerchantOrderManager(true);}catch(error){showToast('保存失败，请确认你有点餐管理权限');}
+function saveMerchantTakeoutQrImage(url){
+  const svg=memberCardQrHtml(url),blob=new Blob([svg],{type:'image/svg+xml'}),blobUrl=URL.createObjectURL(blob),image=new Image();
+  image.onload=()=>{const canvas=document.createElement('canvas'),size=1600,ctx=canvas.getContext('2d');canvas.width=size;canvas.height=size;ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.drawImage(image,160,160,1280,1280);URL.revokeObjectURL(blobUrl);canvas.toBlob(file=>{if(!file){showToast('二维码保存失败');return;}const link=document.createElement('a');link.href=URL.createObjectURL(file);link.download='乐生活-外卖点单二维码.png';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);showToast('已生成大尺寸二维码，可保存到相册或打印');},'image/png');};
+  image.onerror=()=>{URL.revokeObjectURL(blobUrl);showToast('二维码生成失败，请重试');};image.src=blobUrl;
 }
 function merchantOrderBatchHtml(items,manager){
   let lastBatch=null;const canServe=!!manager&&merchantWorkspaceHasPermission('order_serve');
@@ -17647,7 +17648,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Takeout Checkout & App Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Takeout Order Polish】`);
 </script>
 </body>
 </html>

@@ -186,7 +186,7 @@
     fulfillment: value => { persistFields(); state.takeout.fulfillment = value; state.takeout.speed = 'standard'; render(); }, speed: value => { persistFields(); state.takeout.speed = value; render(); },
     coupon: id => { persistFields(); state.takeout.couponId = Number(state.takeout.couponId) === id ? null : id; render(); }, payment: value => { persistFields(); state.takeout.payment = value; render(); },
     tip: value => { persistFields(); state.takeout.tipPercent = value; state.takeout.customTip = ''; render(); }, customTip: () => { persistFields(); state.takeout.customTip = state.takeout.customTip || '0'; render(); }, setCustomTip: value => { persistFields(); state.takeout.customTip = value; render(); },
-    lookupAddress, useAddress: index => { const row = state.addressResults?.[index]; if (!row) return; state.takeout.address = row.formatted_address; render(); }, submit
+    lookupAddress, useAddress: index => { const row = state.addressResults?.[index]; if (!row) return; state.takeout.address = row.formatted_address; state.takeout.note = ''; render(); }, submit
   };
 
   (async () => {
