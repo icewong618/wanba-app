@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.350';
+const APP_VERSION = '5.352';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7081,7 +7081,7 @@ async function saveMerchantEnabledFeatures(merchant, values){
   return clean;
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
-function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.340`; }
+function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.352&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function closeMerchantRentalManager(){ document.getElementById('merchantRentalManager')?.classList.remove('open'); }
 async function openMerchantRentalPage(merchantUserId){
   try {
@@ -7098,10 +7098,11 @@ function merchantRentalCanManage(merchantUserId){
 async function openMerchantManagementCenter(merchantUserId){
   const id = merchantUserId || activeMerchantWorkspaceId();
   if(!id || String(id) !== String(activeMerchantWorkspaceId() || '')){ showToast('请先进入自己的商家主页'); return; }
+  closeProfileMenu();
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/merchant/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&admin_v=5.350`;
+    const url = `https://escoopcity.com/merchant/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&admin_v=5.352&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){
@@ -7115,7 +7116,7 @@ async function openMerchantRentalManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/rental/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&manage_v=5.340`;
+    const url = `https://escoopcity.com/rental/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&manage_v=5.352&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){
@@ -7403,7 +7404,6 @@ function merchantContentHtml(m, opts){
         <div class="profile-menu merchant-owner-menu" id="merchantOwnerMenu">
           <button onclick="copyMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}复制微网站链接</button>
           <button onclick="shareMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}转发店铺</button>
-          <button onclick="openMerchantManagementCenter('${uidSafe}')">${uiIcon('settings',15)}商家管理后台</button>
           <button onclick="openMerchantFeatureCenter()">${uiIcon('store',15)}功能中心</button>
           <button onclick="closeProfileMenu();openMerchantEditSheet()">${uiIcon('edit',15)}编辑商家资料</button>
           <button onclick="closeProfileMenu();openMerchantTeamManager()">${uiIcon('user',15)}团队与矩阵账号</button>
@@ -7449,6 +7449,7 @@ function merchantContentHtml(m, opts){
       </div>
       ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 点餐服务</b><p>扫码点餐可选择餐桌；外卖点单可选择自提或送餐上门；扫码排队可提前点菜。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 点餐订单</button><button onclick="openMerchantTakeoutManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖订单</button><button onclick="openMerchantQueueManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>` : `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderEntry('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 5px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 扫码点餐</button><button onclick="openMerchantTakeoutOrder('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖点单</button><button onclick="openMerchantQueuePage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>`}</div>` : ''}
       ${rentalEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('car',14)} 租车预约</b><p>按日或小时预约，商家确认后安排取车；押金和付款状态由商家统一管理。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantRentalManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('settings',14)} 车辆与预约</button><button onclick="openMerchantRentalPage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 查看预约页</button></div>` : `<button onclick="openMerchantRentalPage('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('car',14)} 查看车辆并预约</button>`}</div>` : ''}
+      ${isOwnerPage ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('settings',14)} 商家管理后台</b><p>统一查看经营概览，并进入点餐、会员、优惠券、内容、团队和已开通的业务功能。</p><button onclick="openMerchantManagementCenter('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage-dark);color:#fff;font:800 13px inherit;">${uiIcon('settings',14)} 进入商家管理后台</button></div>` : ''}
       <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
         <div style="display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;">${uiIcon('bag',15)} 会员优惠规则</div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
@@ -7467,7 +7468,7 @@ function merchantContentHtml(m, opts){
     <div style="padding:14px 16px 4px;">
       <div class="deals-section-header" style="margin:0 0 10px;">
         ${section === 'store' ? (rentalEnabled ? '车辆库' : '店铺') : section === 'coupons' ? '优惠券' : '最新动态'}
-        <span>${section === 'store' ? (rentalEnabled ? '可预约车辆' : '商品 / 服务列表') : section === 'coupons' ? '到店出示使用' : '来自商家真实发布'}</span>
+        ${section === 'store' && rentalEnabled && isOwnerPage ? `<button onclick="openMerchantRentalManager('${uidSafe}')" style="margin-left:auto;border:0;border-radius:8px;background:var(--sage);color:#fff;padding:7px 10px;font:800 12px inherit;">${uiIcon('settings',13)} 租车管理后台</button>` : `<span>${section === 'store' ? (rentalEnabled ? '可预约车辆' : '商品 / 服务列表') : section === 'coupons' ? '到店出示使用' : '来自商家真实发布'}</span>`}
       </div>
       ${sectionBody}
     </div>
@@ -18044,20 +18045,29 @@ if(initialHomePage){
   initialHomePage.classList.add('active');
   initialHomePage.style.display = 'block';
 }
-bootApp();
+// Keep deep links from the standalone merchant console until the app has restored auth.
+// This avoids returning to the home feed before the requested management view is opened.
+bootApp().finally(() => launchMerchantAdminAction());
 
 // 独立商家管理后台返回主站时，用这个轻量路由打开既有工作台，避免复制两套业务逻辑。
 async function launchMerchantAdminAction(){
   const params = new URLSearchParams(window.location.search);
   const action = params.get('merchant_admin');
   const merchantId = params.get('merchant_id');
-  if(!action || !merchantId || !(session && session.user)) return;
+  if(!action || !merchantId) return;
   const clear = () => { try { const next = new URL(window.location.href); next.searchParams.delete('merchant_admin'); next.searchParams.delete('merchant_id'); next.searchParams.delete('from'); window.history.replaceState({},'',next.pathname + next.search + next.hash); } catch(error) {} };
-  // Wait for bootApp to finish restoring the session and merchant workspace.
-  await new Promise(resolve => setTimeout(resolve, 700));
+  // bootApp normally restores this. The local fallback protects a cold app start.
+  if(!(session && session.user)){
+    try { session = JSON.parse(localStorage.getItem('wanba_session') || 'null'); } catch(error) {}
+  }
+  if(!(session && session.user)){
+    showToast('请先登录后再打开商家管理后台');
+    return;
+  }
   clear();
   if(action === 'orders') return openMerchantOrderManager(merchantId);
   if(action === 'takeout') return openMerchantTakeoutManager(merchantId);
+  if(action === 'queue') return openMerchantQueueManager(merchantId);
   if(action === 'members') return openMerchantMemberManager(merchantId);
   if(action === 'team') return openMerchantTeamManager();
   if(action === 'features') return openMerchantFeatureCenter();
@@ -18065,7 +18075,6 @@ async function launchMerchantAdminAction(){
   if(action === 'rental') return openMerchantRentalManager(merchantId);
   if(action === 'store' || action === 'public') return switchTab('profile');
 }
-launchMerchantAdminAction();
 
 // 定时刷新仅在首页可见时执行，减少后台页面的无效网络请求。
 setInterval(() => {
@@ -18090,7 +18099,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Management Center】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Routing and Category Fix】`);
 </script>
 </body>
 </html>

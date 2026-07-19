@@ -12,7 +12,7 @@
   const top = title => `<header class="top"><button onclick="Rental.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button class="close" onclick="Rental.close()" aria-label="关闭">×</button></header>`;
   const toLocalInput = value => { const date=value?new Date(value):new Date(Date.now()+3600000); date.setMinutes(date.getMinutes()-date.getTimezoneOffset()); return date.toISOString().slice(0,16); };
   const displayDate = value => value ? new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'}).format(new Date(value)) : '';
-  const rate = vehicle => vehicle.pricing_mode === 'hour' ? `${money(vehicle.hourly_rate)}/小时` : vehicle.pricing_mode === 'both' ? `${money(vehicle.hourly_rate)}/小时起` : `${money(vehicle.daily_rate)}/天`;
+  const rate = vehicle => vehicle.pricing_mode === 'hour' ? `${money(vehicle.hourly_rate)}/小时` : vehicle.pricing_mode === 'both' ? `${money(vehicle.daily_rate)}/天 · ${money(vehicle.hourly_rate)}/小时` : `${money(vehicle.daily_rate)}/天`;
   const photo = vehicle => Array.isArray(vehicle.photos)&&vehicle.photos[0] ? `<img src="${esc(vehicle.photos[0])}" alt="">` : '<div class="placeholder">🚗</div>';
   const fuel = value => ({'纯电':'电动','电动':'电动','柴油':'柴油','混动':'混动','汽油':'汽油'}[String(value||'')] || '汽油');
   const addons = () => Array.isArray(state.selected?.addons) ? state.selected.addons : [];
