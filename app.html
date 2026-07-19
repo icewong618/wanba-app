@@ -3217,7 +3217,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.332';
+const APP_VERSION = '5.340';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7081,7 +7081,7 @@ async function saveMerchantEnabledFeatures(merchant, values){
   return clean;
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
-function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.332`; }
+function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.340`; }
 function closeMerchantRentalManager(){ document.getElementById('merchantRentalManager')?.classList.remove('open'); }
 async function openMerchantRentalPage(merchantUserId){
   try {
@@ -7098,11 +7098,16 @@ function merchantRentalCanManage(merchantUserId){
 async function openMerchantRentalManager(merchantUserId){
   const id = merchantUserId || activeMerchantWorkspaceId();
   if(!id || !merchantRentalCanManage(id)){ showToast('你没有这家商家的租车管理权限'); return; }
-  const sheet = document.getElementById('merchantRentalManager');
-  if(!sheet) return;
-  sheet.dataset.merchantUserId = id;
-  sheet.classList.add('open');
-  await renderMerchantRentalManager();
+  try {
+    const merchant = await getMerchantOrderMerchant(id);
+    if(!merchant) throw new Error('merchant_not_found');
+    const url = `https://escoopcity.com/rental/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&manage_v=5.340`;
+    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
+    else window.location.href = url;
+  } catch(error){
+    console.warn('打开租车管理失败:', error.message);
+    showToast('租车管理暂时无法打开，请稍后再试');
+  }
 }
 function merchantRentalMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
 function merchantRentalStatusText(status){ return ({available:'可预约',reserved:'已保留',rented:'租用中',maintenance:'维修中',cleaning:'清洁中',inactive:'已下架',pending:'待确认',confirmed:'已确认',rejected:'已拒绝',cancelled:'已取消',active:'取车中',returned:'已归还',overdue:'逾期'}[status] || status || '待确认'); }
@@ -18049,7 +18054,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental Store Vehicle Library】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Standalone Rental Management】`);
 </script>
 </body>
 </html>
