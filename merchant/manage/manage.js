@@ -28,6 +28,7 @@
   const top = title => `<header class="top"><button onclick="MerchantAdmin.close()">‹</button><b>${esc(title)}</b><button onclick="MerchantAdmin.close()">×</button></header>`;
   const go = action => {
     if(!merchant) return;
+    if(action === 'auto_sales') return location.assign(`/autos/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
     location.assign(`/?merchant_admin=${encodeURIComponent(action)}&merchant_id=${encodeURIComponent(merchant.user_id)}&from=merchant_manage`);
   };
   const count = async path => {
@@ -42,6 +43,7 @@
     return merchant?.category === '餐饮饮品' || (!merchant?.category && ['table_order','takeout_order','queue'].some(key => active.has(key)));
   };
   const isRental = () => merchant?.category === '住宿旅游' || (!merchant?.category && features().has('rental'));
+  const isAutoSales = () => features().has('auto_sales');
 
   async function load(){
     const slug = query.get('merchant');
@@ -92,8 +94,11 @@
     const rentalEntries = isRental()
       ? entry('▱', '租车管理', '车辆、预约、增值服务与保险服务', 'rental')
       : '';
-    const businessEntries = restaurantEntries || rentalEntries
-      ? `<div class="section-head"><b>行业功能</b><span>只显示适用于本店的功能</span></div><div class="grid">${restaurantEntries}${rentalEntries}</div>`
+    const autoEntries = isAutoSales()
+      ? entry('▱', '二手车管理', '车辆库存、试驾预约与卖车估价线索', 'auto_sales')
+      : '';
+    const businessEntries = restaurantEntries || rentalEntries || autoEntries
+      ? `<div class="section-head"><b>行业功能</b><span>只显示适用于本店的功能</span></div><div class="grid">${restaurantEntries}${rentalEntries}${autoEntries}</div>`
       : '';
 
     app.innerHTML = `${top('商家管理后台')}
