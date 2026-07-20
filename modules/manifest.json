@@ -1,5 +1,5 @@
 {
-  "version": "5.397",
+  "version": "5.398",
   "modules": [
     { "id": "community", "path": "/", "label": "社区主程序", "status": "active" },
     { "id": "deals", "path": "/deals/", "label": "今日省钱", "status": "active" },
