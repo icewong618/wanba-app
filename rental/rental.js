@@ -3,7 +3,7 @@
   const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app = document.getElementById('rentalApp');
   const query = new URLSearchParams(location.search);
-  const state = { merchant:null, vehicles:[], bookings:[], selected:null, booking:null, quote:null, screen:'list', startsAt:'', endsAt:'', name:'', phone:'', email:'', note:'', selectedAddons:[], paymentMethod:'apple_pay', editingBookingId:'', error:'' };
+  const state = { merchant:null, vehicles:[], bookings:[], selected:null, booking:null, quote:null, screen:'list', startsAt:'', endsAt:'', name:'', phone:'', email:'', note:'', selectedAddons:[], paymentMethod:'apple_pay', editingBookingId:'', error:'', filters:{seats:'',fuel:'',type:''} };
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const money = value => `$${Number(value || 0).toFixed(2)}`;
   const user = () => JSON.parse(localStorage.getItem('wanba_session') || 'null')?.user || null;
@@ -193,7 +193,30 @@
     if(!response.ok){ alert('这笔预约目前无法取消，请联系商家协助处理。'); return; }
     await loadBookings(); state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; renderBookingDetail();
   }
+  const vehicleCategory = vehicle => {
+    const raw = String(vehicle?.vehicle_type || '').toLowerCase();
+    if(raw.includes('suv')) return 'SUV';
+    if(raw.includes('van') || raw.includes('商务') || raw.includes('面包')) return 'VAN';
+    if(raw.includes('皮卡') || raw.includes('pickup')) return '皮卡';
+    if(raw.includes('紧凑') || raw.includes('compact')) return '紧凑';
+    return '标准';
+  };
+  function filteredVehicles(){
+    const filters=state.filters;
+    return state.vehicles.filter(vehicle => {
+      if(filters.seats && Number(vehicle.seats || 0) < Number(filters.seats)) return false;
+      if(filters.fuel && fuel(vehicle.fuel_type) !== filters.fuel) return false;
+      if(filters.type && vehicleCategory(vehicle) !== filters.type) return false;
+      return true;
+    });
+  }
+  function renderList(){
+    const start=state.startsAt?toLocalInput(state.startsAt):toLocalInput();
+    const end=state.endsAt?toLocalInput(state.endsAt):toLocalInput(new Date(Date.now()+25*3600000));
+    const filters=state.filters; const cars=filteredVehicles();
+    app.innerHTML=`${top('租车预约')}<section class="rental-hero"><div class="rental-hero-row"><div><h1>${esc(state.merchant?.business_name||'乐生活租车')}</h1><p>${esc(state.merchant?.address||'请选择取还时间后查看可预约车辆')}</p></div>${user()?'<button onclick="Rental.bookings()">我的预约</button>':''}</div></section><section class="time-filter"><label>取车时间<input id="rentalStart" type="datetime-local" value="${esc(start)}" min="${toLocalInput()}"></label><label>还车时间<input id="rentalEnd" type="datetime-local" value="${esc(end)}" min="${toLocalInput(new Date(Date.now()+3600000))}"></label><button onclick="Rental.refreshList()">查询车辆</button></section><section class="vehicle-filter"><div class="filter-heading"><b>筛选车型</b><button onclick="Rental.clearFilters()">清除筛选</button></div><div class="vehicle-filter-grid"><label>乘客<select onchange="Rental.setFilter('seats',this.value)"><option value="">不限人数</option>${Array.from({length:9},(_,index)=>index+2).map(number=>`<option value="${number}" ${String(filters.seats)===String(number)?'selected':''}>${number} 人及以上</option>`).join('')}</select></label><label>能源<select onchange="Rental.setFilter('fuel',this.value)"><option value="">不限能源</option>${['汽油','柴油','混动','电动'].map(item=>`<option value="${item}" ${filters.fuel===item?'selected':''}>${item}</option>`).join('')}</select></label><label>车型<select onchange="Rental.setFilter('type',this.value)"><option value="">不限车型</option>${['紧凑','标准','SUV','VAN','皮卡'].map(item=>`<option value="${item}" ${filters.type===item?'selected':''}>${item}</option>`).join('')}</select></label></div></section><div class="filter-result">找到 <b>${cars.length}</b> 辆符合条件的车辆</div><div class="vehicle-list">${cars.length?cars.map(vehicle=>`<article class="vehicle">${photo(vehicle)}<div class="vehicle-main"><div class="vehicle-head"><div><h2>${esc(vehicle.name)}</h2><p>${esc([vehicle.year,vehicle.make,vehicle.model].filter(Boolean).join(' '))}</p></div><b>${rate(vehicle)}</b></div><div class="chips"><span>${esc(vehicleCategory(vehicle))}</span><span>${vehicle.seats||5} 座</span><span>${esc(vehicle.transmission||'自动挡')}</span><span>${esc(fuel(vehicle.fuel_type))}</span></div><button onclick="Rental.select('${esc(vehicle.id)}')">查看车辆</button></div></article>`).join(''):'<div class="empty">没有符合条件的车辆。试试减少乘客人数或清除筛选。</div>'}</div>`;
+  }
   async function load(){ const slug=query.get('merchant'); if(!slug){ app.innerHTML='<div class="empty">缺少商家信息。</div>'; return; } try { const res=await api('/rest/v1/rpc/merchant_rental_public_catalog',{method:'POST',body:JSON.stringify({p_slug:slug})}); const data=await res.json(); if(!res.ok||!data?.merchant)throw new Error('not_found'); state.merchant=data.merchant; state.vehicles=Array.isArray(data.vehicles)?data.vehicles:[]; await loadBookings(); renderList(); } catch(e){ app.innerHTML=`${top('车辆预约')}<div class="empty">暂时无法读取租车服务，请稍后再试。</div>`; } }
-  window.Rental={close,back,refreshList,select,quote,toggleAddon,contact,review,pickPayment:id=>{state.paymentMethod=id;renderPayment();},submit,modify,cancel,bookings:async()=>{await loadBookings();state.screen='bookings';renderBookings();},booking:openBooking,cancelBooking,editBooking,list:()=>{state.screen='list';state.selected=null;state.quote=null;state.editingBookingId='';renderList();},help:()=>alert(`请联系 ${state.merchant?.business_name||'商家'}：${state.merchant?.phone||'商家暂未填写电话'}`),faq:()=>alert('常见问题：预约提交后由商家确认；请在取车前携带有效驾照与预约信息。')};
+  window.Rental={close,back,refreshList,select,quote,toggleAddon,contact,review,pickPayment:id=>{state.paymentMethod=id;renderPayment();},submit,modify,cancel,bookings:async()=>{await loadBookings();state.screen='bookings';renderBookings();},booking:openBooking,cancelBooking,editBooking,setFilter:(key,value)=>{state.filters[key]=value;renderList();},clearFilters:()=>{state.filters={seats:'',fuel:'',type:''};renderList();},list:()=>{state.screen='list';state.selected=null;state.quote=null;state.editingBookingId='';renderList();},help:()=>alert(`请联系 ${state.merchant?.business_name||'商家'}：${state.merchant?.phone||'商家暂未填写电话'}`),faq:()=>alert('常见问题：预约提交后由商家确认；请在取车前携带有效驾照与预约信息。')};
   load();
 })();

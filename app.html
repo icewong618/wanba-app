@@ -985,10 +985,13 @@
   .public-profile-cover .profile-cover-bio{max-width:100%;}
   #searchOverlay{
     padding:0;background:#fff;align-items:stretch;justify-content:center;overflow:hidden;
+    z-index:1200;overscroll-behavior:contain;
   }
+  #searchOverlay.open{display:block;}
   #searchModal{
-    position:relative;width:100%;max-width:var(--container-w);height:100vh;max-height:none;
+    position:relative;width:100%;max-width:none;height:100vh;height:100dvh;max-height:none;
     border-radius:0;box-shadow:none;animation:none;background:#fff;
+    display:flex;flex-direction:column;overflow:hidden;
   }
   .search-modal-head{
     display:flex;align-items:center;gap:10px;
@@ -1005,12 +1008,14 @@
   }
   #searchInput{
     flex:1;min-width:0;padding:10px 14px;border:1px solid var(--line);border-radius:999px;
-    font-size:14px;font-family:inherit;background:var(--bg-alt);
+    font-size:16px;font-family:inherit;background:var(--bg-alt);touch-action:manipulation;
+    -webkit-user-select:text;user-select:text;
   }
   #searchBody{
     padding:16px 16px calc(24px + env(safe-area-inset-bottom));
-    overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;flex:1;min-height:0;
   }
+  body.search-page-open{overflow:hidden;overscroll-behavior:none;}
   /* ---- 小红书风格顶栏 ---- */
   .xhs-topbar{
     display:flex;align-items:center;gap:10px;
@@ -3217,7 +3222,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.362';
+const APP_VERSION = '5.364';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7081,7 +7086,7 @@ async function saveMerchantEnabledFeatures(merchant, values){
   return clean;
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
-function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.362&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.364&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function closeMerchantRentalManager(){ document.getElementById('merchantRentalManager')?.classList.remove('open'); }
 async function openMerchantRentalPage(merchantUserId){
   try {
@@ -7102,7 +7107,7 @@ async function openMerchantManagementCenter(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/merchant/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&admin_v=5.362&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/merchant/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&admin_v=5.364&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){
@@ -7116,7 +7121,7 @@ async function openMerchantRentalManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/rental/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&manage_v=5.362&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/rental/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&manage_v=5.364&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){
@@ -13075,14 +13080,21 @@ let searchKeyword = '';
 
 function openSearchPage(){
   appRememberRoute();
-  document.getElementById('searchOverlay').classList.add('open');
-  document.getElementById('searchInput').value = '';
+  const overlay = document.getElementById('searchOverlay');
+  const input = document.getElementById('searchInput');
+  overlay.classList.add('open');
+  document.body.classList.add('search-page-open');
+  input.value = '';
   searchKeyword = '';
   renderSearchHome();
-  setTimeout(() => { const el = document.getElementById('searchInput'); if(el) el.focus(); }, 100);
+  // iOS only opens its keyboard when focus happens in the original tap gesture.
+  input.focus({preventScroll:true});
+  requestAnimationFrame(() => input.focus({preventScroll:true}));
 }
 function closeSearchPage(){
   document.getElementById('searchOverlay').classList.remove('open');
+  document.body.classList.remove('search-page-open');
+  document.getElementById('searchInput')?.blur();
 }
 function getSearchHistory(){
   try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch(e){ return []; }
@@ -18099,7 +18111,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental Tasks and Schedule】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental Customer Filters】`);
 </script>
 </body>
 </html>
