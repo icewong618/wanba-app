@@ -3222,7 +3222,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.365';
+const APP_VERSION = '5.370';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17522,6 +17522,13 @@ initAppPullToRefresh();
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
+  // 省钱页面已迁移为独立模块，避免其业务代码继续耦合社区主程序。
+  if(tab === 'deals'){
+    const url = new URL('./deals/', window.location.href);
+    url.searchParams.set('module_v', '5.370');
+    window.location.assign(url.href);
+    return;
+  }
   ensureAdminPageAtRoot();
   if(tab !== currentTab) appRememberRoute();
   currentTab = tab;
