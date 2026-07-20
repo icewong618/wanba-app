@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.383';
+  const version = '5.384';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -61,7 +61,7 @@
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABPCAMAAABLT7LRAAAArlBMVEWfW5WRP4eXQ4+QLYWfTJTHj8LUoM+HK3eOMYPJd8Lhtt3bstnEjb2WLoWUNYiPLn6YM5C3aK2fMZ3BfLfRkMuQKoaSH4WWK4WfN5GfO5WbNJDSjsecMJavT6C+brbr0uuoN5KqT5rEcbq3WKq0TquaJoqSIYKWMo6KJn+cKpmWHYWYHIuaGouxb6TRpM6UPoTJecKkNpqoLqSjKJimNKKiG5SdGZHCWLKhJoygHIz95Yr8AAAAMHRSTlMBFS5oj46rSCh68dKbdE+Redrprv2RzO3Vs6bx8ff5tv3M/v39/bLN4f7m8f5eVjqh+FG2AAAHwklEQVRYw6WZD1ejOhOHixSSV20TWhLrLsFeknDlz7oNoch+/y/2TmjVttK19eYcjy3Ck0lm5jcTnEzODu/Gnwbh1EfY8+Db5L8ND+P/3d7e3t2HM4SxdzMPAjKdUoB/j419jO5DSimCQX2AhVEYwgzRYunjm5trmUF8N50SyvjD6pFQyghg55T9iOLbOP4ZUozRDb5iuTS8C8MoEWmaBnR4EA+mIjR1xDiOZgjB3l6IQzh4isVapPFyiuAbCij1l2H4z2KxcCb+zKTK7kKM6GXOoHSZSi3STAQe0Fn+b5I8/0sICcIoFUKobJOuhUojH82+tpEGiEapKZRIOKUk5zljsDyM97Mhyli5llmqpBIpmPmFb6dLjBdKNTYBEH/mDI24E8/4Ot2kqTLp7d38b0HkIXDfqmmbbQV2PDN8/sY8yTYyNfL2Caw+v32TCaqaxlpRlRXDf/dcLjKZSfGEJ+eIHtrzjFSao69jayFllpkpRMHN6A0BAp5tbCtNxS7JBMSFzGLxD0I3I9N74EvgWaukLucX5ifR6zRbM2B/Jro04N12CzxNL04pprXMEqDR0x3HAfZY3W3bV12ursjS2YOWcgUaRE82ifgeAZ7JCo7wNTJCH7QQBBQTneygR5OtNZnh+EphYg9arR/RyTZihBcW4kVczZvAynoFu4Sefh1cnWNmrDJtib6hxbw3xnl6+WEM/oUWVqpCo+9UC1T2xjkS+Qcxw1rwb5FfpG+IMXK0M6zvIRgx8t89PUdVq1SfoK9ZeZW0bWvoyaLXK+y9vMcHnjOjXq0dNdDz9m5jhFe2dcMsTlJ9pvseTHzPQBpUhVT98bSeK3cMLBoSG1WJaZqmNUnF6KdIxau+X7kHdpN7PikgAvujkPHyxOzMMW4niHGsnA11eSQYdb+GUN5XwpsZLxSk3PG8MInjFWyYd8ZHDDt0tF4TqGc7VfGDxL4qzU7lEZGibd8c9YWe5XVfYrTzsxeErXo15ef5IZbaBF0oEr2Ggkud1PqzBcSM5pMxoLkQiEsIRcxcqfYCum6lOF3xsI1uDy8DelyDUxn1HRCek8UDGrmpuAJYrxMIVWfhS2WN0s94DGhMMZQXfDicuMOvIzfhh3otKImWk8mLHxklNP/kRoyqwhZFxZmHqoOR7EaVH9qOtNZixuLQm6C5ENLoT2lHq6TYjQQz2xyNIeLbw12na1BuRqMlgkYtFaooyOl6V3scpAdUdQ557FDwbT+gFz3KZq0No4/z+QQxaKn0JyBcZ4OJs73Q8MLapjhXEPEDAHO08qEWkI0QxVjU4Ap4b5oLNbuwzfmoJFon+Wwxc3kfC3MeWO0RDD63jUEeHpeHudYrRheB62cGIDkHxB+f2yL1Gfg5H1k4bCKv2MKfO6Cyo+o/QPbxOYePTVPEvzikY1t9Dlqk+0UkH38DEMfS6pE4dEALS0YU9Is7oDUh5q0pzMjNVPerIPrhChW+c8ARscFVA35NgMqQM7aB9XscfGNGNhwKVT6TK98l810KCfHw+3MDmDTwB2sTzvguJplLRzfBOHAuw3vnwzCzfX9akjHlwLOFdn32YODgIG9AozH56gleBKE3HJv63lWtowldYlhdskH32c7AfLIDViPdYAUEtPAH/9O4t/2JV5g1RUX2VQQ/74B0KDV7z+OjAwKrdT3bRQ3Q0zWs+VgQQdo+atJ8xyvfjOUgYaQ6zBqQw/qBrqL7AYgjBUuu2XnxbPYucTM5+eEVlESDDlfc1Q8r8XS3u5bL3nY1P1fYUNIW7znjkUEyXJVGhyuuQWCjp6cdYyadhRU6C/ww0JXXQbzQYZVGVV1DIxs+Tfd9S7Tu+rrOz5kIvU+e/+2kwTowUEbTO38/Sy41AMtvdYf7HdRKLMjyrXVHcg1z1Dn+Fs+5uLZryDv6BvQWCq7VFfsWEI4j4AMpCf3oYWmma7Cx/I6JqKwhMXo4r/v++/PeQtRd19XkOz17t+17I+M0DMODaWQBwKKaX72B7vxVcxHH8dPy5fDFiqw7l17oWh6cDzvOUveuZHlkeWS6IWF/X+mQ7XZbsijO4tunYw/Q1ImptfwKG4fz4bac/4izTRafbleQQtWAcfmqcQ6h0VUzlqZZFvqfpgulHUbJLnuzBedrGHAqiLI0FiNmgIxBa2xBbC9JGUyqbog0FmXiZzTao6BVnm4MRL0u/S+M9GYu35x9LJEiis5sEyIciH/+6Pq4+xtZLXgXeOWMJkpJcfalAgozGYM6/un7ir29oPp8F6sgWLagyXOWZFIm5Px6HPEnnKqs3W7/VPuid9LY5gMOeDki+nWTrf66GLzMZPoz0nZ4aFuXH8cxD06jfl660NuCO0pGeSHjzVfvPDwiUhGRvRmOWZWc8zyHLrasnMpB7HV1L0ieKLlJydcRAcsWj3Sptu9jiA8nR/tR1yaLpcjcq86LMmAapUK+tvaA1x3wtNjcxhL0IAsvFFCEgyiT6vVVNQfIzglLZ1WWbTZpDEgVXS7IGJBRBGaqdkjHDuIOPG+7FmCwdbexENndy3XSHobR40JIqVr3jhJ+WtvAMVO07QYONjK+v7pKYhpQMiBVu3UWAk8q0dQlJyT8VtF1oYdosAQnKRhAS8qSzdx/B779v4HhtIgppa4BGV4Ye/+B9mHqxXf+H7YBHYz12JU0AAAAAElFTkSuQmCC">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<script src="./i18n/i18n.js?v=5.383"></script>
+<script src="./i18n/i18n.js?v=5.384"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -1493,7 +1493,7 @@
   .profile-cover-name-row{display:flex;align-items:flex-start;justify-content:flex-start;gap:0;flex-direction:column;}
   .profile-cover-name{font-size:22px;font-weight:900;line-height:1.2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .profile-cover-id,.profile-cover-location{font-size:12px;color:rgba(255,255,255,.84);line-height:1.5;}
-  .profile-cover-bio{position:relative;z-index:2;margin-top:14px;font-size:13px;line-height:1.55;color:rgba(255,255,255,.94);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;overflow-wrap:anywhere;}
+  .profile-cover-bio{position:relative;z-index:2;margin-top:14px;font-size:13px;line-height:1.55;color:rgba(255,255,255,.94);white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;overflow-wrap:anywhere;}
   .profile-cover-tags{position:relative;z-index:2;display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11.5px;}
   .profile-cover-tags span{
     display:inline-flex;align-items:center;min-height:24px;padding:4px 9px;border-radius:999px;
@@ -3311,7 +3311,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.383';
+const APP_VERSION = '5.384';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3793,6 +3793,13 @@ document.addEventListener('click', e => {
   if(merchantMenu && !e.target.closest('#merchantOwnerMenu') && !e.target.closest('.profile-cover-menu-btn')) merchantMenu.classList.remove('open');
   if(publicMenu && !e.target.closest('#publicProfileMenu') && !e.target.closest('#userPublicBody .profile-cover-menu-btn')) publicMenu.classList.remove('open');
 });
+// 全局菜单规则：任一三条杠菜单打开后，触摸或点击菜单外任意位置都立即关闭。
+// Capture 阶段可覆盖 App WebView 内部分浮层对普通 click 的拦截。
+document.addEventListener('pointerdown', e => {
+  const target = e.target;
+  if(target?.closest?.('.profile-menu,.profile-cover-menu-btn')) return;
+  document.querySelectorAll('.profile-menu.open').forEach(menu => menu.classList.remove('open'));
+}, true);
 function openProfileCoverPicker(){
   if(!(session && session.user)){
     showToast('请先登录后再更换背景');
@@ -18186,10 +18193,14 @@ function merchantOrderCardHtml(order,items){
   return `<div class="merchant-order-card"><div class="merchant-order-card-head"><div><b>${escHtml(order.table_name||'餐桌')} · ${escHtml(order.order_code||'')}</b><span>${escHtml(order.user_name||'乐生活用户')} · ${order.created_at?new Date(order.created_at).toLocaleString('zh-CN'):''}${Number(order.addition_count||0)?` · 加菜 ${order.addition_count} 次`:''}</span></div><i class="merchant-order-state">${statusText} · ${merchantOrderPaymentLabel(order)}</i></div><div class="merchant-order-lines">${merchantOrderBatchHtml(items,order)}${order.note?`<div style="margin-top:8px;color:var(--berry-dark);">备注：${escHtml(order.note)}</div>`:''}<div class="merchant-order-line" style="margin-top:9px;padding-top:9px;border-top:1px solid var(--line);font-size:13px;"><b>合计 ${Number(order.item_count||0)} 件</b><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div></div>${paymentNote}${actionHtml?`<div class="merchant-order-card-actions">${actionHtml}</div>`:''}${billButton}</div>`;
 }
 
-/* ---------- v5.293：消费账单明细 ---------- */
+/* ---------- v5.384：统一 Purchase（餐饮账单 + 租车预约，后续模块可继续注册） ---------- */
 window._merchantOrderHistoryBills = [];
+window._merchantOrderHistoryRentals = [];
+window._purchaseHistoryRecords = [];
 window._merchantOrderHistoryDetailId = null;
 function merchantBillPaymentText(method){ return ({cash:'现金',card:'刷卡',online:'在线支付'})[method] || '支付'; }
+function purchaseRentalPaymentText(status){ return ({paid:'已付款',refunded:'已退款',partial_refund:'部分退款',waived:'免单',pending:'待付款'})[status] || status || '待付款'; }
+function purchaseRentalStatusText(status){ return ({pending:'等待商家确认',confirmed:'已确认',active:'租用中',returned:'已归还',overdue:'已逾期',cancelled:'已取消',rejected:'已拒绝'})[status] || status || '预约中'; }
 function closeMerchantOrderHistory(){
   if(window._merchantOrderHistoryDetailId != null){
     window._merchantOrderHistoryDetailId = null;
@@ -18201,10 +18212,14 @@ function closeMerchantOrderHistory(){
 function renderMerchantOrderHistoryList(){
   const body=document.getElementById('merchantOrderHistoryBody');
   if(!body)return;
-  const bills=window._merchantOrderHistoryBills||[];
-  body.innerHTML=bills.length?bills.map(bill=>{
-    const merchant=window._merchantIdentityCache[bill.merchant_user_id]||{};
-    return `<button onclick="openMerchantOrderBillDetail('${String(bill.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div><b>${escHtml(merchant.business_name||'乐生活商家')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">${new Date(bill.created_at).toLocaleString('zh-CN')} · ${merchantBillPaymentText(bill.payment_method)}</span></div><b style="color:var(--berry);">${merchantOrderMoney(bill.total_amount)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">菜品 ${merchantOrderMoney(bill.subtotal)}${Number(bill.discount_amount)?` · 优惠 -${merchantOrderMoney(bill.discount_amount)}`:''}${Number(bill.tip_amount)?` · 小费 ${merchantOrderMoney(bill.tip_amount)}`:''}<span style="float:right;color:var(--sage-dark);font-weight:900;">查看明细 ›</span></div></button>`;
+  const records=window._purchaseHistoryRecords||[];
+  body.innerHTML=records.length?records.map(record=>{
+    if(record.kind==='rental'){
+      const booking=record.data,merchant=booking.merchant||window._merchantIdentityCache[booking.merchant_user_id]||{},vehicle=booking.vehicle||{};
+      return `<button onclick="openPurchaseRentalDetail('${String(booking.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div style="min-width:0;"><b>${escHtml(merchant.business_name||'乐生活租车')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">租车预约 · ${new Date(booking.created_at).toLocaleString('zh-CN')} · ${escHtml(purchaseRentalPaymentText(booking.payment_status))}</span></div><b style="color:var(--berry);">${merchantOrderMoney(booking.total_amount)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">${escHtml(vehicle.name||'租赁车辆')} · ${escHtml(booking.booking_code||'')}<span style="float:right;color:var(--sage-dark);font-weight:900;">${escHtml(purchaseRentalStatusText(booking.status))} ›</span></div></button>`;
+    }
+    const bill=record.data,merchant=window._merchantIdentityCache[bill.merchant_user_id]||{};
+    return `<button onclick="openMerchantOrderBillDetail('${String(bill.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div><b>${escHtml(merchant.business_name||'乐生活商家')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">餐饮消费 · ${new Date(bill.created_at).toLocaleString('zh-CN')} · ${merchantBillPaymentText(bill.payment_method)}</span></div><b style="color:var(--berry);">${merchantOrderMoney(bill.total_amount)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">菜品 ${merchantOrderMoney(bill.subtotal)}${Number(bill.discount_amount)?` · 优惠 -${merchantOrderMoney(bill.discount_amount)}`:''}${Number(bill.tip_amount)?` · 小费 ${merchantOrderMoney(bill.tip_amount)}`:''}<span style="float:right;color:var(--sage-dark);font-weight:900;">查看明细 ›</span></div></button>`;
   }).join(''):'<div class="deals-empty-panel">还没有消费记录。</div>';
 }
 async function openMerchantOrderHistory(){
@@ -18213,12 +18228,32 @@ async function openMerchantOrderHistory(){
   if(!sheet||!body)return;
   sheet.classList.add('open');body.innerHTML='<div class="deals-empty-panel">正在读取消费记录...</div>';
   try{
-    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_bills?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=created_at.desc&limit=200`,{method:'GET'});
-    if(!res.ok)throw new Error(await res.text());
-    const bills=await res.json(),merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).filter(Boolean))];
+    const [billResult,rentalResult]=await Promise.allSettled([
+      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_bills?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=created_at.desc&limit=200`,{method:'GET'}),
+      authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_customer_bookings`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+    ]);
+    if(billResult.status!=='fulfilled'||!billResult.value.ok)throw new Error(billResult.status==='fulfilled'?await billResult.value.text():billResult.reason?.message);
+    const bills=await billResult.value.json();
+    let rentalBookings=[];
+    if(rentalResult.status==='fulfilled'&&rentalResult.value.ok){
+      const rentalData=await rentalResult.value.json();
+      rentalBookings=Array.isArray(rentalData)?rentalData:[];
+    }
+    const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id)).filter(Boolean))];
     if(merchantIds.length){const merchantRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${merchantIds.map(encodeURIComponent).join(',')})&select=user_id,business_name,logo`,{method:'GET'});if(merchantRes.ok)(await merchantRes.json()).forEach(row=>setMerchantIdentityCache(row.user_id,row));}
-    window._merchantOrderHistoryBills=bills;window._merchantOrderHistoryDetailId=null;renderMerchantOrderHistoryList();
+    rentalBookings.forEach(row=>{if(row.merchant?.user_id)setMerchantIdentityCache(row.merchant.user_id,row.merchant);});
+    window._merchantOrderHistoryBills=bills;window._merchantOrderHistoryRentals=rentalBookings;
+    window._purchaseHistoryRecords=[...bills.map(data=>({kind:'restaurant',data,created_at:data.created_at})),...rentalBookings.map(data=>({kind:'rental',data,created_at:data.created_at}))].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+    window._merchantOrderHistoryDetailId=null;renderMerchantOrderHistoryList();
   }catch(error){console.warn('读取消费记录失败:',error.message);body.innerHTML='<div class="deals-empty-panel">消费记录暂时无法读取，请稍后重试。</div>';}
+}
+function openPurchaseRentalDetail(bookingId){
+  const body=document.getElementById('merchantOrderHistoryBody');
+  const booking=(window._merchantOrderHistoryRentals||[]).find(row=>String(row.id)===String(bookingId));
+  if(!body||!booking)return;
+  window._merchantOrderHistoryDetailId=`rental:${bookingId}`;
+  const merchant=booking.merchant||window._merchantIdentityCache[booking.merchant_user_id]||{},vehicle=booking.vehicle||{},addons=Array.isArray(booking.rental_addons)?booking.rental_addons:[];
+  body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回消费记录</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${escHtml(merchant.business_name||'乐生活租车')}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">租车预约 · ${new Date(booking.created_at).toLocaleString('zh-CN')} · ${escHtml(booking.booking_code||'')}</div><div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;"><div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(vehicle.name||'租赁车辆')}</span><b>${merchantOrderMoney(booking.base_amount)}</b></div>${addons.map(item=>`<div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(item.name||'附加服务')}</span><b>${merchantOrderMoney(item.amount??item.price)}</b></div>`).join('')}<div class="merchant-order-line" style="margin:8px 0;"><span>租期</span><span>${new Date(booking.starts_at).toLocaleString('zh-CN')} 至 ${new Date(booking.ends_at).toLocaleString('zh-CN')}</span></div></div><div style="margin-top:13px;padding-top:10px;border-top:1px solid var(--line);"><div class="merchant-order-line"><span>会员/优惠券减免</span><b style="color:var(--berry);">-${merchantOrderMoney(Number(booking.member_discount_amount||0)+Number(booking.coupon_discount_amount||0))}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>押金</span><b>${merchantOrderMoney(booking.deposit_amount)}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>支付状态</span><b>${escHtml(purchaseRentalPaymentText(booking.payment_status))}</b></div><div class="merchant-order-line" style="margin-top:11px;font-size:16px;"><b>预约总额</b><b style="color:var(--berry);">${merchantOrderMoney(booking.total_amount)}</b></div></div></section>`;
 }
 async function openMerchantOrderBillDetail(billId){
   const body=document.getElementById('merchantOrderHistoryBody');
@@ -18301,7 +18336,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Profile Layout & English Terms】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Profile Menu, Bio & Purchase】`);
 </script>
 </body>
 </html>
