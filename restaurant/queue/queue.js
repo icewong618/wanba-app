@@ -19,7 +19,7 @@
   const nav = screen => { state.screen=screen; render(); window.scrollTo(0,0); };
   const exitQueue = () => { if(window.parent!==window) window.parent.postMessage({type:'leshenghuo-close-takeout'},'*'); else if(history.length>1) history.back(); else location.assign('/'); };
   const close = () => ['menu','cart','seat'].includes(state.screen) ? window.Queue.back() : exitQueue();
-  const top = title => `<header class="top"><button onclick="Queue.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button onclick="Queue.close()" aria-label="关闭">×</button></header>`;
+  const top = title => `<header class="top"><button onclick="Queue.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span class="top-actions"><button class="language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button onclick="Queue.close()" aria-label="关闭">×</button></span></header>`;
   const hero = () => `<section class="hero"><h1>${esc(state.merchant?.business_name || '乐生活扫码排队')}</h1><p>${esc(state.merchant?.address || '')}</p></section>`;
   const products = () => state.products.filter(row=>row.active!==false && row.orderable!==false);
   const productCategories = row => Array.isArray(row.categories)?row.categories:(row.category?[row.category]:[]);

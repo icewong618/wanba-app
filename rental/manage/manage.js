@@ -19,7 +19,7 @@
     const session = getSession();
     return fetch(`${SUPABASE_URL}${path}`, { ...options, headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${session?.access_token || SUPABASE_KEY}`, 'Content-Type':'application/json', ...(options.headers || {}) } });
   };
-  const top = title => `<header class="top"><button onclick="RentalManage.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button onclick="RentalManage.close()" aria-label="关闭">×</button></header>`;
+  const top = title => `<header class="top"><button onclick="RentalManage.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span class="top-actions"><button class="language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button onclick="RentalManage.close()" aria-label="关闭">×</button></span></header>`;
   const exitManager = () => {
     if(window.parent !== window) { window.parent.postMessage({ type:'leshenghuo-close-rental' }, '*'); return; }
     const slug = query.get('merchant');

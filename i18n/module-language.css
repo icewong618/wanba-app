@@ -1,0 +1,23 @@
+/* Shared compact language control for independent modules. */
+.module-top,
+.top{
+  grid-template-columns:42px minmax(0,1fr) 80px !important;
+}
+.module-top-actions,
+.top-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:3px;
+}
+.module-top .module-top-actions button,
+.top .top-actions button{
+  width:36px;
+  height:36px;
+  font-size:20px;
+}
+.module-top .module-top-actions .module-language,
+.top .top-actions .language{
+  font-size:14px;
+  font-weight:900;
+}

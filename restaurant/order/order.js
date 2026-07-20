@@ -52,7 +52,7 @@
     else if (state.screen === 'orders' || state.screen === 'success') nav('menu');
     else exitOrder();
   };
-  const top = title => `<header class="top"><button class="back" onclick="Order.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button class="close" onclick="Order.close()" aria-label="关闭">×</button></header>`;
+  const top = title => `<header class="top"><button class="back" onclick="Order.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span class="top-actions"><button class="language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button class="close" onclick="Order.close()" aria-label="关闭">×</button></span></header>`;
   const hero = () => `<section class="hero"><h1>${esc(state.merchant?.business_name || '乐生活点餐')}</h1><p>${isTakeout() ? esc(state.merchant?.address || '') : `当前餐桌：${esc(state.dinein.tableName || '扫码点餐')}`}</p></section>`;
   const productCategories = product => Array.isArray(product.categories) ? product.categories : (product.category ? [product.category] : []);
   const fulfillmentLabel = () => state.takeout.fulfillment === 'delivery' ? '派送' : '到店自取';
