@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.380';
+  const version = '5.381';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -20,8 +20,16 @@
       const url = new URL(String(raw), window.location.origin);
       if(!['escoopcity.com','www.escoopcity.com'].includes(url.hostname)) return null;
       const path = url.pathname.replace(/\/+$/, '') || '/';
-      if(!['/restaurant/order','/restaurant/order/index.html','/order','/order/index.html'].includes(path) || !url.searchParams.get('merchant')) return null;
-      url.pathname = '/restaurant/order/';
+      const targetPath = {
+        '/restaurant/order':'/restaurant/order/',
+        '/restaurant/order/index.html':'/restaurant/order/',
+        '/order':'/restaurant/order/',
+        '/order/index.html':'/restaurant/order/',
+        '/restaurant/queue':'/restaurant/queue/',
+        '/restaurant/queue/index.html':'/restaurant/queue/'
+      }[path];
+      if(!targetPath || !url.searchParams.get('merchant')) return null;
+      url.pathname = targetPath;
       url.searchParams.set('embedded_app', '1');
       url.searchParams.set('app_v', version);
       url.searchParams.set('native_link', '1');
@@ -53,7 +61,7 @@
 <link rel="apple-touch-icon" href="data:image/png;base64,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">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<script src="./i18n/i18n.js?v=5.380"></script>
+<script src="./i18n/i18n.js?v=5.381"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3286,7 +3294,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.380';
+const APP_VERSION = '5.381';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3347,9 +3355,17 @@ function nativeRestaurantOrderUrl(rawUrl){
     const allowedHosts = new Set(['escoopcity.com', 'www.escoopcity.com']);
     if(!allowedHosts.has(source.hostname)) return null;
     const path = source.pathname.replace(/\/+$/, '') || '/';
-    if(path !== '/restaurant/order' && path !== '/restaurant/order/index.html' && path !== '/order' && path !== '/order/index.html') return null;
+    const targetPath = {
+      '/restaurant/order':'/restaurant/order/',
+      '/restaurant/order/index.html':'/restaurant/order/',
+      '/order':'/restaurant/order/',
+      '/order/index.html':'/restaurant/order/',
+      '/restaurant/queue':'/restaurant/queue/',
+      '/restaurant/queue/index.html':'/restaurant/queue/'
+    }[path];
+    if(!targetPath) return null;
     if(!source.searchParams.get('merchant')) return null;
-    source.pathname = '/restaurant/order/';
+    source.pathname = targetPath;
     source.searchParams.set('embedded_app', '1');
     source.searchParams.set('app_v', APP_VERSION);
     source.searchParams.set('native_link', '1');
@@ -5327,9 +5343,9 @@ window._merchantOrderState = window._merchantOrderState || { merchant:null, tabl
 function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
-function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.380`; }
-function merchantTakeoutUrl(m){ return `https://escoopcity.com/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.380`; }
-function merchantQueueUrl(m){ return `https://escoopcity.com/restaurant/queue/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.371`; }
+function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.381`; }
+function merchantTakeoutUrl(m){ return `https://escoopcity.com/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.381`; }
+function merchantQueueUrl(m){ return `https://escoopcity.com/restaurant/queue/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.381`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
 async function getMerchantOrderMerchant(userId){
@@ -6659,11 +6675,12 @@ function merchantWaitlistCardHtml(row){
 async function setMerchantWaitlistStatus(id,status){
   try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_waitlist_set_status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_waitlist_id:id,p_status:status,p_table_id:null})});if(!res.ok)throw new Error(await res.text());showToast(status==='seated'?'已安排入座':'已取消排队');renderMerchantQueueManager();}catch(error){showToast('更新排队状态失败，请稍后重试');}
 }
-function saveMerchantQueueQrImage(url){
-  const svg=memberCardQrHtml(url),blob=new Blob([svg],{type:'image/svg+xml'}),blobUrl=URL.createObjectURL(blob),image=new Image();
-  image.onload=()=>{const canvas=document.createElement('canvas'),size=1600,ctx=canvas.getContext('2d');canvas.width=size;canvas.height=size;ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.drawImage(image,160,160,1280,1280);URL.revokeObjectURL(blobUrl);canvas.toBlob(file=>{if(!file){showToast('二维码保存失败');return;}const link=document.createElement('a');link.href=URL.createObjectURL(file);link.download='乐生活-扫码排队二维码.png';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);showToast('已生成大尺寸二维码，可保存到相册或打印');},'image/png');};
-  image.onerror=()=>{URL.revokeObjectURL(blobUrl);showToast('二维码生成失败，请重试');};image.src=blobUrl;
+async function saveMerchantQrPng(svg,filename){
+  const sourceBlob=new Blob([svg],{type:'image/svg+xml'}),sourceUrl=URL.createObjectURL(sourceBlob),image=new Image();
+  image.onload=()=>{const canvas=document.createElement('canvas'),size=1600,ctx=canvas.getContext('2d');canvas.width=size;canvas.height=size;ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.drawImage(image,160,160,1280,1280);URL.revokeObjectURL(sourceUrl);canvas.toBlob(async file=>{if(!file){showToast('二维码保存失败');return;}const imageFile=new File([file],filename,{type:'image/png'});try{if(navigator.canShare&&navigator.canShare({files:[imageFile]})){await navigator.share({title:'乐生活二维码',files:[imageFile]});showToast('已打开系统分享，可保存到相册或打印');return;}}catch(error){if(error?.name==='AbortError')return;console.warn('系统分享二维码失败:',error.message);}const link=document.createElement('a'),fileUrl=URL.createObjectURL(file);link.href=fileUrl;link.download=filename;link.style.display='none';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(fileUrl),1500);showToast('二维码图片已下载，可保存或打印');},'image/png');};
+  image.onerror=()=>{URL.revokeObjectURL(sourceUrl);showToast('二维码生成失败，请重试');};image.src=sourceUrl;
 }
+function saveMerchantQueueQrImage(url){ return saveMerchantQrPng(memberCardQrHtml(url),'乐生活-扫码排队二维码.png'); }
 function merchantOrderManagerStatus(status){merchantOrderState().managerStatus=status||'processing';renderMerchantOrderManager();}
 async function renderMerchantOrderManager(silent){
   const body=document.getElementById('merchantOrderManagerBody'),merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId();if(!body||!merchantUserId)return;if(!silent)body.innerHTML='<div class="deals-empty-panel">正在读取订单...</div>';
@@ -6678,11 +6695,7 @@ function merchantTakeoutOrderQrHtml(merchant){
   const url=merchantTakeoutUrl(merchant);
   return `<div class="merchant-table-card" style="margin-bottom:12px;justify-content:center;"><div class="merchant-table-qr" id="merchantTakeoutQrCode">${memberCardQrHtml(url)}</div><div style="display:grid;gap:8px;"><button onclick="renderMerchantOrderManager(true)">生成二维码</button><button onclick="saveMerchantTakeoutQrImage('${escAttr(url).replace(/'/g,"\\'")}')">保存二维码</button></div></div>`;
 }
-function saveMerchantTakeoutQrImage(url){
-  const svg=memberCardQrHtml(url),blob=new Blob([svg],{type:'image/svg+xml'}),blobUrl=URL.createObjectURL(blob),image=new Image();
-  image.onload=()=>{const canvas=document.createElement('canvas'),size=1600,ctx=canvas.getContext('2d');canvas.width=size;canvas.height=size;ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.drawImage(image,160,160,1280,1280);URL.revokeObjectURL(blobUrl);canvas.toBlob(file=>{if(!file){showToast('二维码保存失败');return;}const link=document.createElement('a');link.href=URL.createObjectURL(file);link.download='乐生活-外卖点单二维码.png';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);showToast('已生成大尺寸二维码，可保存到相册或打印');},'image/png');};
-  image.onerror=()=>{URL.revokeObjectURL(blobUrl);showToast('二维码生成失败，请重试');};image.src=blobUrl;
-}
+function saveMerchantTakeoutQrImage(url){ return saveMerchantQrPng(memberCardQrHtml(url),'乐生活-外卖点单二维码.png'); }
 function merchantOrderBatchHtml(items,manager){
   let lastBatch=null;const canServe=!!manager&&merchantWorkspaceHasPermission('order_serve');
   // 同一秒创建的菜品也按编号排序，刷新后不会改变行位置。
@@ -17657,7 +17670,7 @@ window.switchTab = function(tab){
   // 省钱页面已迁移为独立模块，避免其业务代码继续耦合社区主程序。
   if(tab === 'deals'){
     const url = new URL('./deals/', window.location.href);
-    url.searchParams.set('module_v', '5.380');
+    url.searchParams.set('module_v', '5.381');
     window.location.assign(url.href);
     return;
   }
@@ -18259,7 +18272,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Offline Ready & Fixed Navigation】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Restaurant Exit & QR Save Fix】`);
 </script>
 </body>
 </html>

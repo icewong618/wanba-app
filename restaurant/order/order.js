@@ -41,9 +41,14 @@
     state.dinein.note = (get('dineinNote') ?? state.dinein.note).trim();
   };
   const exitOrder = () => {
-    if (window.parent !== window) window.parent.postMessage({ type: 'leshenghuo-close-takeout' }, '*');
-    else if (history.length > 1) history.back();
-    else location.assign('/');
+    // Embedded sheets report back to their parent. A native QR App Link has
+    // no useful browser history, so send it to the 乐生活 home explicitly.
+    if (window.parent !== window) { window.parent.postMessage({ type: 'leshenghuo-close-takeout' }, '*'); return; }
+    const appLink = query.get('embedded_app') === '1' || query.get('native_link') === '1' || !!window.Capacitor?.isNativePlatform?.();
+    if (!appLink && history.length > 1) { history.back(); return; }
+    const home = new URL('/', location.origin);
+    if (appLink) { home.searchParams.set('embedded_app', '1'); home.searchParams.set('app_v', query.get('app_v') || '5.381'); }
+    location.replace(home.href);
   };
   const close = () => state.screen === 'menu' ? exitOrder() : back();
   const back = () => {
