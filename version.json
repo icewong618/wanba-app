@@ -1,5 +1,5 @@
 {
-  "version": "5.394",
+  "version": "5.395",
   "updated_at": "2026-07-20",
-  "message": "Startup Render Loop Fix"
+  "message": "Auto Manager Access Fix"
 }
