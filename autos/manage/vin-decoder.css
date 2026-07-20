@@ -1,0 +1,1 @@
+.vin-decode{display:flex;align-items:center;gap:9px;margin-top:8px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#f4f1e8}.vin-decode .btn{flex:0 0 auto;padding:8px 10px;font-size:12px}.vin-decode .btn:disabled{opacity:.65}.vin-decode small{color:#6c6a60;font-size:11px;line-height:1.45}

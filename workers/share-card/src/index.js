@@ -51,6 +51,59 @@ function sharedUserId(url) {
   return /^[0-9a-f-]{8,64}$/i.test(userId) ? userId : '';
 }
 
+function vinFromPath(pathname) {
+  const matched = pathname.match(/^\/api\/vin\/([A-HJ-NPR-Z0-9]{17})$/i);
+  return matched ? matched[1].toUpperCase() : '';
+}
+
+function vinApiResponse(body, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400, s-maxage=2592000',
+      'X-Content-Type-Options': 'nosniff',
+      ...extraHeaders
+    }
+  });
+}
+
+async function decodeVin(vin) {
+  const upstream = new URL(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended/${encodeURIComponent(vin)}`);
+  upstream.searchParams.set('format', 'json');
+  const response = await fetch(upstream.toString(), { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`nhtsa_${response.status}`);
+  const payload = await response.json();
+  const item = Array.isArray(payload?.Results) ? payload.Results[0] : null;
+  if (!item || Number(item.ErrorCode || 0) !== 0) throw new Error(item?.ErrorText || 'vin_not_found');
+  return {
+    Make: String(item.Make || '').trim(),
+    Model: String(item.Model || '').trim(),
+    ModelYear: String(item.ModelYear || '').trim(),
+    BodyClass: String(item.BodyClass || '').trim(),
+    FuelTypePrimary: String(item.FuelTypePrimary || '').trim(),
+    TransmissionStyle: String(item.TransmissionStyle || '').trim(),
+    DriveType: String(item.DriveType || '').trim()
+  };
+}
+
+async function vinDecodeResponse(request, url) {
+  if (request.method !== 'GET') return vinApiResponse({ error: 'method_not_allowed' }, 405, { Allow: 'GET' });
+  const vin = vinFromPath(url.pathname);
+  if (!vin) return vinApiResponse({ error: 'invalid_vin' }, 400);
+  const cache = caches.default;
+  const cacheKey = new Request(`${url.origin}/__cache/vin/${vin}`, { method: 'GET' });
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+  try {
+    const response = vinApiResponse({ data: await decodeVin(vin) });
+    await cache.put(cacheKey, response.clone());
+    return response;
+  } catch (error) {
+    return vinApiResponse({ error: 'decode_unavailable' }, 503, { 'Cache-Control': 'no-store' });
+  }
+}
+
 function cleanShareText(value) {
   return String(value || '')
     .replace(/\[\[[^\]]+\]\]/g, '')
@@ -237,6 +290,7 @@ function withShareMeta(response, meta, htmlPage) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/api/vin/')) return vinDecodeResponse(request, url);
     if (request.method === 'GET' && url.pathname === '/version.json' && env.APP_VERSION) {
       return new Response(JSON.stringify({
         version: env.APP_VERSION,
