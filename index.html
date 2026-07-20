@@ -3223,7 +3223,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.377';
+const APP_VERSION = '5.378';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3256,6 +3256,50 @@ function isEmbeddedAppEntry(){
     return false;
   }
 }
+
+// Native App links can wake the WebView at its default home URL. Catch both a
+// warm app URL event and a cold-start launch URL, then keep the customer in the
+// matching independent restaurant flow instead of falling back to the homepage.
+function nativeRestaurantOrderUrl(rawUrl){
+  if(!rawUrl) return null;
+  try {
+    const source = new URL(String(rawUrl), window.location.origin);
+    const allowedHosts = new Set(['escoopcity.com', 'www.escoopcity.com']);
+    if(!allowedHosts.has(source.hostname)) return null;
+    const path = source.pathname.replace(/\/+$/, '') || '/';
+    if(path !== '/restaurant/order' && path !== '/restaurant/order/index.html' && path !== '/order' && path !== '/order/index.html') return null;
+    if(!source.searchParams.get('merchant')) return null;
+    source.pathname = '/restaurant/order/';
+    source.searchParams.set('embedded_app', '1');
+    source.searchParams.set('app_v', APP_VERSION);
+    source.searchParams.set('native_link', '1');
+    return source.href;
+  } catch(e){
+    return null;
+  }
+}
+
+function openNativeRestaurantOrder(payload){
+  const target = nativeRestaurantOrderUrl(typeof payload === 'string' ? payload : payload?.url);
+  if(!target) return false;
+  try { sessionStorage.setItem('leshenghuo_embedded_app_entry', '1'); } catch(e){}
+  if(window.location.href !== target) window.location.replace(target);
+  return true;
+}
+
+function bindNativeRestaurantDeepLinks(){
+  const appPlugin = window.Capacitor?.Plugins?.App;
+  if(appPlugin?.addListener){
+    try { appPlugin.addListener('appUrlOpen', openNativeRestaurantOrder); } catch(e){ console.warn('App 深链监听未启用:', e.message); }
+  }
+  if(appPlugin?.getLaunchUrl){
+    Promise.resolve(appPlugin.getLaunchUrl()).then(openNativeRestaurantOrder).catch(() => {});
+  }
+  // Supports native shells that forward the URL through a WebView message bridge.
+  window.addEventListener('message', event => openNativeRestaurantOrder(event?.data));
+}
+
+bindNativeRestaurantDeepLinks();
 
 function clearOldVersionCache(){
   const last = localStorage.getItem(APP_CACHE_VERSION_KEY);
@@ -5203,8 +5247,8 @@ window._merchantOrderState = window._merchantOrderState || { merchant:null, tabl
 function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
-function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.371`; }
-function merchantTakeoutUrl(m){ return `https://escoopcity.com/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.371`; }
+function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.378`; }
+function merchantTakeoutUrl(m){ return `https://escoopcity.com/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.378`; }
 function merchantQueueUrl(m){ return `https://escoopcity.com/restaurant/queue/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.371`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
@@ -18126,7 +18170,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Message Shortcuts & Module Language】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Restaurant App Link Routing】`);
 </script>
 </body>
 </html>
