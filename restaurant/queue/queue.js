@@ -26,9 +26,8 @@
     // case history.back() does nothing, so deliberately return to 首页.
     if(window.parent!==window){ window.parent.postMessage({type:'leshenghuo-close-takeout'},'*'); return; }
     const appLink=query.get('embedded_app')==='1'||query.get('native_link')==='1'||!!window.Capacitor?.isNativePlatform?.();
-    if(!appLink&&history.length>1){ history.back(); return; }
     const home=new URL('/',location.origin);
-    if(appLink){home.searchParams.set('embedded_app','1');home.searchParams.set('app_v',query.get('app_v')||'5.381');}
+    if(appLink){home.searchParams.set('embedded_app','1');home.searchParams.set('app_v',query.get('app_v')||'5.382');}
     location.replace(home.href);
   };
   const close = () => ['menu','cart','seat'].includes(state.screen) ? window.Queue.back() : exitQueue();
