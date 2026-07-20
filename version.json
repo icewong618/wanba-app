@@ -1,5 +1,5 @@
 {
-  "version": "5.393",
+  "version": "5.394",
   "updated_at": "2026-07-20",
-  "message": "Startup And Session Stability Fix"
+  "message": "Startup Render Loop Fix"
 }

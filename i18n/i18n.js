@@ -75,15 +75,28 @@
   const skip = node => node?.closest?.('[data-i18n-skip],script,style,code,pre,textarea');
   const translateTree = (root=document.body) => {
     if (!root) return;
-    root.querySelectorAll?.('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+    root.querySelectorAll?.('[data-i18n]').forEach(el => {
+      const translated = t(el.dataset.i18n);
+      // Avoid replacing an identical text node. Replacing it retriggers the
+      // MutationObserver and can otherwise starve the startup render loop.
+      if(el.textContent !== translated) el.textContent = translated;
+    });
     root.querySelectorAll?.('[placeholder],[title],[aria-label]').forEach(el => {
       if (skip(el)) return;
-      ['placeholder','title','aria-label'].forEach(attr => { if (el.hasAttribute(attr)) el.setAttribute(attr, applyText(el.getAttribute(attr))); });
+      ['placeholder','title','aria-label'].forEach(attr => {
+        if(!el.hasAttribute(attr)) return;
+        const translated = applyText(el.getAttribute(attr));
+        if(el.getAttribute(attr) !== translated) el.setAttribute(attr, translated);
+      });
     });
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const nodes=[]; let node;
     while ((node=walker.nextNode())) nodes.push(node);
-    nodes.forEach(textNode => { if (!skip(textNode.parentElement)) textNode.nodeValue = applyText(textNode.nodeValue); });
+    nodes.forEach(textNode => {
+      if(skip(textNode.parentElement)) return;
+      const translated = applyText(textNode.nodeValue);
+      if(textNode.nodeValue !== translated) textNode.nodeValue = translated;
+    });
   };
   const apply = () => {
     const language = getLanguage();
