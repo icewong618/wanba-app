@@ -127,12 +127,23 @@
       state.bookings = response.ok && Array.isArray(data) ? data : [];
     } catch(error) { state.bookings=[]; }
   }
-  function openBooking(id){ state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='booking-detail'; renderBookingDetail(); }
+  function renderBookingWithHandover(){
+    renderBookingDetail();
+    const booking=state.booking; const handover=booking?.handover;
+    if(!booking || !handover) return;
+    const rows=[];
+    if(handover.checkout_at) rows.push(`<div><span>已取车</span><b>${esc(displayDate(handover.checkout_at))}</b><small>里程 ${esc(handover.checkout_mileage ?? '—')} mi · 油量/电量 ${esc(handover.checkout_fuel_percent ?? '—')}%</small></div>`);
+    if(handover.return_at) rows.push(`<div><span>已还车</span><b>${esc(displayDate(handover.return_at))}</b><small>里程 ${esc(handover.return_mileage ?? '—')} mi · 油量/电量 ${esc(handover.return_fuel_percent ?? '—')}%${handover.return_condition==='damage'?' · 已记录车况问题':''}</small></div>`);
+    if(!rows.length) return;
+    const target=app.querySelector('.help-list');
+    if(target) target.insertAdjacentHTML('beforebegin',`<section class="rental-section handover-customer"><h2>车辆交接</h2><div class="price-card">${rows.join('')}</div></section>`);
+  }
+  function openBooking(id){ state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='booking-detail'; renderBookingWithHandover(); }
   async function cancelBooking(id){
     if(!confirm('确定取消这笔预约吗？取消后需要重新选择车辆和时间。')) return;
     const response=await api('/rest/v1/rpc/merchant_rental_customer_cancel_booking',{method:'POST',body:JSON.stringify({p_booking_id:id})});
     if(!response.ok){ alert('这笔预约目前无法取消，请联系商家协助处理。'); return; }
-    await loadBookings(); state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; renderBookingDetail();
+    await loadBookings(); state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; renderBookingWithHandover();
   }
   async function editBooking(id){
     const booking=state.bookings.find(item=>String(item.id)===String(id));

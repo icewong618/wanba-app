@@ -4,7 +4,7 @@
   const MEDIA_URL = 'https://upload.escoopcity.com';
   const app = document.getElementById('rentalManageApp');
   const query = new URLSearchParams(location.search);
-  const state = { merchant:null, merchantId:'', vehicles:[], services:[], bookings:[], stats:{}, fleetStats:{}, photos:[], screen:'home', booking:null, bookingFilter:'all', vehicleFilter:'' };
+  const state = { merchant:null, merchantId:'', vehicles:[], services:[], bookings:[], stats:{}, fleetStats:{}, photos:[], handoverPhotos:[], screen:'home', booking:null, bookingFilter:'all', vehicleFilter:'', handoverAction:'' };
 
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
   const money = value => `$${Number(value || 0).toFixed(2)}`;
@@ -23,7 +23,7 @@
   const close = () => {
     if(window.parent !== window) { window.parent.postMessage({ type:'leshenghuo-close-rental' }, '*'); return; }
     const slug = query.get('merchant');
-    location.assign(`/merchant/manage/?merchant=${encodeURIComponent(slug || '')}&admin_v=5.360`);
+    location.assign(`/merchant/manage/?merchant=${encodeURIComponent(slug || '')}&admin_v=5.361`);
   };
   const vehiclePhoto = vehicle => Array.isArray(vehicle?.photos) && vehicle.photos[0] ? `<img src="${esc(vehicle.photos[0])}" alt="">` : '<div class="placeholder">🚗</div>';
   const vehicleName = booking => booking?.vehicle?.name || state.vehicles.find(item => String(item.id) === String(booking?.vehicle_id))?.name || '租车预约';
@@ -58,7 +58,8 @@
   function renderCurrent() {
     if(state.screen === 'fleet') return renderFleet();
     if(state.screen === 'bookings') return renderBookings();
-    if(state.screen === 'booking') return renderBookingDetail();
+    if(state.screen === 'booking') return renderBookingWithHandover();
+    if(state.screen === 'handover') return renderHandover();
     if(state.screen === 'finance') return renderFinance();
     if(state.screen === 'reprice') return renderReprice();
     if(state.screen === 'vehicle') return renderVehicleEditor(state.editingVehicleId);
@@ -110,6 +111,84 @@
     state.bookingFilter = 'all';
     state.screen = 'bookings';
     renderBookings();
+  }
+
+  function renderBookingWithHandover() {
+    renderBookingDetail();
+    const booking = state.booking;
+    const actions = app.querySelector('.ops-detail-actions');
+    if(!booking || !actions) return;
+    const handover = booking.handover || {};
+    const buttons = [];
+    if(booking.status === 'confirmed' && booking.payment_status === 'paid' && !handover.checkout_at) {
+      buttons.push(`<button class="primary" onclick="RentalManage.startHandover('${esc(booking.id)}','checkout')">办理取车交接</button>`);
+    }
+    if(['active','overdue'].includes(booking.status) && handover.checkout_at && !handover.return_at) {
+      buttons.push(`<button class="primary" onclick="RentalManage.startHandover('${esc(booking.id)}','return')">办理还车交接</button>`);
+    }
+    if(handover.checkout_at || handover.return_at) {
+      const checkout = handover.checkout_at ? `取车：${esc(dateText(handover.checkout_at))} · ${esc(handover.checkout_mileage ?? '—')} mi · ${esc(handover.checkout_fuel_percent ?? '—')}%` : '';
+      const returned = handover.return_at ? `<br>还车：${esc(dateText(handover.return_at))} · ${esc(handover.return_mileage ?? '—')} mi · ${esc(handover.return_fuel_percent ?? '—')}%` : '';
+      actions.insertAdjacentHTML('beforebegin', `<section class="detail-card handover-summary"><h2>交接记录</h2><p>${checkout}${returned}</p></section>`);
+    }
+    if(buttons.length) actions.insertAdjacentHTML('afterbegin', buttons.join(''));
+  }
+
+  function startHandover(id, action) {
+    state.booking = state.bookings.find(item => String(item.id) === String(id)) || null;
+    state.handoverAction = action;
+    state.handoverPhotos = [];
+    state.screen = 'handover';
+    renderHandover();
+  }
+
+  function renderHandover() {
+    const booking = state.booking;
+    if(!booking) { state.screen='bookings'; return renderBookings(); }
+    const returning = state.handoverAction === 'return';
+    const record = booking.handover || {};
+    const title = returning ? '办理还车交接' : '办理取车交接';
+    const actionText = returning ? '确认还车并转为清洁中' : '确认取车并开始租用';
+    const mileage = returning ? record.checkout_mileage || '' : '';
+    const fuel = returning ? record.checkout_fuel_percent ?? 100 : 100;
+    app.innerHTML = `${top(title)}<section class="detail-card"><h2>${esc(vehicleName(booking))}</h2><p>${esc(booking.booking_code || '')} · ${esc(booking.customer?.name || booking.customer_name || '')}</p><p>${returning ? '请核对还车车况。完成后车辆会自动变为清洁中。' : '请当面核对车辆、里程和油量后办理交车。'}</p></section><section class="form"><div class="grid"><label class="field">${returning ? '还车' : '取车'}里程（英里）<input id="handoverMileage" type="number" min="0" step="1" value="${esc(mileage)}" placeholder="必填"></label><label class="field">${returning ? '还车' : '取车'}油量 / 电量<select id="handoverFuel">${[[100,'满格 100%'],[75,'约 75%'],[50,'约一半 50%'],[25,'约 25%'],[0,'接近空 0%']].map(([id,label])=>`<option value="${id}" ${Number(fuel)===Number(id)?'selected':''}>${label}</option>`).join('')}</select></label></div>${returning ? `<label class="field">车辆状态<select id="handoverCondition"><option value="normal">正常</option><option value="attention">需要留意</option><option value="damage">发现损坏</option></select></label>` : ''}<label class="field">交接备注<textarea id="handoverNote" maxlength="1000" placeholder="可记录外观、钥匙、油量或客户确认事项"></textarea></label><label class="field">交接照片<input type="file" accept="image/*" multiple onchange="RentalManage.handoverPhotos(this.files)"></label><div id="handoverPhotos" class="photo-list"></div><p class="notice">照片会压缩上传，最多 8 张。</p><button id="handoverSave" class="button primary full" onclick="RentalManage.saveHandover('${esc(booking.id)}','${esc(state.handoverAction)}')">${actionText}</button></section>`;
+    renderHandoverPhotos();
+  }
+
+  function renderHandoverPhotos() {
+    const target = document.getElementById('handoverPhotos');
+    if(target) target.innerHTML = state.handoverPhotos.map((photo,index) => `<div class="photo"><img src="${esc(photo)}" alt=""><button onclick="RentalManage.removeHandoverPhoto(${index})">×</button></div>`).join('');
+  }
+
+  async function addHandoverPhotos(files) {
+    for(const file of Array.from(files || []).slice(0, 8 - state.handoverPhotos.length)) {
+      const source = await new Promise((resolve,reject) => { const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(file); });
+      state.handoverPhotos.push(await compress(source));
+    }
+    renderHandoverPhotos();
+  }
+
+  async function saveHandover(id, action) {
+    const mileageValue = value('handoverMileage');
+    const mileage = Number(mileageValue);
+    if(!mileageValue || !Number.isInteger(mileage) || mileage < 0) { alert('请填写正确的里程。'); return; }
+    const button = document.getElementById('handoverSave');
+    try {
+      button.disabled=true; button.textContent='正在保存交接记录…';
+      const photos=[]; for(const source of state.handoverPhotos) photos.push(await upload(source));
+      const response = await api('/rest/v1/rpc/merchant_rental_manager_handover',{method:'POST',body:JSON.stringify({p_booking_id:id,p_action:action,p_mileage:mileage,p_fuel_percent:Number(value('handoverFuel')),p_condition:value('handoverCondition')||null,p_note:value('handoverNote')||null,p_photos:photos})});
+      const data = await response.json().catch(()=>({}));
+      if(!response.ok) {
+        const message=String(data?.message||'');
+        alert(message.includes('payment_required') ? '客户尚未付款，暂时不能办理取车。' : message.includes('return_mileage_invalid') ? '还车里程不能低于取车里程。' : '交接保存失败，请检查信息后重试。');
+        return;
+      }
+      await loadManager('bookings');
+      state.booking=state.bookings.find(item=>String(item.id)===String(id))||null;
+      state.screen='booking';
+      renderBookingWithHandover();
+      alert(action==='return' ? '还车已完成，车辆已转为清洁中。' : '取车交接已完成，车辆已开始租用。');
+    } finally { if(button){button.disabled=false;button.textContent=action==='return'?'确认还车并转为清洁中':'确认取车并开始租用';} }
   }
 
   function bookingCard(booking) {
@@ -258,10 +337,10 @@
     if(!response.ok){ alert(String(data?.message||'').includes('cancel_reason_required')?'请填写取消原因。':'取消预约失败，请稍后重试。'); return; }
     await loadManager('bookings'); state.booking=state.bookings.find(item=>String(item.id)===String(id))||data; renderBookingDetail();
   }
-  function openBooking(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='booking'; renderBookingDetail(); }
+  function openBooking(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='booking'; renderBookingWithHandover(); }
   function openFinance(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='finance'; renderFinance(); }
   function openReprice(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='reprice'; renderReprice(); }
-  function back() { if(['booking','finance','reprice'].includes(state.screen)){ state.vehicleFilter=''; state.screen='bookings'; renderBookings(); return; } if(['fleet','vehicles','vehicle','services','service','bookings'].includes(state.screen)){ state.vehicleFilter=''; state.screen='home'; renderHome(); return; } close(); }
-  window.RentalManage = { close,back,home:()=>{state.vehicleFilter='';state.screen='home';renderHome();},reload:()=>loadManager(state.screen),bookings:filter=>{state.vehicleFilter='';state.bookingFilter=filter==='finance'?'finance':filter||'all';state.screen='bookings';renderBookings();},fleet:()=>{state.vehicleFilter='';state.screen='fleet';renderFleet();},openVehicleBookings,setVehicleStatus,openBooking,finance:openFinance,reprice:openReprice,confirm:confirmBooking,cancelBooking:cancelMerchantBooking,saveFinance,saveReprice,vehicles:()=>{state.screen='vehicles';renderVehicles();},editVehicle:id=>{state.editingVehicleId=id||'';state.screen='vehicle';renderVehicleEditor(id);},saveVehicle,toggleVehicle,services:type=>{state.serviceType=type||'addon';state.screen='services';renderServices(state.serviceType);},editService,saveService,toggleService,photos:addPhotos,removePhoto:index=>{state.photos.splice(index,1);renderPhotos();} };
+  function back() { if(state.screen==='handover'){ state.screen='booking'; renderBookingWithHandover(); return; } if(['booking','finance','reprice'].includes(state.screen)){ state.vehicleFilter=''; state.screen='bookings'; renderBookings(); return; } if(['fleet','vehicles','vehicle','services','service','bookings'].includes(state.screen)){ state.vehicleFilter=''; state.screen='home'; renderHome(); return; } close(); }
+  window.RentalManage = { close,back,home:()=>{state.vehicleFilter='';state.screen='home';renderHome();},reload:()=>loadManager(state.screen),bookings:filter=>{state.vehicleFilter='';state.bookingFilter=filter==='finance'?'finance':filter||'all';state.screen='bookings';renderBookings();},fleet:()=>{state.vehicleFilter='';state.screen='fleet';renderFleet();},openVehicleBookings,setVehicleStatus,startHandover,saveHandover,handoverPhotos:addHandoverPhotos,removeHandoverPhoto:index=>{state.handoverPhotos.splice(index,1);renderHandoverPhotos();},openBooking,finance:openFinance,reprice:openReprice,confirm:confirmBooking,cancelBooking:cancelMerchantBooking,saveFinance,saveReprice,vehicles:()=>{state.screen='vehicles';renderVehicles();},editVehicle:id=>{state.editingVehicleId=id||'';state.screen='vehicle';renderVehicleEditor(id);},saveVehicle,toggleVehicle,services:type=>{state.serviceType=type||'addon';state.screen='services';renderServices(state.serviceType);},editService,saveService,toggleService,photos:addPhotos,removePhoto:index=>{state.photos.splice(index,1);renderPhotos();} };
   loadManager();
 })();
