@@ -4,7 +4,7 @@
   const MEDIA_URL = 'https://upload.escoopcity.com';
   const app = document.getElementById('rentalManageApp');
   const query = new URLSearchParams(location.search);
-  const state = { merchant:null, merchantId:'', vehicles:[], services:[], bookings:[], stats:{}, photos:[], screen:'home', booking:null, bookingFilter:'all' };
+  const state = { merchant:null, merchantId:'', vehicles:[], services:[], bookings:[], stats:{}, fleetStats:{}, photos:[], screen:'home', booking:null, bookingFilter:'all', vehicleFilter:'' };
 
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
   const money = value => `$${Number(value || 0).toFixed(2)}`;
@@ -23,7 +23,7 @@
   const close = () => {
     if(window.parent !== window) { window.parent.postMessage({ type:'leshenghuo-close-rental' }, '*'); return; }
     const slug = query.get('merchant');
-    location.assign(`/merchant/manage/?merchant=${encodeURIComponent(slug || '')}&admin_v=5.357`);
+    location.assign(`/merchant/manage/?merchant=${encodeURIComponent(slug || '')}&admin_v=5.360`);
   };
   const vehiclePhoto = vehicle => Array.isArray(vehicle?.photos) && vehicle.photos[0] ? `<img src="${esc(vehicle.photos[0])}" alt="">` : '<div class="placeholder">🚗</div>';
   const vehicleName = booking => booking?.vehicle?.name || state.vehicles.find(item => String(item.id) === String(booking?.vehicle_id))?.name || '租车预约';
@@ -46,6 +46,7 @@
       state.services = Array.isArray(data.services) ? data.services : [];
       state.bookings = Array.isArray(data.bookings) ? data.bookings : [];
       state.stats = data.stats || {};
+      state.fleetStats = data.fleet_stats || {};
       state.screen = nextScreen;
       renderCurrent();
     } catch(error) {
@@ -55,6 +56,7 @@
   }
 
   function renderCurrent() {
+    if(state.screen === 'fleet') return renderFleet();
     if(state.screen === 'bookings') return renderBookings();
     if(state.screen === 'booking') return renderBookingDetail();
     if(state.screen === 'finance') return renderFinance();
@@ -69,7 +71,45 @@
   function renderHome() {
     const pending = state.bookings.filter(item => item.status === 'pending');
     const preview = pending.length ? pending.slice(0,3).map(bookingCard).join('') : '<div class="empty compact">目前没有等待确认的预约。</div>';
-    app.innerHTML = `${top('租车管理')}<section class="ops-hero"><p>${esc(state.merchant?.business_name || '商家')}</p><h1>租车运营后台</h1><span>先确认预约，再登记收款、押金和后续费用。</span></section><section class="ops-stats">${summaryCard('pending',state.stats.pending_count,'warn')}${summaryCard('confirmed',state.stats.confirmed_count)}${summaryCard('active',state.stats.active_count)}${summaryCard('completed',state.stats.completed_count)}</section><section class="ops-entry-grid"><button onclick="RentalManage.bookings('all')"><b>预约管理</b><span>确认、改期、客户资料</span></button><button onclick="RentalManage.bookings('finance')"><b>财务与押金</b><span>收款、优惠、损坏违章</span></button><button onclick="RentalManage.vehicles()"><b>车队管理</b><span>车辆状态与价格</span></button><button onclick="RentalManage.services('addon')"><b>服务库</b><span>增值服务与保险</span></button></section><div class="section-title"><b>等待商家确认</b><button onclick="RentalManage.bookings('pending')">查看全部</button></div>${preview}<section class="ops-revenue"><span>预约金额合计</span><b>${money(state.stats.booking_total)}</b><span>已登记收款</span><b>${money(state.stats.paid_total)}</b></section><div class="footer-space"></div>`;
+    app.innerHTML = `${top('租车管理')}<section class="ops-hero"><p>${esc(state.merchant?.business_name || '商家')}</p><h1>租车运营后台</h1><span>先确认预约，再登记收款、押金和后续费用。</span></section><section class="ops-stats">${summaryCard('pending',state.stats.pending_count,'warn')}${summaryCard('confirmed',state.stats.confirmed_count)}${summaryCard('active',state.stats.active_count)}${summaryCard('completed',state.stats.completed_count)}</section><section class="ops-entry-grid"><button onclick="RentalManage.bookings('all')"><b>预约管理</b><span>确认、改期、客户资料</span></button><button onclick="RentalManage.bookings('finance')"><b>财务与押金</b><span>收款、优惠、损坏违章</span></button><button onclick="RentalManage.fleet()"><b>车队看板</b><span>出租、清洁、维修状态</span></button><button onclick="RentalManage.services('addon')"><b>服务库</b><span>增值服务与保险</span></button></section><div class="section-title"><b>等待商家确认</b><button onclick="RentalManage.bookings('pending')">查看全部</button></div>${preview}<section class="ops-revenue"><span>预约金额合计</span><b>${money(state.stats.booking_total)}</b><span>已登记收款</span><b>${money(state.stats.paid_total)}</b></section><div class="footer-space"></div>`;
+  }
+
+  function fleetStatus(vehicle) {
+    if(vehicle?.active_booking) return { id:'rented', label: vehicle.active_booking.status === 'overdue' ? '逾期未还' : '租用中' };
+    return ({ available:{id:'available',label:'可预约'}, cleaning:{id:'cleaning',label:'清洁中'}, maintenance:{id:'maintenance',label:'维修中'}, inactive:{id:'inactive',label:'已下架'} }[vehicle?.status]) || { id:'inactive',label:'已下架' };
+  }
+
+  function fleetVehicleCard(vehicle) {
+    const current = fleetStatus(vehicle);
+    const next = vehicle.next_booking;
+    const active = vehicle.active_booking;
+    const statusButtons = [['available','可预约'],['cleaning','清洁中'],['maintenance','维修中'],['inactive','下架']]
+      .map(([id,label]) => `<button class="fleet-action ${current.id === id ? 'selected' : ''}" ${active ? 'disabled' : ''} onclick="RentalManage.setVehicleStatus('${esc(vehicle.id)}','${id}')">${label}</button>`).join('');
+    return `<article class="fleet-card"><div class="fleet-card-top">${vehiclePhoto(vehicle)}<div><span class="fleet-pill ${esc(current.id)}">${esc(current.label)}</span><h2>${esc(vehicle.name || '未命名车辆')}</h2><p>${esc([vehicle.year,vehicle.make,vehicle.model].filter(Boolean).join(' · ') || '车辆资料待补充')}</p></div></div>${active ? `<div class="fleet-current"><b>${esc(active.customer_name || '客户')} 正在使用</b><span>${esc(dateText(active.ends_at))} 前应还车 · ${esc(active.booking_code || '')}</span></div>` : next ? `<div class="fleet-next"><b>下一笔预约</b><span>${esc(dateText(next.starts_at))} · ${esc(next.customer_name || '客户')}</span></div>` : '<div class="fleet-next"><b>暂无后续预约</b><span>可直接接受新预约</span></div>'}<div class="fleet-actions">${statusButtons}</div><div class="card-actions"><button class="primary" onclick="RentalManage.editVehicle('${esc(vehicle.id)}')">编辑车辆</button><button onclick="RentalManage.openVehicleBookings('${esc(vehicle.id)}')">查看预约</button></div></article>`;
+  }
+
+  function renderFleet() {
+    const stats = state.fleetStats || {};
+    app.innerHTML = `${top('车队看板')}<div class="actions"><button class="secondary" onclick="RentalManage.home()">← 返回后台</button><button class="primary" onclick="RentalManage.editVehicle()">＋ 添加车辆</button></div><section class="fleet-stats"><div><b>${Number(stats.total_count || state.vehicles.length || 0)}</b><span>全部车辆</span></div><div><b>${Number(stats.rented_count || 0)}</b><span>租用中</span></div><div><b>${Number(stats.available_count || 0)}</b><span>可预约</span></div><div><b>${Number(stats.cleaning_count || 0)}</b><span>清洁中</span></div><div><b>${Number(stats.maintenance_count || 0)}</b><span>维修中</span></div></section><div class="fleet-help">租用中由有效预约自动计算；车辆还车后，可在这里改为清洁中、维修中或重新开放预约。</div><section class="fleet-list">${state.vehicles.length ? state.vehicles.map(fleetVehicleCard).join('') : '<div class="empty">还没有车辆。添加车辆后即可在这里查看出租和维护状态。</div>'}</section><div class="footer-space"></div>`;
+  }
+
+  async function setVehicleStatus(id, status) {
+    const labels = { available:'可预约', cleaning:'清洁中', maintenance:'维修中', inactive:'下架' };
+    if(!confirm(`将车辆状态改为“${labels[status] || status}”吗？`)) return;
+    const response = await api('/rest/v1/rpc/merchant_rental_manager_set_vehicle_status', { method:'POST', body:JSON.stringify({ p_vehicle_id:id, p_status:status }) });
+    if(!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      alert(String(error?.message || '').includes('currently_rented') ? '该车辆正在租用中，不能手动修改状态。' : '车辆状态更新失败，请稍后重试。');
+      return;
+    }
+    await loadManager('fleet');
+  }
+
+  function openVehicleBookings(vehicleId) {
+    state.vehicleFilter = vehicleId;
+    state.bookingFilter = 'all';
+    state.screen = 'bookings';
+    renderBookings();
   }
 
   function bookingCard(booking) {
@@ -79,6 +119,7 @@
   function renderBookings() {
     const filters = [['all','全部'],['pending','待确认'],['confirmed','已确认'],['active','租用中'],['finance','财务']];
     const filtered = state.bookings.filter(item => {
+      if(state.vehicleFilter && String(item.vehicle_id) !== String(state.vehicleFilter)) return false;
       if(state.bookingFilter === 'all') return true;
       if(state.bookingFilter === 'finance') return true;
       return item.status === state.bookingFilter;
@@ -220,7 +261,7 @@
   function openBooking(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='booking'; renderBookingDetail(); }
   function openFinance(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='finance'; renderFinance(); }
   function openReprice(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='reprice'; renderReprice(); }
-  function back() { if(['booking','finance','reprice'].includes(state.screen)){ state.screen='bookings'; renderBookings(); return; } if(['vehicles','vehicle','services','service','bookings'].includes(state.screen)){ state.screen='home'; renderHome(); return; } close(); }
-  window.RentalManage = { close,back,home:()=>{state.screen='home';renderHome();},reload:()=>loadManager(state.screen),bookings:filter=>{state.bookingFilter=filter==='finance'?'finance':filter||'all';state.screen='bookings';renderBookings();},openBooking,finance:openFinance,reprice:openReprice,confirm:confirmBooking,cancelBooking:cancelMerchantBooking,saveFinance,saveReprice,vehicles:()=>{state.screen='vehicles';renderVehicles();},editVehicle:id=>{state.editingVehicleId=id||'';state.screen='vehicle';renderVehicleEditor(id);},saveVehicle,toggleVehicle,services:type=>{state.serviceType=type||'addon';state.screen='services';renderServices(state.serviceType);},editService,saveService,toggleService,photos:addPhotos,removePhoto:index=>{state.photos.splice(index,1);renderPhotos();} };
+  function back() { if(['booking','finance','reprice'].includes(state.screen)){ state.vehicleFilter=''; state.screen='bookings'; renderBookings(); return; } if(['fleet','vehicles','vehicle','services','service','bookings'].includes(state.screen)){ state.vehicleFilter=''; state.screen='home'; renderHome(); return; } close(); }
+  window.RentalManage = { close,back,home:()=>{state.vehicleFilter='';state.screen='home';renderHome();},reload:()=>loadManager(state.screen),bookings:filter=>{state.vehicleFilter='';state.bookingFilter=filter==='finance'?'finance':filter||'all';state.screen='bookings';renderBookings();},fleet:()=>{state.vehicleFilter='';state.screen='fleet';renderFleet();},openVehicleBookings,setVehicleStatus,openBooking,finance:openFinance,reprice:openReprice,confirm:confirmBooking,cancelBooking:cancelMerchantBooking,saveFinance,saveReprice,vehicles:()=>{state.screen='vehicles';renderVehicles();},editVehicle:id=>{state.editingVehicleId=id||'';state.screen='vehicle';renderVehicleEditor(id);},saveVehicle,toggleVehicle,services:type=>{state.serviceType=type||'addon';state.screen='services';renderServices(state.serviceType);},editService,saveService,toggleService,photos:addPhotos,removePhoto:index=>{state.photos.splice(index,1);renderPhotos();} };
   loadManager();
 })();
