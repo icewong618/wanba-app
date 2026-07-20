@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.379';
+  const version = '5.380';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -53,7 +53,7 @@
 <link rel="apple-touch-icon" href="data:image/png;base64,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">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<script src="./i18n/i18n.js?v=5.379"></script>
+<script src="./i18n/i18n.js?v=5.380"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -1330,7 +1330,7 @@
     display:flex;justify-content:space-around;align-items:center;gap:0;
     height:calc(56px + env(safe-area-inset-bottom));
     padding-bottom:env(safe-area-inset-bottom);
-    z-index:50;box-shadow:0 -2px 8px rgba(42,39,33,0.08);
+    z-index:900;isolation:isolate;box-shadow:0 -2px 8px rgba(42,39,33,0.08);
   }
   .nav-btn{
     flex:1;height:100%;display:flex;flex-direction:column;
@@ -1696,6 +1696,19 @@
     visibility:hidden;
     pointer-events:none;
   }
+  .network-offline-overlay{
+    position:fixed;inset:0;z-index:10020;display:none;
+    align-items:center;justify-content:center;padding:28px;
+    background:linear-gradient(180deg,#fffaf7 0%,#ffffff 58%,#fff6f2 100%);
+  }
+  .network-offline-overlay.open{display:flex;}
+  .network-offline-card{width:min(100%,340px);text-align:center;color:var(--ink);}
+  .network-offline-mark{width:74px;height:74px;margin:0 auto 20px;border-radius:22px;display:grid;place-items:center;background:#edf2ea;color:var(--sage-dark);}
+  .network-offline-mark svg{width:38px;height:38px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .network-offline-card h1{margin:0 0 10px;font-size:22px;line-height:1.25;letter-spacing:0;}
+  .network-offline-card p{margin:0 auto;color:var(--ink-soft);font-size:14px;line-height:1.7;max-width:280px;}
+  .network-offline-retry{width:100%;margin-top:26px;min-height:48px;border:0;border-radius:12px;background:var(--sage);color:#fff;font:inherit;font-size:15px;font-weight:800;cursor:pointer;}
+  .network-offline-note{margin-top:14px!important;font-size:12px!important;color:var(--ink-faint)!important;}
   .embedded-app-entry .launch-screen{display:none!important;}
   .launch-inner{
     width:min(82vw,320px);
@@ -1906,6 +1919,16 @@
 </script>
 </head>
 <body>
+
+<section class="network-offline-overlay" id="networkOfflineOverlay" role="status" aria-live="assertive" aria-label="网络连接不可用">
+  <div class="network-offline-card">
+    <div class="network-offline-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.6a10 10 0 0 1 14 0"></path><path d="M8.4 16a5 5 0 0 1 7.2 0"></path><path d="M12 20h.01"></path><path d="M3 3l18 18"></path></svg></div>
+    <h1>暂时无法连接网络</h1>
+    <p>请检查 Wi-Fi 或移动数据连接后，再重新打开乐生活。</p>
+    <button class="network-offline-retry" type="button" onclick="retryNetworkConnection()">重新连接</button>
+    <p class="network-offline-note">已缓存的内容会在网络恢复后继续更新。</p>
+  </div>
+</section>
 
 <div class="launch-screen" id="launchScreen" aria-live="polite">
   <div class="launch-inner">
@@ -3263,11 +3286,28 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.379';
+const APP_VERSION = '5.380';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
 console.info(`乐生活 当前版本：v${APP_VERSION}`);
+
+function updateNetworkOfflineOverlay(){
+  const overlay = document.getElementById('networkOfflineOverlay');
+  if(!overlay) return;
+  const offline = navigator.onLine === false;
+  overlay.classList.toggle('open', offline);
+  overlay.setAttribute('aria-hidden', offline ? 'false' : 'true');
+}
+function retryNetworkConnection(){
+  updateNetworkOfflineOverlay();
+  if(navigator.onLine){
+    window.location.reload();
+  }
+}
+window.retryNetworkConnection = retryNetworkConnection;
+window.addEventListener('offline', updateNetworkOfflineOverlay);
+window.addEventListener('online', updateNetworkOfflineOverlay);
 
 function syncVisibleAppVersion(){
   document.querySelectorAll('[data-app-version]').forEach(el => {
@@ -5287,8 +5327,8 @@ window._merchantOrderState = window._merchantOrderState || { merchant:null, tabl
 function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
-function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.378`; }
-function merchantTakeoutUrl(m){ return `https://escoopcity.com/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.378`; }
+function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.380`; }
+function merchantTakeoutUrl(m){ return `https://escoopcity.com/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.380`; }
 function merchantQueueUrl(m){ return `https://escoopcity.com/restaurant/queue/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.371`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
@@ -17617,7 +17657,7 @@ window.switchTab = function(tab){
   // 省钱页面已迁移为独立模块，避免其业务代码继续耦合社区主程序。
   if(tab === 'deals'){
     const url = new URL('./deals/', window.location.href);
-    url.searchParams.set('module_v', '5.377');
+    url.searchParams.set('module_v', '5.380');
     window.location.assign(url.href);
     return;
   }
@@ -17704,6 +17744,14 @@ async function bootApp(){
   const minSplashMs = 850;
   syncVisibleAppVersion();
   const embeddedAppEntry = isEmbeddedAppEntry();
+  updateNetworkOfflineOverlay();
+
+  // A cached page can still open without a connection. Show the dedicated
+  // offline screen instead of attempting remote startup work in that state.
+  if(navigator.onLine === false){
+    hideLaunchScreen();
+    return;
+  }
 
   try {
     const updating = await checkRemoteAppVersion();
@@ -18197,6 +18245,7 @@ setInterval(() => {
 }, 60000);
 
 window.addEventListener('online', () => {
+  updateNetworkOfflineOverlay();
   window._postsNextRetryAt = 0;
   clearPostsRetry();
   if(currentTab === 'home') loadPostsFromSupabase({force:true});
@@ -18210,7 +18259,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Fast Restaurant App Links】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Offline Ready & Fixed Navigation】`);
 </script>
 </body>
 </html>
