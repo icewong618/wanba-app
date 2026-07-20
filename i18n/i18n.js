@@ -92,7 +92,9 @@
   document.head.appendChild(style);
   window.LeshenghuoI18n = { getLanguage, setLanguage, openPicker, closePicker, translate:apply, t };
   let pending=false;
-  const observe = () => new MutationObserver(() => { if(pending) return; pending=true; setTimeout(() => { pending=false; translateTree(); }, 30); }).observe(document.body, { childList:true, subtree:true });
+  // Translate newly rendered module content before the browser paints it. The old
+  // timer briefly exposed Chinese templates in English and Traditional Chinese.
+  const observe = () => new MutationObserver(() => { if(pending) return; pending=true; queueMicrotask(() => { pending=false; translateTree(); }); }).observe(document.body, { childList:true, subtree:true });
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { apply(); observe(); });
   else { apply(); observe(); }
 })();

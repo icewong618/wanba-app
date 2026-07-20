@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.389';
+  const version = '5.390';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -61,7 +61,7 @@
 <link rel="apple-touch-icon" href="data:image/png;base64,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">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<script src="./i18n/i18n.js?v=5.389"></script>
+<script src="./i18n/i18n.js?v=5.390"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3316,7 +3316,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.389';
+const APP_VERSION = '5.390';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
