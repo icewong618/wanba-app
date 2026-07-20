@@ -48,6 +48,16 @@
     '已申请改期':'Reschedule Requested','已取消':'Cancelled','申请改期':'Request Reschedule','取消试驾':'Cancel Test Drive','确认试驾':'Confirmed Test Drive','试驾地点':'Test Drive Location','试驾安排':'Test Drive Schedule','客户申请改期':'Customer Requested Reschedule','客户申请取消试驾':'Customer Requested Cancellation','保存试驾安排':'Save Test Drive Schedule','客户未填写说明。':'No note provided by the customer.','等待商家安排试驾时间。':'Waiting for the merchant to schedule a test drive.','希望试驾时间：':'Preferred time: ','将状态设为“已安排”时，必须填写确认试驾时间。客户可在自己的试驾记录中查看。':'To mark this as scheduled, set a confirmed time. The customer will see it in their records.','重新确认试驾时间并保存“已安排”后，该请求会自动清除。':'Confirm a new time and save as Scheduled to clear this request.','确定要取消这次试驾吗？商家会收到通知。':'Cancel this test drive? The merchant will be notified.','可填写取消原因（可选）':'Optional cancellation note','请填写希望改期的时间或说明（可选）':'Preferred new time or note (optional)','操作失败。请确认该试驾仍为已安排状态，并已运行 v5.391 数据库更新。':'Unable to update. Confirm the test drive is still scheduled and the v5.391 database update has been run.'
   });
 
+  Object.assign(packs['zh-CN'], {
+    '试驾日历':'试驾日历','今日试驾':'今日试驾','改期请求':'改期请求','待处理试驾':'待处理试驾','返回车辆库存':'返回车辆库存','查看客户线索':'查看客户线索','等待确认时间':'等待确认时间','暂无需要处理的试驾。':'暂无需要处理的试驾。','客户申请改期':'客户申请改期'
+  });
+  Object.assign(packs['zh-TW'], {
+    '试驾日历':'試駕日曆','今日试驾':'今日試駕','改期请求':'改期請求','待处理试驾':'待處理試駕','返回车辆库存':'返回車輛庫存','查看客户线索':'查看客戶線索','等待确认时间':'等待確認時間','暂无需要处理的试驾。':'暫無需要處理的試駕。','客户申请改期':'客戶申請改期'
+  });
+  Object.assign(packs.en, {
+    '试驾日历':'Test Drive Calendar','今日试驾':'Today’s Test Drives','改期请求':'Reschedule Requests','待处理试驾':'Open Test Drives','返回车辆库存':'Back to Inventory','查看客户线索':'View Customer Leads','等待确认时间':'Awaiting Confirmation','暂无需要处理的试驾。':'No test drives need attention.','客户申请改期':'Customer Requested Reschedule'
+  });
+
   const normalized = value => String(value || '').replace(/\s+/g, ' ').trim();
   const reverse = value => {
     const input = normalized(value);

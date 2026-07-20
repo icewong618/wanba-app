@@ -5,6 +5,12 @@ alter table public.merchant_auto_leads
   add column if not exists customer_action_note text,
   add column if not exists customer_action_at timestamptz;
 
+alter table public.merchant_auto_leads
+  drop constraint if exists merchant_auto_leads_status_check;
+alter table public.merchant_auto_leads
+  add constraint merchant_auto_leads_status_check
+  check (status in ('new','contacted','scheduled','reschedule_requested','cancelled','quoted','closed','archived'));
+
 create or replace function public.merchant_auto_update_lead_schedule(
   p_lead_id uuid,
   p_status text,
