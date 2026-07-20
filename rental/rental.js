@@ -8,7 +8,8 @@
   const money = value => `$${Number(value || 0).toFixed(2)}`;
   const user = () => JSON.parse(localStorage.getItem('wanba_session') || 'null')?.user || null;
   const api = async (path, options={}) => { const session=JSON.parse(localStorage.getItem('wanba_session') || 'null'); const headers=Object.assign({apikey:SUPABASE_KEY,'Content-Type':'application/json'},options.headers||{}); headers.Authorization=`Bearer ${session?.access_token||SUPABASE_KEY}`; return fetch(`${SUPABASE_URL}${path}`,Object.assign({},options,{headers})); };
-  const close = () => { if(window.parent!==window) window.parent.postMessage({type:'leshenghuo-close-rental'},'*'); else if(history.length>1) history.back(); else location.assign('/'); };
+  const exitRental = () => { if(window.parent!==window) window.parent.postMessage({type:'leshenghuo-close-rental'},'*'); else if(history.length>1) history.back(); else location.assign('/'); };
+  const close = () => ['payment','contact','vehicle','booking-detail','bookings'].includes(state.screen) ? back() : exitRental();
   const top = title => `<header class="top"><button onclick="Rental.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button class="close" onclick="Rental.close()" aria-label="关闭">×</button></header>`;
   const toLocalInput = value => { const date=value?new Date(value):new Date(Date.now()+3600000); date.setMinutes(date.getMinutes()-date.getTimezoneOffset()); return date.toISOString().slice(0,16); };
   const displayDate = value => value ? new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'}).format(new Date(value)) : '';
@@ -121,7 +122,7 @@
   }
   function refreshList(){ formTimes(); renderList(); }
   function select(id){ state.selected=state.vehicles.find(v=>String(v.id)===String(id))||null; state.quote=null; state.error=''; state.selectedAddons=[]; state.editingBookingId=''; state.screen='vehicle'; renderVehicle(); }
-  function back(){ if(state.screen==='payment'){state.screen='contact';renderContact();} else if(state.screen==='contact'){state.screen='vehicle';renderVehicle();} else if(state.screen==='vehicle'){state.screen='list';state.editingBookingId='';renderList();} else if(state.screen==='booking-detail'){state.screen='bookings';renderBookings();} else if(state.screen==='bookings'){state.screen='list';renderList();} else close(); }
+  function back(){ if(state.screen==='payment'){state.screen='contact';renderContact();} else if(state.screen==='contact'){state.screen='vehicle';renderVehicle();} else if(state.screen==='vehicle'){state.screen='list';state.editingBookingId='';renderList();} else if(state.screen==='booking-detail'){state.screen='bookings';renderBookings();} else if(state.screen==='bookings'){state.screen='list';renderList();} else exitRental(); }
   function modify(){ state.screen='vehicle'; renderVehicle(); }
   function cancel(){ if(confirm('确定取消本次尚未提交的预约吗？')) { state.screen='list'; state.selected=null; state.quote=null; state.selectedAddons=[]; renderList(); } }
   async function loadBookings(){

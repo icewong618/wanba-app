@@ -1,0 +1,7 @@
+.schedule-event{width:100%;border:0;text-align:left;position:relative;cursor:pointer;font:inherit}
+.schedule-event:hover{filter:brightness(.98)}
+.schedule-event i{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-style:normal;font-size:18px;opacity:.65}
+.schedule-event b,.schedule-event span{padding-right:20px}
+.schedule-detail-hero{margin:14px 0;padding:18px;border-radius:10px;background:linear-gradient(135deg,#315f43,#22442f);color:#fff}
+.schedule-detail-hero h1{margin:10px 0 4px;font-size:23px}.schedule-detail-hero p{margin:0;color:#d8e6d9}
+.schedule-detail-hero .task-type{display:inline-block;background:rgba(255,255,255,.18);color:#fff}

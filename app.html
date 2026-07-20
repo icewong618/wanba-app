@@ -3222,7 +3222,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.370';
+const APP_VERSION = '5.371';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5196,9 +5196,9 @@ window._merchantOrderState = window._merchantOrderState || { merchant:null, tabl
 function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
-function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.320`; }
-function merchantTakeoutUrl(m){ return `https://escoopcity.com/order/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.316`; }
-function merchantQueueUrl(m){ return `https://escoopcity.com/queue/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.321`; }
+function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&order_v=5.371`; }
+function merchantTakeoutUrl(m){ return `https://escoopcity.com/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&order_v=5.371`; }
+function merchantQueueUrl(m){ return `https://escoopcity.com/restaurant/queue/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.371`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
 async function getMerchantOrderMerchant(userId){
@@ -17525,7 +17525,7 @@ window.switchTab = function(tab){
   // 省钱页面已迁移为独立模块，避免其业务代码继续耦合社区主程序。
   if(tab === 'deals'){
     const url = new URL('./deals/', window.location.href);
-    url.searchParams.set('module_v', '5.370');
+    url.searchParams.set('module_v', '5.371');
     window.location.assign(url.href);
     return;
   }

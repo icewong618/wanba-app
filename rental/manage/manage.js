@@ -4,7 +4,7 @@
   const MEDIA_URL = 'https://upload.escoopcity.com';
   const app = document.getElementById('rentalManageApp');
   const query = new URLSearchParams(location.search);
-  const state = { merchant:null, merchantId:'', vehicles:[], services:[], bookings:[], tasks:[], blackouts:[], stats:{}, fleetStats:{}, photos:[], handoverPhotos:[], screen:'home', booking:null, bookingFilter:'all', vehicleFilter:'', handoverAction:'', editingTaskId:'' };
+  const state = { merchant:null, merchantId:'', vehicles:[], services:[], bookings:[], tasks:[], blackouts:[], stats:{}, fleetStats:{}, photos:[], handoverPhotos:[], screen:'home', booking:null, bookingFilter:'all', vehicleFilter:'', handoverAction:'', editingTaskId:'', editingVehicleId:'', serviceType:'addon', editingServiceId:'', scheduleEvent:null, history:[] };
 
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
   const money = value => `$${Number(value || 0).toFixed(2)}`;
@@ -20,11 +20,33 @@
     return fetch(`${SUPABASE_URL}${path}`, { ...options, headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${session?.access_token || SUPABASE_KEY}`, 'Content-Type':'application/json', ...(options.headers || {}) } });
   };
   const top = title => `<header class="top"><button onclick="RentalManage.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button onclick="RentalManage.close()" aria-label="关闭">×</button></header>`;
-  const close = () => {
+  const exitManager = () => {
     if(window.parent !== window) { window.parent.postMessage({ type:'leshenghuo-close-rental' }, '*'); return; }
     const slug = query.get('merchant');
     location.assign(`/merchant/manage/?merchant=${encodeURIComponent(slug || '')}&admin_v=5.362`);
   };
+  const currentRoute = () => ({ screen:state.screen, bookingId:state.booking?.id || '', bookingFilter:state.bookingFilter, vehicleFilter:state.vehicleFilter, taskId:state.editingTaskId, vehicleId:state.editingVehicleId, serviceType:state.serviceType, serviceId:state.editingServiceId, taskVehicleId:state.taskVehicleId || '', scheduleEvent:state.scheduleEvent });
+  const restoreRoute = route => {
+    state.screen = route.screen;
+    state.bookingFilter = route.bookingFilter || 'all';
+    state.vehicleFilter = route.vehicleFilter || '';
+    state.editingTaskId = route.taskId || '';
+    state.editingVehicleId = route.vehicleId || '';
+    state.serviceType = route.serviceType || 'addon';
+    state.editingServiceId = route.serviceId || '';
+    state.taskVehicleId = route.taskVehicleId || '';
+    state.scheduleEvent = route.scheduleEvent || null;
+    state.booking = route.bookingId ? state.bookings.find(item => String(item.id) === String(route.bookingId)) || null : null;
+    renderCurrent();
+    window.scrollTo(0,0);
+  };
+  const go = (screen, updates={}) => {
+    if(state.screen !== screen || Object.keys(updates).length) state.history.push(currentRoute());
+    Object.assign(state, updates, { screen });
+    renderCurrent();
+    window.scrollTo(0,0);
+  };
+  const close = () => state.history.length ? back() : exitManager();
   const vehiclePhoto = vehicle => Array.isArray(vehicle?.photos) && vehicle.photos[0] ? `<img src="${esc(vehicle.photos[0])}" alt="">` : '<div class="placeholder">🚗</div>';
   const vehicleName = booking => booking?.vehicle?.name || state.vehicles.find(item => String(item.id) === String(booking?.vehicle_id))?.name || '租车预约';
   const rateText = vehicle => vehicle.pricing_mode === 'hour' ? `${money(vehicle.hourly_rate)}/小时` : vehicle.pricing_mode === 'both' ? `${money(vehicle.daily_rate)}/天 · ${money(vehicle.hourly_rate)}/小时` : `${money(vehicle.daily_rate)}/天`;
@@ -67,6 +89,7 @@
     if(state.screen === 'tasks') return renderTasks();
     if(state.screen === 'task') return renderTaskEditor(state.editingTaskId);
     if(state.screen === 'schedule') return renderSchedule();
+    if(state.screen === 'schedule-event') return renderScheduleEvent();
     if(state.screen === 'vehicle') return renderVehicleEditor(state.editingVehicleId);
     if(state.screen === 'services') return renderServices(state.serviceType);
     if(state.screen === 'service') return editService(state.serviceType, state.editingServiceId);
@@ -115,10 +138,7 @@
   }
 
   function openVehicleBookings(vehicleId) {
-    state.vehicleFilter = vehicleId;
-    state.bookingFilter = 'all';
-    state.screen = 'bookings';
-    renderBookings();
+    go('bookings', { vehicleFilter:vehicleId, bookingFilter:'all' });
   }
 
   function renderBookingWithHandover() {
@@ -143,11 +163,9 @@
   }
 
   function startHandover(id, action) {
-    state.booking = state.bookings.find(item => String(item.id) === String(id)) || null;
-    state.handoverAction = action;
-    state.handoverPhotos = [];
-    state.screen = 'handover';
-    renderHandover();
+    const booking = state.bookings.find(item => String(item.id) === String(id)) || null;
+    if(!booking) return;
+    go('handover', { booking, handoverAction:action, handoverPhotos:[] });
   }
 
   function renderHandover() {
@@ -211,7 +229,7 @@
       if(state.bookingFilter === 'finance') return true;
       return item.status === state.bookingFilter;
     });
-    app.innerHTML = `${top(state.bookingFilter === 'finance' ? '财务与押金' : '预约管理')}<div class="actions"><button class="secondary" onclick="RentalManage.home()">← 返回后台</button><button class="secondary" onclick="RentalManage.reload()">刷新</button></div><div class="filter-row">${filters.map(([id,label]) => `<button class="${state.bookingFilter === id ? 'selected' : ''}" onclick="RentalManage.bookings('${id}')">${label}</button>`).join('')}</div>${filtered.length ? filtered.map(bookingCard).join('') : '<div class="empty">没有符合条件的预约。</div>'}<div class="footer-space"></div>`;
+    app.innerHTML = `${top(state.bookingFilter === 'finance' ? '财务与押金' : '预约管理')}<div class="actions"><button class="secondary" onclick="RentalManage.back()">← 返回上一页</button><button class="secondary" onclick="RentalManage.reload()">刷新</button></div><div class="filter-row">${filters.map(([id,label]) => `<button class="${state.bookingFilter === id ? 'selected' : ''}" onclick="RentalManage.bookings('${id}')">${label}</button>`).join('')}</div>${filtered.length ? filtered.map(bookingCard).join('') : '<div class="empty">没有符合条件的预约。</div>'}<div class="footer-space"></div>`;
   }
 
   function line(label, amount, tone='') { return `<div class="finance-line ${tone}"><span>${esc(label)}</span><b>${money(amount)}</b></div>`; }
@@ -394,18 +412,42 @@
     const dateLabel = date => new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric',weekday:'short'}).format(date);
     const dayCard = date => {
       const events = [
-        ...bookingEvents.filter(item=>isInDay(item.starts_at,item.ends_at,date)).map(item=>({kind:'booking',title:`${item.vehicle?.name || '车辆'} · ${item.customer?.name || item.customer_name}`,detail:`${statusText(item.status)} · ${dateText(item.starts_at)}`})),
-        ...taskEvents.filter(item=>isInDay(item.starts_at,item.ends_at,date)).map(item=>({kind:item.task_type,title:`${item.vehicle?.name || '车辆'} · ${item.title}`,detail:`${taskStatusText(item.status)} · ${dateText(item.ends_at)} 前`}))
+        ...bookingEvents.filter(item=>isInDay(item.starts_at,item.ends_at,date)).map(item=>({id:item.id,kind:'booking',title:`${item.vehicle?.name || '车辆'} · ${item.customer?.name || item.customer_name}`,detail:`${statusText(item.status)} · ${dateText(item.starts_at)}`})),
+        ...taskEvents.filter(item=>isInDay(item.starts_at,item.ends_at,date)).map(item=>({id:item.id,kind:item.task_type,title:`${item.vehicle?.name || '车辆'} · ${item.title}`,detail:`${taskStatusText(item.status)} · ${dateText(item.ends_at)} 前`}))
       ];
-      return `<section class="schedule-day"><h2>${esc(dateLabel(date))}</h2>${events.length ? events.map(event=>`<div class="schedule-event ${esc(event.kind)}"><b>${esc(event.title)}</b><span>${esc(event.detail)}</span></div>`).join('') : '<p class="schedule-empty">暂无预约或任务</p>'}</section>`;
+      return `<section class="schedule-day"><h2>${esc(dateLabel(date))}</h2>${events.length ? events.map(event=>`<button class="schedule-event ${esc(event.kind)}" onclick="RentalManage.openScheduleEvent('${esc(event.kind)}','${esc(event.id)}')"><b>${esc(event.title)}</b><span>${esc(event.detail)}</span><i>›</i></button>`).join('') : '<p class="schedule-empty">暂无预约或任务</p>'}</section>`;
     };
-    app.innerHTML = `${top('车辆日历')}<div class="actions"><button class="secondary" onclick="RentalManage.home()">← 返回后台</button><button class="secondary" onclick="RentalManage.tasks()">任务单</button><button class="primary" onclick="RentalManage.newTask()">＋ 添加任务</button></div><div class="notice">未来 14 天：绿色为客户预约，蓝色为清洁任务，红色为维修任务。任务进行中会阻止车辆被重新开放预约。</div><div class="schedule-grid">${days.map(dayCard).join('')}</div><div class="footer-space"></div>`;
+    app.innerHTML = `${top('车辆日历')}<div class="actions"><button class="secondary" onclick="RentalManage.back()">← 返回上一页</button><button class="secondary" onclick="RentalManage.tasks()">任务单</button><button class="primary" onclick="RentalManage.newTask()">＋ 添加任务</button></div><div class="notice">未来 14 天：绿色为客户预约，蓝色为清洁任务，红色为维修任务。点击任一项目可查看完整资料；任务进行中会阻止车辆被重新开放预约。</div><div class="schedule-grid">${days.map(dayCard).join('')}</div><div class="footer-space"></div>`;
   }
 
-  function openBooking(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='booking'; renderBookingWithHandover(); }
-  function openFinance(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='finance'; renderFinance(); }
-  function openReprice(id) { state.booking=state.bookings.find(item=>String(item.id)===String(id))||null; state.screen='reprice'; renderReprice(); }
-  function back() { if(state.screen==='handover'){ state.screen='booking'; renderBookingWithHandover(); return; } if(['booking','finance','reprice'].includes(state.screen)){ state.vehicleFilter=''; state.screen='bookings'; renderBookings(); return; } if(state.screen==='task'){ state.screen='tasks'; renderTasks(); return; } if(['fleet','vehicles','vehicle','services','service','bookings','tasks','schedule'].includes(state.screen)){ state.vehicleFilter=''; state.screen='home'; renderHome(); return; } close(); }
-  window.RentalManage = { close,back,home:()=>{state.vehicleFilter='';state.screen='home';renderHome();},reload:()=>loadManager(state.screen),bookings:filter=>{state.vehicleFilter='';state.bookingFilter=filter==='finance'?'finance':filter||'all';state.screen='bookings';renderBookings();},fleet:()=>{state.vehicleFilter='';state.screen='fleet';renderFleet();},tasks:()=>{state.screen='tasks';renderTasks();},schedule:()=>{state.screen='schedule';renderSchedule();},newTask:vehicleId=>{state.taskVehicleId=vehicleId||'';state.editingTaskId='';state.screen='task';renderTaskEditor();},editTask:id=>{state.editingTaskId=id;state.screen='task';renderTaskEditor(id);},saveTask,taskStatus:saveTaskStatus,openVehicleBookings,setVehicleStatus,startHandover,saveHandover,handoverPhotos:addHandoverPhotos,removeHandoverPhoto:index=>{state.handoverPhotos.splice(index,1);renderHandoverPhotos();},openBooking,finance:openFinance,reprice:openReprice,confirm:confirmBooking,cancelBooking:cancelMerchantBooking,saveFinance,saveReprice,vehicles:()=>{state.screen='vehicles';renderVehicles();},editVehicle:id=>{state.editingVehicleId=id||'';state.screen='vehicle';renderVehicleEditor(id);},saveVehicle,toggleVehicle,services:type=>{state.serviceType=type||'addon';state.screen='services';renderServices(state.serviceType);},editService,saveService,toggleService,photos:addPhotos,removePhoto:index=>{state.photos.splice(index,1);renderPhotos();} };
+  function openScheduleEvent(kind, id) {
+    const record = kind === 'booking'
+      ? state.bookings.find(item => String(item.id) === String(id))
+      : state.tasks.find(item => String(item.id) === String(id));
+    if(!record) { alert('该日历项目已更新，请返回日历刷新后重试。'); return; }
+    go('schedule-event', { scheduleEvent:{ kind, id:String(id) } });
+  }
+
+  function renderScheduleEvent() {
+    const event = state.scheduleEvent || {};
+    const isBooking = event.kind === 'booking';
+    const item = isBooking
+      ? state.bookings.find(row => String(row.id) === String(event.id))
+      : state.tasks.find(row => String(row.id) === String(event.id));
+    if(!item) { app.innerHTML = `${top('日历详情')}<div class="empty">该项目已不存在或已更新。</div>`; return; }
+    const vehicle = item.vehicle || state.vehicles.find(row => String(row.id) === String(item.vehicle_id)) || {};
+    const typeLabel = isBooking ? '客户预约' : taskTypeText(item.task_type);
+    const status = isBooking ? statusText(item.status) : taskStatusText(item.status);
+    const detail = isBooking
+      ? `<section class="detail-card"><h2>预约信息</h2><p><b>${esc(item.customer?.name || item.customer_name || '客户')}</b><span>${esc(item.customer_phone || '未填写电话')}</span></p><p>${esc(dateText(item.starts_at))} 至 ${esc(dateText(item.ends_at))}</p><p>预约编号：<b>${esc(item.booking_code || '—')}</b></p></section><section class="detail-card"><h2>金额与状态</h2><p>预约金额：<b>${money(item.total_amount)}</b></p><p>收款状态：<b>${esc(paymentText(item.payment_status))}</b></p><p>押金状态：<b>${esc(depositText(item.deposit_status))}</b></p></section><div class="actions"><button class="primary" onclick="RentalManage.openScheduleBooking('${esc(item.id)}')">打开预约管理</button></div>`
+      : `<section class="detail-card"><h2>任务信息</h2><p><b>${esc(item.title || '未命名任务')}</b><span>${esc(status)}</span></p><p>${esc(dateText(item.starts_at))} 至 ${esc(dateText(item.ends_at))}</p><p>负责人：${esc(item.assignee_name || '暂未指派')}</p>${item.note ? `<p>备注：${esc(item.note)}</p>` : ''}</section><div class="actions"><button class="primary" onclick="RentalManage.openScheduleTask('${esc(item.id)}')">查看任务记录</button></div>`;
+    app.innerHTML = `${top('日历项目详情')}<section class="schedule-detail-hero"><span class="task-type ${esc(isBooking ? 'booking' : item.task_type)}">${esc(typeLabel)}</span><h1>${esc(vehicle.name || '车辆')}</h1><p>${esc(status)}</p></section>${detail}<div class="footer-space"></div>`;
+  }
+
+  function openBooking(id) { const booking=state.bookings.find(item=>String(item.id)===String(id))||null; if(!booking)return; go('booking',{booking}); }
+  function openFinance(id) { const booking=state.bookings.find(item=>String(item.id)===String(id))||null; if(!booking)return; go('finance',{booking}); }
+  function openReprice(id) { const booking=state.bookings.find(item=>String(item.id)===String(id))||null; if(!booking)return; go('reprice',{booking}); }
+  function back() { const previous=state.history.pop(); if(previous) { restoreRoute(previous); return; } exitManager(); }
+  window.RentalManage = { close,back,home:()=>{state.vehicleFilter='';state.history=[];state.screen='home';renderHome();},reload:()=>loadManager(state.screen),bookings:filter=>go('bookings',{vehicleFilter:'',bookingFilter:filter==='finance'?'finance':filter||'all'}),fleet:()=>go('fleet',{vehicleFilter:''}),tasks:()=>go('tasks'),schedule:()=>go('schedule'),newTask:vehicleId=>go('task',{taskVehicleId:vehicleId||'',editingTaskId:''}),editTask:id=>go('task',{editingTaskId:id}),saveTask,taskStatus:saveTaskStatus,openVehicleBookings,setVehicleStatus,startHandover,saveHandover,handoverPhotos:addHandoverPhotos,removeHandoverPhoto:index=>{state.handoverPhotos.splice(index,1);renderHandoverPhotos();},openBooking,finance:openFinance,reprice:openReprice,openScheduleEvent,openScheduleBooking:id=>openBooking(id),openScheduleTask:id=>go('task',{editingTaskId:id}),confirm:confirmBooking,cancelBooking:cancelMerchantBooking,saveFinance,saveReprice,vehicles:()=>go('vehicles'),editVehicle:id=>go('vehicle',{editingVehicleId:id||''}),saveVehicle,toggleVehicle,services:type=>go('services',{serviceType:type||'addon'}),editService:(type,id)=>go('service',{serviceType:type,editingServiceId:id||''}),saveService,toggleService,photos:addPhotos,removePhoto:index=>{state.photos.splice(index,1);renderPhotos();} };
   loadManager();
 })();
