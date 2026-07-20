@@ -1,5 +1,5 @@
 -- 乐生活 5.385：二手车买卖第一版
--- 运行后：房产生活服务类商家可开通「二手车买卖」，建立销售库存并接收卖车估价、试驾咨询线索。
+-- 运行后：交通出行 / 车辆销售类商家可开通「二手车买卖」，建立销售库存并接收卖车估价、试驾咨询线索。
 
 create table if not exists public.merchant_auto_listings (
   id uuid primary key default gen_random_uuid(),
