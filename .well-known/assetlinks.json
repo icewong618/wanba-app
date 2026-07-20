@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.leshenghuo.app",
+      "sha256_cert_fingerprints": [
+        "85:FB:75:D3:CC:7F:3E:AD:67:95:58:F0:64:B3:03:B8:D3:10:BB:E7:F4:95:34:A5:87:FB:2B:55:0F:98:E3:AF"
+      ]
+    }
+  }
+]
