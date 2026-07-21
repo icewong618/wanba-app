@@ -162,6 +162,93 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     const addTile=state.sellPhotos.length<8?`<label class="sell-photo-add"><b>＋</b><small>添加照片</small><input type="file" accept="image/*" multiple onchange="Auto.uploadSellPhotos(this.files)"></label>`:`<div class="sell-photo-limit">已添加 8 张照片</div>`;
     return `<section class="section"><h2>出售你的车</h2><p>请填写完整 17 位 VIN。商家可据此提取车辆历史报告，VIN 不会在公开页面展示。</p></section><section class="form"><label class="field">姓名<input id="leadName" maxlength="80" value="${esc(session()?.user?.user_metadata?.display_name||'')}" placeholder="姓名（必填）"></label><label class="field">联系电话<input id="leadPhone" maxlength="40" inputmode="tel" placeholder="电话（必填）"></label><div class="lead-actions"><label class="field">品牌<input id="sellMake" maxlength="50" placeholder="例如 Toyota"></label><label class="field">车型<input id="sellModel" maxlength="50" placeholder="例如 Camry"></label><label class="field">年份<input id="sellYear" inputmode="numeric" type="number" min="1900" max="2100" placeholder="例如 2021"></label><label class="field">里程<input id="sellMileage" inputmode="numeric" type="number" min="0" placeholder="英里（必填）"></label><label class="field">车型<select id="sellType"><option>轿车</option><option>SUV</option><option>VAN</option><option>皮卡</option><option>跑车</option><option>其他</option></select></label><label class="field">能源<select id="sellFuel"><option>汽油</option><option>柴油</option><option>混动</option><option>纯电</option></select></label><label class="field">变速箱<select id="sellTransmission"><option>自动挡</option><option>手动挡</option><option>其他</option></select></label><label class="field">期望售价（可选）<input id="sellExpectedPrice" type="number" min="0" inputmode="decimal" placeholder="美元"></label></div><label class="field">车辆识别码 VIN<input id="sellVin" maxlength="17" autocapitalize="characters" spellcheck="false" placeholder="17 位 VIN（必填）"></label><label class="field">车辆情况<textarea id="sellMessage" maxlength="1500" placeholder="可补充事故记录、保养情况、改装或其他需要说明的情况"></textarea></label><section class="sell-photo-section"><div class="sell-photo-heading"><b>车辆照片</b><span>${state.sellPhotos.length}/8</span></div><div class="sell-photo-picker">${photos}${addTile}</div></section><div class="notice">图片会压缩后上传。建议提供车头、车尾、两侧、内饰、仪表盘和车况细节。</div><button class="primary" onclick="Auto.submitSell()">提交车辆，获取报价</button></section>`;
   };
+
+  /* v5.411: searchable vehicle alerts are stored per customer and checked in-app. */
+  state.searchAlerts=[];
+  state.priceDrops=[];
+  const alertFilterLabel=filters=>{
+    const names=[];
+    if(filters?.type)names.push(filters.type);
+    if(filters?.fuel)names.push(filters.fuel);
+    if(filters?.price)names.push(`${money(filters.price)} 以下`);
+    return names.length?names.join(' · '):'全部在售车辆';
+  };
+  const priceDropMatches=(drop,filters)=>
+    (!filters?.type||drop.vehicle_type===filters.type)&&
+    (!filters?.fuel||drop.fuel_type===filters.fuel)&&
+    (!filters?.price||Number(drop.current_price||0)<=Number(filters.price));
+  async function loadSearchAlerts(){
+    if(!session()?.user||!state.merchant?.user_id){state.searchAlerts=[];state.priceDrops=[];return;}
+    try{
+      const response=await api('/rest/v1/rpc/merchant_auto_list_search_alerts',{method:'POST',body:JSON.stringify({p_merchant_user_id:state.merchant.user_id})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data?.message||'load_failed');
+      state.searchAlerts=Array.isArray(data?.searches)?data.searches:[];
+      state.priceDrops=Array.isArray(data?.price_drops)?data.price_drops:[];
+    }catch(error){
+      state.searchAlerts=[];
+      state.priceDrops=[];
+    }
+  }
+  function alertCount(){
+    return state.searchAlerts.filter(alert=>alert.price_drop_enabled).reduce((count,alert)=>count+state.priceDrops.filter(drop=>priceDropMatches(drop,alert.filters)).length,0);
+  }
+  function saveSearchView(){
+    if(!session()?.user){alert('请先登录后保存筛选和开启降价提醒。');return;}
+    state.screen='save-search';
+    const suggested=alertFilterLabel(state.filters);
+    app.innerHTML=`${top('保存筛选')}<section class="section"><h2>保存当前条件</h2><p>下次进入这家车行时，可直接查看符合条件的车辆和新近降价信息。</p></section><section class="form"><label class="field">提醒名称<input id="autoSearchName" maxlength="50" value="${esc(suggested)}" placeholder="例如：预算 $20,000 内的 SUV"></label><div class="auto-alert-summary"><b>当前筛选</b><span>${esc(suggested)}</span></div><label class="auto-alert-toggle"><input id="autoPriceAlert" type="checkbox" checked><span><b>开启降价提醒</b><small>车辆价格下调后，会在“我的提醒”中显示。</small></span></label><button class="primary" type="button" onclick="Auto.saveSearch()">保存筛选</button></section>`;
+  }
+  async function saveSearch(){
+    const name=document.getElementById('autoSearchName')?.value.trim()||alertFilterLabel(state.filters);
+    const enabled=!!document.getElementById('autoPriceAlert')?.checked;
+    try{
+      const response=await api('/rest/v1/rpc/merchant_auto_save_search_alert',{method:'POST',body:JSON.stringify({p_merchant_user_id:state.merchant.user_id,p_name:name,p_filters:state.filters,p_price_drop_enabled:enabled})});
+      if(!response.ok)throw new Error('save_failed');
+      await loadSearchAlerts();
+      alert('筛选已保存。');
+      state.screen='list';
+      renderList();
+    }catch(error){alert('保存失败，请确认已运行 v5.411 数据库更新后重试。');}
+  }
+  async function deleteSearch(id){
+    if(!confirm('删除这个筛选和降价提醒？'))return;
+    try{
+      const response=await api('/rest/v1/rpc/merchant_auto_delete_search_alert',{method:'POST',body:JSON.stringify({p_search_id:id})});
+      if(!response.ok)throw new Error('delete_failed');
+      await loadSearchAlerts();
+      alertsView();
+    }catch(error){alert('删除失败，请稍后重试。');}
+  }
+  async function alertsView(){
+    if(!session()?.user){alert('请先登录后查看提醒。');return;}
+    state.screen='alerts';
+    await loadSearchAlerts();
+    const alerts=state.searchAlerts;
+    const drops=state.priceDrops;
+    const alertRows=alerts.length?alerts.map(alert=>{
+      const matches=drops.filter(drop=>alert.price_drop_enabled&&priceDropMatches(drop,alert.filters));
+      return `<article class="auto-alert-card"><div><span class="chip">${alert.price_drop_enabled?'降价提醒已开启':'仅保存筛选'}</span><h2>${esc(alert.name||alertFilterLabel(alert.filters))}</h2><p>${esc(alertFilterLabel(alert.filters))}</p>${matches.length?`<p class="auto-alert-hit">${matches.length} 辆车辆最近降价</p>`:'<p>目前没有新的降价车辆。</p>'}</div><button class="outline" type="button" onclick="Auto.deleteSearch('${esc(alert.id)}')">删除</button></article>`;
+    }).join(''):'<div class="empty">还没有保存筛选。先按车型、能源或预算筛选，再点“保存筛选”。</div>';
+    const dropRows=drops.length?`<section class="section auto-drop-list"><h2>最近降价</h2>${drops.map(drop=>`<button class="auto-drop-row" type="button" onclick="Auto.openVehicle(event,'${esc(drop.listing_id)}')"><span>${esc(drop.title)}</span><b>${money(drop.previous_price)} → ${money(drop.current_price)}</b></button>`).join('')}</section>`:'';
+    app.innerHTML=`${top('我的提醒')}<section class="section"><h2>保存筛选与降价提醒</h2><p>提醒会在你下次打开这家车行时检查价格变化。系统推送会在 App 通知功能接入后开放。</p></section><section class="auto-alert-list">${alertRows}</section>${dropRows}<button class="primary" type="button" onclick="Auto.back()">返回车辆列表</button>`;
+    api('/rest/v1/rpc/merchant_auto_mark_search_alerts_checked',{method:'POST',body:JSON.stringify({p_merchant_user_id:state.merchant.user_id})}).catch(()=>{});
+  }
+  const renderListBeforeSearchAlerts=renderList;
+  renderList=function(){
+    renderListBeforeSearchAlerts();
+    if(state.screen!=='list'||state.tab!=='buy')return;
+    const filters=app.querySelector('.filters');
+    if(!filters||app.querySelector('#autoSearchActions'))return;
+    const actions=document.createElement('section');
+    actions.id='autoSearchActions';
+    actions.className='auto-search-actions';
+    const count=alertCount();
+    actions.innerHTML=`<button class="outline" type="button" onclick="Auto.saveSearchView()">保存筛选</button><button class="outline" type="button" onclick="Auto.alertsView()">我的提醒${count?` <i>${count}</i>`:''}</button>`;
+    filters.insertAdjacentElement('afterend',actions);
+  };
+  const loadBeforeSearchAlerts=load;
+  load=async function(){await loadBeforeSearchAlerts();await loadSearchAlerts();renderList();};
   window.Auto={...window.Auto,
     close:exit,
     list(){state.tab='buy';state.screen='list';renderList();},
@@ -174,7 +261,8 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     submitSell,testDrive(){state.screen='lead';renderLead('test_drive');},submitLead,
     quotes:loadQuotes,myVehicles,testDriveAction,quoteResponse,confirmArrival,
     updateLoan,toggleCompare,clearCompare,compare(){state.screen='compare';renderCompareView();},
-    back(){document.getElementById('autoCompareFab')?.remove();if(state.screen==='detail'||state.screen==='lead'||state.screen==='compare'){state.screen='list';renderList()}else exit()}
+    saveSearchView,saveSearch,alertsView,deleteSearch,
+    back(){document.getElementById('autoCompareFab')?.remove();if(['detail','lead','compare','save-search','alerts'].includes(state.screen)){state.screen='list';renderList()}else exit()}
   };
   load();
 })();
