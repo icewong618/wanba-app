@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.448';
+  const version = '5.449';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -84,6 +84,7 @@
 <script src="./shared/app-module-router.js?v=5.446"></script>
 <script src="./shared/auth-verification-limits.js?v=5.447"></script>
 <script src="./shared/auth-session.js?v=5.448"></script>
+<script src="./shared/auth-api.js?v=5.449"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3355,7 +3356,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.448';
+const APP_VERSION = '5.449';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3469,6 +3470,7 @@ let authMode = 'login';
 let session = null; // {access_token, user}
 let sessionRefreshInFlight = null;
 const authSessionStore = window.LeshenghuoAuthSession?.create({ supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
+const authApi = window.LeshenghuoAuthApi?.create({ supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
 
 function accessTokenExpiresSoon(token){
   return authSessionStore?.accessTokenExpiresSoon(token) ?? true;
@@ -3642,30 +3644,13 @@ function getVerifyLog(email){ return authVerificationLimits?.get(email) || []; }
 function pushVerifyLog(email){ return authVerificationLimits?.record(email) || 0; }
 function canSendVerify(email){ return authVerificationLimits?.canSend(email) || { ok:true }; }
 async function resendVerifyEmail(email){
-  const {res} = await authRequest(`${SUPABASE_URL}/auth/v1/resend`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-    body: JSON.stringify({ type:'signup', email })
-  });
+  const {res} = await authApi.resendSignupVerification(email);
   return res.ok;
 }
 
 /* 认证邮件通过外部 SMTP 发送时可能需要数十秒。统一解析响应，避免网关返回纯文本时让界面永远停在“处理中”。 */
 async function authRequest(url, options, timeoutMs=45000){
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, Object.assign({}, options, {signal:controller.signal}));
-    const raw = await res.text();
-    let data = {};
-    try { data = raw ? JSON.parse(raw) : {}; } catch(e) { data = {message:raw}; }
-    return {res, data};
-  } catch(e) {
-    if(e && e.name === 'AbortError') throw new Error('邮件服务响应超时，请稍后再试');
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
+  return authApi.request(url, options, timeoutMs);
 }
 
 /* ---- 一体化登入：自动判断 注册/登录/补发验证 ---- */
@@ -18090,7 +18075,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Auth Session】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Auth API】`);
 </script>
 </body>
 </html>
