@@ -92,6 +92,83 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     const row=(label,key,format=value=>value||'—')=>`<div class="compare-row"><b>${esc(label)}</b>${cars.map(car=>`<span>${esc(format(car[key]))}</span>`).join('')}</div>`;
     app.innerHTML=`${top('车辆对比')}<section class="compare-grid"><div class="compare-row compare-head"><b>项目</b>${cars.map(car=>`<span><strong>${esc(car.title)}</strong><button class="outline" onclick="Auto.open('${esc(car.id)}')">查看详情</button></span>`).join('')}</div>${row('售价','price',money)}${row('年份','year')}${row('里程','mileage',value=>value?`${Number(value).toLocaleString()} mi`:'—')}${row('车型','vehicle_type')}${row('能源','fuel_type')}${row('变速箱','transmission')}${row('驱动','drivetrain')}${row('事故记录','accident_history')}${row('过户次数','owner_count',value=>value===null||value===undefined?'—':`${value} 次`)}${row('产权状态','title_status')}${row('保修状态','warranty_status')}</section><button class="outline" style="width:100%;margin-top:15px" onclick="Auto.clearCompare()">清空对比</button>`;
   }
-  window.Auto={...window.Auto,updateLoan,toggleCompare,clearCompare,compare(){state.screen='compare';compareView()},back(){if(state.screen==='detail'||state.screen==='lead'||state.screen==='compare'){state.screen='list';renderList()}else exit()}};
+  // Keep the public controls in one place. Earlier versions layered card renderers
+  // but left several inline handlers pointing at functions that no longer existed.
+  function openVehicle(event,id){
+    event?.preventDefault();
+    event?.stopPropagation();
+    const car=state.listings.find(item=>String(item.id)===String(id));
+    if(!car){alert('暂时找不到这辆车，请刷新后重试。');return;}
+    state.selected=car;
+    state.screen='detail';
+    renderDetail();
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  async function toggleFavorite(event,id){
+    event?.preventDefault();
+    event?.stopPropagation();
+    await toggleSaved(id);
+  }
+  function toggleCompareCard(event,id){
+    event?.preventDefault();
+    event?.stopPropagation();
+    toggleCompare(id);
+  }
+  function myVehicles(){location.assign(`/autos/mine/?v=5.405&refresh_t=${Date.now()}`);}
+  function renderCompareView(){
+    const cars=state.listings.filter(car=>state.compareIds.has(String(car.id)));
+    if(cars.length<2){alert('至少选择两辆车后再对比。');state.screen='list';return renderList();}
+    const row=(label,key,format=value=>value||'—')=>`<div class="compare-row"><b>${esc(label)}</b>${cars.map(car=>`<span>${esc(format(car[key]))}</span>`).join('')}</div>`;
+    app.innerHTML=`${top('车辆对比')}<p class="compare-hint">左右滑动即可查看全部车辆和参数。</p><section class="compare-scroll"><section class="compare-grid" style="--compare-count:${cars.length}"><div class="compare-row compare-head"><b>项目</b>${cars.map(car=>`<span><strong>${esc(car.title)}</strong><button class="outline" type="button" onclick="Auto.openVehicle(event,'${esc(car.id)}')">查看详情</button></span>`).join('')}</div>${row('售价','price',money)}${row('年份','year')}${row('里程','mileage',value=>value?`${Number(value).toLocaleString()} mi`:'—')}${row('车型','vehicle_type')}${row('能源','fuel_type')}${row('变速箱','transmission')}${row('驱动','drivetrain')}${row('事故记录','accident_history')}${row('过户次数','owner_count',value=>value===null||value===undefined?'—':`${value} 次`)}${row('产权状态','title_status')}${row('保修状态','warranty_status')}</section></section><button class="outline" type="button" style="width:100%;margin-top:15px" onclick="Auto.clearCompare()">清空对比</button>`;
+  }
+  const legacyRenderList=renderList;
+  renderList=function(){
+    legacyRenderList();
+    if(session()?.user){
+      const oldMine=document.getElementById('autoMineEntry');
+      const oldQuotes=[...app.querySelectorAll('button')].find(button=>button.textContent.includes('查看我的估价与试驾记录'));
+      const existing=document.getElementById('autoAccountActions');
+      if(!existing&&(oldMine||oldQuotes)){
+        const actions=document.createElement('section');
+        actions.id='autoAccountActions';
+        actions.className='auto-account-actions';
+        actions.innerHTML='<button class="outline" type="button" onclick="Auto.myVehicles()">我的车辆</button><button class="outline" type="button" onclick="Auto.quotes()">估价与试驾</button>';
+        (oldMine||oldQuotes).replaceWith(actions);
+        if(oldMine&&oldMine!==actions)oldMine.remove();
+        if(oldQuotes&&oldQuotes!==actions)oldQuotes.remove();
+      }
+    }
+    document.getElementById('autoCompareFab')?.remove();
+    if(state.screen==='list'&&state.compareIds.size>=2){
+      const fab=document.createElement('div');
+      fab.id='autoCompareFab';
+      fab.className='auto-compare-fab';
+      fab.innerHTML=`<button class="primary" type="button" onclick="Auto.compare()">对比 ${state.compareIds.size} 辆车</button>`;
+      document.body.appendChild(fab);
+    }
+  };
+  buyHtml=function(cars){
+    const compareBar=state.compareIds.size?`<section class="auto-compare-bar"><span>已选 ${state.compareIds.size}/3 辆</span><span>${state.compareIds.size>=2?'可直接点击底部对比':'再选一辆即可对比'}</span><button class="outline" type="button" onclick="Auto.clearCompare()">清空</button></section>`:'';
+    const filters=`<section class="filters"><select onchange="Auto.filter('type',this.value)"><option value="">全部车型</option>${['轿车','SUV','VAN','皮卡','跑车','其他'].map(v=>`<option ${state.filters.type===v?'selected':''}>${v}</option>`).join('')}</select><select onchange="Auto.filter('fuel',this.value)"><option value="">全部能源</option>${['汽油','柴油','混动','纯电'].map(v=>`<option ${state.filters.fuel===v?'selected':''}>${v}</option>`).join('')}</select><select onchange="Auto.filter('price',this.value)"><option value="">全部价格</option><option value="10000">$10,000 以下</option><option value="20000">$20,000 以下</option><option value="30000">$30,000 以下</option><option value="50000">$50,000 以下</option></select></section>`;
+    const cards=cars.length?cars.map(car=>{
+      const id=esc(car.id),saved=state.savedIds.has(String(car.id)),checked=state.compareIds.has(String(car.id)),disabled=!checked&&state.compareIds.size>=3;
+      return `<article class="car-card saved-card"><button type="button" class="car-main" onclick="Auto.openVehicle(event,'${id}')">${photo(car)}<div><span class="chip">${esc(car.vehicle_type||'车辆')}</span>${car.is_certified?'<span class="chip">认证车况</span>':''}<h2>${esc(car.title)}</h2><p>${esc([car.year,car.mileage?`${Number(car.mileage).toLocaleString()} mi`:'里程待补充',car.fuel_type,car.transmission].filter(Boolean).join(' · '))}</p><strong class="price">${money(car.price)}</strong></div></button><div class="auto-card-actions"><button class="compare-toggle ${checked?'on':''}" type="button" ${disabled?'disabled':''} onclick="Auto.toggleCompareCard(event,'${id}')">${checked?'✓ 已选对比':'＋ 对比'}</button><button class="save-button ${saved?'saved':''}" type="button" aria-label="${saved?'取消收藏':'收藏车辆'}" onclick="Auto.toggleFavorite(event,'${id}')">${saved?'♥ 已收藏':'♡ 收藏'}</button></div></article>`;
+    }).join(''):'<div class="empty">暂无符合条件的车辆。</div>';
+    return `${compareBar}${filters}<div class="count">找到 <b>${cars.length}</b> 辆可售车辆</div><section class="cards">${cards}</section>`;
+  };
+  window.Auto={...window.Auto,
+    close:exit,
+    list(){state.tab='buy';state.screen='list';renderList();},
+    buy(){state.tab='buy';state.screen='list';renderList();},
+    sell(){state.tab='sell';state.screen='list';renderList();},
+    saved(){state.tab='saved';state.screen='list';renderList();},
+    filter(key,value){state.filters[key]=value;state.screen='list';renderList();},
+    open(id){openVehicle(null,id);},openVehicle,toggleFavorite,toggleCompareCard,
+    toggleSaved,uploadSellPhotos,removeSellPhoto(index){state.sellPhotos.splice(index,1);renderList();},
+    submitSell,testDrive(){state.screen='lead';renderLead('test_drive');},submitLead,
+    quotes:loadQuotes,myVehicles,testDriveAction,quoteResponse,confirmArrival,
+    updateLoan,toggleCompare,clearCompare,compare(){state.screen='compare';renderCompareView();},
+    back(){document.getElementById('autoCompareFab')?.remove();if(state.screen==='detail'||state.screen==='lead'||state.screen==='compare'){state.screen='list';renderList()}else exit()}
+  };
   load();
 })();
