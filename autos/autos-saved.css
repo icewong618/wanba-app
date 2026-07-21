@@ -8,3 +8,12 @@
 .detail-save.saved{background:#fff2f6;color:var(--berry);border-color:#e9a0b8}
 @media(min-width:650px){.car-main{grid-template-columns:1fr}.car-main>img,.car-main .placeholder{width:100%;height:185px}}
 @media(max-width:360px){.car-main{grid-template-columns:110px minmax(0,1fr)}.car-main>img,.car-main .placeholder{width:110px;height:94px}}
+
+/* v5.404: a single-column vehicle card prevents title/action collisions. */
+.saved-card{display:block!important;position:relative!important;padding:0!important;min-width:0!important}
+.saved-card .car-main{display:block!important;width:100%!important;min-width:0!important;padding:10px!important}
+.saved-card .car-main>img,.saved-card .car-main>.placeholder{display:block!important;width:100%!important;height:190px!important;border-radius:9px!important;object-fit:cover!important}
+.saved-card .car-main>div{min-width:0!important;padding-top:8px!important}
+.saved-card .car-main h2{margin:8px 0 6px!important;overflow-wrap:anywhere!important}
+.saved-card .save-button{right:18px!important;top:18px!important;width:38px!important;height:38px!important;font-size:25px!important}
+@media(min-width:650px){.saved-card .car-main>img,.saved-card .car-main>.placeholder{height:210px!important}}

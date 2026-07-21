@@ -97,5 +97,22 @@ async function save(){
   S.screen='home';await load();
 }
 window.AutoAdmin={...window.AutoAdmin,save};
+// Standalone management keeps the same durable bottom navigation as the main app.
+function openMainTab(tab){
+  const target=new URL('/',location.origin);
+  target.searchParams.set('tab',tab);
+  target.searchParams.set('app_v','5.404');
+  if(new URLSearchParams(location.search).get('app_v')) target.searchParams.set('embedded_app','1');
+  location.assign(target.toString());
+}
+function ensureMainNavigation(){
+  document.documentElement.style.overflowX='hidden';
+  document.body.style.overflowX='hidden';
+  app.style.paddingBottom='calc(82px + env(safe-area-inset-bottom))';
+  if(document.getElementById('autoManageMainNav')) return;
+  document.body.insertAdjacentHTML('beforeend',`<nav id="autoManageMainNav" aria-label="主导航" style="position:fixed;z-index:30;left:0;right:0;bottom:0;height:calc(58px + env(safe-area-inset-bottom));padding:7px max(10px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));display:grid;grid-template-columns:repeat(5,1fr);gap:3px;background:rgba(255,255,255,.98);border-top:1px solid #e4e0d4;box-shadow:0 -4px 14px rgba(38,42,37,.06)"><button style="border:0;background:transparent;color:#c93c6d;font:800 11px inherit" onclick="AutoAdmin.mainTab('home')">首页</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('week')">本周</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('deals')">省钱</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('message')">消息</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('profile')">我</button></nav>`);
+}
+window.AutoAdmin={...window.AutoAdmin,mainTab:openMainTab};
+ensureMainNavigation();
 load();
 })();
