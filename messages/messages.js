@@ -1,20 +1,11 @@
 (() => {
   const routeInAppShell = (route, payload={}) => window.LeshenghuoModuleBridge?.route(route, payload) || false;
-  const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
+  const { esc, session, request } = window.LeshenghuoModuleRuntime;
   const app = document.getElementById('messagesApp');
   const state = { me:null, posts:[], comments:[], likes:[], favorites:[], follows:[], messages:[], profiles:{} };
-  const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
-  const session = () => { try { return JSON.parse(localStorage.getItem('wanba_session') || 'null'); } catch(e) { return null; } };
   const readKey = () => `leshenghuo_message_read_${state.me?.id || 'guest'}`;
   const readMap = () => { try { return JSON.parse(localStorage.getItem(readKey()) || '{}'); } catch(e) { return {}; } };
   const markRead = key => { const values=readMap(); values[key]=new Date().toISOString(); localStorage.setItem(readKey(),JSON.stringify(values)); };
-  const request = async (path, options={}) => {
-    const active = session();
-    const headers = Object.assign({apikey:SUPABASE_KEY,Accept:'application/json',Authorization:`Bearer ${active?.access_token || SUPABASE_KEY}`},options.headers||{});
-    if(options.body) headers['Content-Type']='application/json';
-    return fetch(`${SUPABASE_URL}${path}`,Object.assign({},options,{headers}));
-  };
   const list = async path => { try { const res=await request(path); return res.ok ? await res.json() : []; } catch(e) { return []; } };
   const fmt = value => { try{return new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return '';} };
   const initial = name => String(name||'乐').trim().slice(0,1).toUpperCase();

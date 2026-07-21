@@ -1,7 +1,6 @@
 (() => {
   const routeInAppShell = (route, payload={}) => window.LeshenghuoModuleBridge?.route(route, payload) || false;
-  const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
+  const { esc, session, request } = window.LeshenghuoModuleRuntime;
   const app = document.getElementById('dealsApp');
   const sheet = document.getElementById('dealSheet');
   const state = { rows: [], rankingRows: [], filter: 'today' };
@@ -9,13 +8,6 @@
     ['today','今日最新'],['costco','Costco'],['samsclub',"Sam's Club"],['walmart','Walmart'],['target','Target'],['aldi','ALDI'],['99ranch','99大华'],['gw','GW超市'],['bestbuy','Best Buy'],['tjmaxx','TJ Maxx'],['macys',"Macy's"],['clearance','清仓']
   ];
   const translations = [['鸡胸肉','chicken breast'],['大米','rice'],['鸡蛋','eggs'],['牛奶','milk'],['鸡肉','chicken'],['牛肉','beef'],['猪肉','pork'],['海鲜','seafood'],['水果','fruit'],['蔬菜','vegetables'],['面粉','flour'],['食用油','cooking oil'],['纸巾','paper towels'],['洗衣液','laundry detergent'],['行李箱','luggage'],['耳机','headphones'],['电视','tv'],['电脑','laptop']];
-  const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
-  const session = () => { try { return JSON.parse(localStorage.getItem('wanba_session') || 'null'); } catch(e) { return null; } };
-  const request = async (path, options = {}) => {
-    const active = session();
-    const headers = Object.assign({ apikey: SUPABASE_KEY, 'Content-Type':'application/json', Authorization:`Bearer ${active?.access_token || SUPABASE_KEY}` }, options.headers || {});
-    return fetch(`${SUPABASE_URL}${path}`, Object.assign({}, options, { headers }));
-  };
   const money = value => Number(value || 0) > 0 ? `$${Number(value).toFixed(Number(value) % 1 ? 2 : 0)}` : '官网核对';
   const dateText = value => value ? new Date(value).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'}) : '今日';
   const sourceLabel = value => ({weekly_ad_page:'官方周广告',daily_deals_page:'官方限时优惠',product_page:'固定商品页',public_page:'公开页面',manual:'人工维护',user_report:'用户爆料',merchant_submit:'商家提交'}[value] || '每日缓存');

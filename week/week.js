@@ -1,15 +1,8 @@
 (() => {
   const routeInAppShell = (route, payload={}) => window.LeshenghuoModuleBridge?.route(route, payload) || false;
-  const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
+  const { esc, session, request } = window.LeshenghuoModuleRuntime;
   const app = document.getElementById('weekApp');
   const state = { rows: [], filter: 'all' };
-  const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
-  const session = () => { try { return JSON.parse(localStorage.getItem('wanba_session') || 'null'); } catch(e) { return null; } };
-  const request = async path => {
-    const active = session();
-    return fetch(`${SUPABASE_URL}${path}`, { headers:{ apikey:SUPABASE_KEY, Accept:'application/json', Authorization:`Bearer ${active?.access_token || SUPABASE_KEY}` } });
-  };
   const ymdInLa = date => {
     const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
     const read = type => parts.find(part => part.type === type)?.value || '';
