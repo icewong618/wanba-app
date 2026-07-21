@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.451';
+  const version = '5.452';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -87,6 +87,7 @@
 <script src="./shared/auth-api.js?v=5.449"></script>
 <script src="./shared/supabase-client.js?v=5.450"></script>
 <script src="./shared/identity-cache.js?v=5.451"></script>
+<script src="./shared/identity-loader.js?v=5.452"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3270,42 +3271,23 @@ function setProfileCache(profile){
 function cachedProfile(userId, fallbackName){
   return identityCache?.cachedProfile(userId, fallbackName) || { user_id:userId, name:fallbackName || '乐生活用户', avatar:null, bio:'', tags:[], gender:'', birth:'', cover:'' };
 }
+const identityLoader = window.LeshenghuoIdentityLoader?.create({
+  supabaseUrl: SUPABASE_URL,
+  authedFetch: (...args) => authedFetch(...args),
+  setProfile: setProfileCache,
+  setMerchantIdentity: setMerchantIdentityCache,
+  hasAvatar: userId => userId in window._avatarCache,
+  hasMerchantLogo: userId => userId in window._merchantLogoCache,
+  markAvatarMissing: userId => { window._avatarCache[userId] = null; },
+  markMerchantLogoMissing: userId => setMerchantLogoCache(userId, null),
+  warn: (...args) => console.warn(...args)
+});
 async function loadProfilesForIds(userIds){
-  const ids = [...new Set((userIds || []).filter(Boolean))];
-  if(!ids.length) return [];
-  try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${ids.map(encodeURIComponent).join(',')})&select=user_id,name,avatar,bio,tags,gender,birth,cover,updated_at`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
-    rows.forEach(setProfileCache);
-    return rows;
-  } catch(e){ console.warn('用户资料读取失败:', e.message); return []; }
+  return identityLoader?.loadProfiles(userIds) || [];
 }
 /* 批量拉取一批 user_id 的头像并写入缓存，已认证商家优先使用店铺Logo */
 async function ensureAvatarsFor(userIds, forceRefresh=false){
-  const ids = [...new Set((userIds||[]).filter(Boolean))];
-  const needProfiles = forceRefresh ? ids : ids.filter(uid => !(uid in window._avatarCache));
-  const needMerchants = ids.filter(uid => !(uid in window._merchantLogoCache));
-  if(!needProfiles.length && !needMerchants.length) return false;
-  try {
-    if(needProfiles.length){
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${needProfiles.map(encodeURIComponent).join(',')})&select=user_id,name,avatar,updated_at`);
-      if(res.ok){
-        const rows = await res.json();
-        rows.forEach(setProfileCache);
-      }
-      needProfiles.forEach(uid => { if(!(uid in window._avatarCache)) window._avatarCache[uid] = null; });
-    }
-    if(needMerchants.length){
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${needMerchants.join(',')})&verified=eq.true&select=user_id,logo,business_name,verified`);
-      if(res.ok){
-        const rows = await res.json();
-        rows.forEach(r => setMerchantIdentityCache(r.user_id, r));
-      }
-      needMerchants.forEach(uid => { if(!(uid in window._merchantLogoCache)) setMerchantLogoCache(uid, null); });
-    }
-    return true;
-  } catch(e){ console.warn('头像批量获取失败:', e.message); return false; }
+  return identityLoader?.ensureAvatars(userIds, forceRefresh) || false;
 }
 /* 头像圆圈：有真实头像显示图片，否则回退成色块+首字（class="avatar" 走已有CSS尺寸） */
 function avatarCircleHtml(name, user_id){
@@ -3336,7 +3318,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.451';
+const APP_VERSION = '5.452';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -18039,7 +18021,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Identity Cache】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Identity Loader】`);
 </script>
 </body>
 </html>
