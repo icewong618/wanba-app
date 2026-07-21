@@ -28,6 +28,11 @@
   const top = title => `<header class="top"><button onclick="MerchantAdmin.close()">‹</button><b>${esc(title)}</b><span class="top-actions"><button class="language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button onclick="MerchantAdmin.close()">×</button></span></header>`;
   const go = action => {
     if(!merchant) return;
+    if(action === 'orders' || action === 'takeout'){
+      const view = action === 'takeout' ? 'takeout' : 'dinein';
+      location.assign(`/restaurant/operations/?merchant=${encodeURIComponent(query.get('merchant') || '')}&view=${view}&restaurant_v=5.417`);
+      return;
+    }
     location.assign(`/?merchant_admin=${encodeURIComponent(action)}&merchant_id=${encodeURIComponent(merchant.user_id)}&from=merchant_manage`);
   };
   const count = async path => {
