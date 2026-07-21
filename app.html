@@ -73,6 +73,7 @@
 <script src="./shared/feed-cache.js?v=5.432"></script>
 <script src="./shared/feed-render.js?v=5.433"></script>
 <script src="./shared/retry-controller.js?v=5.434"></script>
+<script src="./shared/media-cache.js?v=5.435"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3344,7 +3345,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.434';
+const APP_VERSION = '5.435';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17346,7 +17347,6 @@ const MEDIA_CACHE_META_KEY = 'leshenghuo-media-cache-meta-v2';
 // Upper bound only. The operating system/browser may grant less space per device.
 const MEDIA_CACHE_MAX_BYTES = 3 * 1024 * 1024 * 1024;
 const MEDIA_CACHE_MAX_ENTRIES = 1200;
-const mediaCachePending = new Set();
 const POSTS_REFRESH_COOLDOWN_MS = 30000;
 const POSTS_NETWORK_BACKOFF_MS = 6000;
 const POSTS_FEED_LIMIT = 24;
@@ -17361,7 +17361,14 @@ const postsRetryController = window.LeshenghuoRetryController?.create({
 const hydratedPostIds = new Set();
 
 function isDataImageUrl(value){ return typeof value === 'string' && value.startsWith('data:image/'); }
-function isR2MediaUrl(value){ return typeof value === 'string' && value.startsWith(R2_MEDIA_PUBLIC_ORIGIN + '/'); }
+const mediaCacheController = window.LeshenghuoMediaCache?.create({
+  publicOrigin: R2_MEDIA_PUBLIC_ORIGIN,
+  cacheName: MEDIA_CACHE_NAME,
+  metaKey: MEDIA_CACHE_META_KEY,
+  maxBytes: MEDIA_CACHE_MAX_BYTES,
+  maxEntries: MEDIA_CACHE_MAX_ENTRIES
+});
+function isR2MediaUrl(value){ return mediaCacheController ? mediaCacheController.isMediaUrl(value) : typeof value === 'string' && value.startsWith(R2_MEDIA_PUBLIC_ORIGIN + '/'); }
 async function dataUrlToBlob(dataUrl){
   const source = await fetch(dataUrl);
   if(!source.ok) throw new Error('图片读取失败');
@@ -17427,42 +17434,11 @@ async function uploadPostMediaAssets(values, existingThumbnails=[]){
   }
   return { originals, thumbnails };
 }
-function mediaCacheMeta(){
-  try { return JSON.parse(localStorage.getItem(MEDIA_CACHE_META_KEY) || '{}'); } catch(error) { return {}; }
-}
-function saveMediaCacheMeta(meta){
-  try { localStorage.setItem(MEDIA_CACHE_META_KEY, JSON.stringify(meta)); } catch(error) {}
-}
 async function warmMediaCache(url){
-  if(!isR2MediaUrl(url) || !('caches' in window) || mediaCachePending.has(url)) return;
-  mediaCachePending.add(url);
-  try {
-    const cache = await caches.open(MEDIA_CACHE_NAME);
-    // Existing edge objects were cached before R2 CORS headers were enabled.
-    // A versioned request bypasses those stale responses without changing media URLs in posts.
-    const cacheUrl = new URL(url);
-    cacheUrl.searchParams.set('media_cache_v', '2');
-    const cacheKey = cacheUrl.toString();
-    const existing = await cache.match(cacheKey);
-    const meta = mediaCacheMeta();
-    if(existing){ meta[cacheKey] = Object.assign({}, meta[cacheKey], { touchedAt:Date.now() }); saveMediaCacheMeta(meta); return; }
-    const response = await fetch(cacheKey, { mode:'cors', cache:'force-cache' });
-    if(!response.ok) return;
-    const size = Number(response.headers.get('content-length')) || (await response.clone().blob()).size || 0;
-    await cache.put(cacheKey, response);
-    meta[cacheKey] = { size, touchedAt:Date.now() };
-    let entries = Object.entries(meta);
-    let total = entries.reduce((sum, [,item]) => sum + Number(item.size || 0), 0);
-    entries.sort((a,b) => Number(a[1].touchedAt || 0) - Number(b[1].touchedAt || 0));
-    while((total > MEDIA_CACHE_MAX_BYTES || entries.length > MEDIA_CACHE_MAX_ENTRIES) && entries.length){
-      const [oldUrl, item] = entries.shift();
-      await cache.delete(oldUrl); delete meta[oldUrl]; total -= Number(item.size || 0);
-    }
-    saveMediaCacheMeta(meta);
-  } catch(error) { console.info('媒体本地缓存跳过:', error.message); }
-  finally { mediaCachePending.delete(url); }
+  if(mediaCacheController) return mediaCacheController.warm(url);
 }
 function warmPostMediaCache(list, detail=false){
+  if(mediaCacheController) return mediaCacheController.warmPosts(list, detail);
   const urls = [];
   (list || []).forEach(post => {
     if(detail && Array.isArray(post.images)) urls.push(...post.images);
@@ -18554,7 +18530,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Feed Retry Controller】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Media Cache】`);
 </script>
 </body>
 </html>
