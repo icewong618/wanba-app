@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.443';
+  const version = '5.444';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -79,6 +79,7 @@
 <script src="./shared/app-update-manager.js?v=5.441"></script>
 <script src="./shared/native-deep-links.js?v=5.442"></script>
 <script src="./shared/app-gesture-navigation.js?v=5.443"></script>
+<script src="./shared/app-pull-refresh.js?v=5.444"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3350,7 +3351,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.443';
+const APP_VERSION = '5.444';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17426,34 +17427,6 @@ window.addEventListener('resize', updateFixedTopLayout);
 window.addEventListener('orientationchange', () => setTimeout(updateFixedTopLayout, 250));
 
 /* ---------- App 下拉刷新：仅在各页面顶部触发 ---------- */
-let pullRefreshStartY = 0;
-let pullRefreshDistance = 0;
-let pullRefreshTracking = false;
-let pullRefreshBusy = false;
-const PULL_REFRESH_THRESHOLD = 72;
-function pullRefreshIndicator(state='hidden', label='下拉刷新'){
-  const el = document.getElementById('pullRefreshIndicator');
-  const text = document.getElementById('pullRefreshLabel');
-  if(!el || !text) return;
-  text.textContent = label;
-  el.classList.toggle('show', state !== 'hidden');
-  el.classList.toggle('ready', state === 'ready');
-  el.classList.toggle('loading', state === 'loading');
-}
-function pullRefreshBlockedTarget(target){
-  if(!target || !target.closest) return false;
-  return !!target.closest('input,textarea,select,button,a,iframe,video,.image-carousel,.yt-wrap,.tiktok-wrap,.share-sheet,.overlay.open,.feedback-overlay.open,.content-report-overlay.open,.my-feedback-overlay.open,.beta-info-overlay.open,.policy-overlay.open');
-}
-function pageAtTopForPullRefresh(target){
-  if((window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 3) return false;
-  let node = target && target.nodeType === 1 ? target : null;
-  while(node && node !== document.body){
-    const style = window.getComputedStyle(node);
-    if(/auto|scroll/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2 && node.scrollTop > 3) return false;
-    node = node.parentElement;
-  }
-  return true;
-}
 async function refreshActiveAppPage(){
   const tab = currentTab || 'home';
   if(tab === 'home'){
@@ -17478,43 +17451,9 @@ async function refreshActiveAppPage(){
     else renderAdminPanel();
   }
 }
-function initAppPullToRefresh(){
-  document.addEventListener('touchstart', event => {
-    if(!isEmbeddedAppEntry() || pullRefreshBusy || event.touches.length !== 1 || pullRefreshBlockedTarget(event.target) || !pageAtTopForPullRefresh(event.target)) return;
-    pullRefreshTracking = true;
-    pullRefreshStartY = event.touches[0].clientY;
-    pullRefreshDistance = 0;
-  }, {passive:true});
-  document.addEventListener('touchmove', event => {
-    if(!pullRefreshTracking || pullRefreshBusy || event.touches.length !== 1) return;
-    const distance = Math.max(0, event.touches[0].clientY - pullRefreshStartY);
-    if(distance <= 0){ pullRefreshTracking = false; pullRefreshIndicator(); return; }
-    pullRefreshDistance = Math.min(distance, PULL_REFRESH_THRESHOLD + 34);
-    if(distance > 8 && event.cancelable) event.preventDefault();
-    pullRefreshIndicator(pullRefreshDistance >= PULL_REFRESH_THRESHOLD ? 'ready' : 'pulling', pullRefreshDistance >= PULL_REFRESH_THRESHOLD ? '松开刷新' : '下拉刷新');
-  }, {passive:false});
-  document.addEventListener('touchend', async () => {
-    if(!pullRefreshTracking) return;
-    const shouldRefresh = pullRefreshDistance >= PULL_REFRESH_THRESHOLD;
-    pullRefreshTracking = false;
-    pullRefreshDistance = 0;
-    if(!shouldRefresh){ pullRefreshIndicator(); return; }
-    pullRefreshBusy = true;
-    pullRefreshIndicator('loading', '正在刷新');
-    try {
-      await refreshActiveAppPage();
-      pullRefreshIndicator('loading', '刷新完成');
-      setTimeout(() => pullRefreshIndicator(), 500);
-    } catch(e){
-      console.warn('下拉刷新失败:', e.message);
-      pullRefreshIndicator('loading', '刷新失败，请重试');
-      setTimeout(() => pullRefreshIndicator(), 900);
-    } finally {
-      pullRefreshBusy = false;
-    }
-  }, {passive:true});
-  document.addEventListener('touchcancel', () => { pullRefreshTracking = false; pullRefreshDistance = 0; if(!pullRefreshBusy) pullRefreshIndicator(); }, {passive:true});
-}
+const appPullRefresh = window.LeshenghuoAppPullRefresh?.create({ isEnabled:isEmbeddedAppEntry, refresh:refreshActiveAppPage });
+function pullRefreshIndicator(state='hidden', label='下拉刷新'){ return appPullRefresh?.indicator(state, label); }
+function initAppPullToRefresh(){ return appPullRefresh?.bind(); }
 initAppPullToRefresh();
 
 /* ---------- 原生 App 内独立模块导航 ---------- */
@@ -18218,7 +18157,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared App Gesture Navigation】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared App Pull Refresh】`);
 </script>
 </body>
 </html>
