@@ -27,8 +27,8 @@
   }
   function typeText(type) { return type === 'sell_quote' ? '卖车估价' : type === 'test_drive' ? '预约试驾' : '车辆咨询'; }
   function statusText(status) { return ({new:'已提交',contacted:'商家已联系',scheduled:'已安排',reschedule_requested:'已申请改期',cancelled:'已取消',quoted:'等待你确认',quote_accepted:'已接受报价',quote_declined:'已拒绝报价',closed:'已完成',archived:'已归档'})[status] || status; }
-  function openMerchant(slug) { location.assign(`/autos/?merchant=${encodeURIComponent(slug)}&auto_v=5.399`); }
-  function openListing(slug) { location.assign(`/autos/?merchant=${encodeURIComponent(slug)}&auto_v=5.399`); }
+  function openMerchant(slug) { location.assign(`/autos/?merchant=${encodeURIComponent(slug)}&auto_v=5.401`); }
+  function openListing(slug) { location.assign(`/autos/?merchant=${encodeURIComponent(slug)}&auto_v=5.401`); }
   function savedHtml() {
     const saved = state.data.saved || [];
     return saved.length ? saved.map(car => `<article class="mine-card"><button style="all:unset;display:contents;cursor:pointer" onclick="AutoMine.openListing('${esc(car.merchant_slug)}')">${Array.isArray(car.photos) && car.photos[0] ? `<img src="${esc(car.photos[0])}" alt="">` : '<div class="placeholder">🚘</div>'}<div><span class="chip">${esc(car.vehicle_type || '车辆')}</span><h2>${esc(car.title)}</h2><p>${esc([car.year,car.mileage ? `${Number(car.mileage).toLocaleString()} mi` : '',car.fuel_type,car.transmission].filter(Boolean).join(' · '))}</p><strong>${money(car.price)}</strong><p class="merchant">${esc(car.merchant_name)}</p></div></button><div class="buttons"><button class="outline" onclick="AutoMine.openListing('${esc(car.merchant_slug)}')">查看车辆</button><button class="primary" onclick="AutoMine.openMerchant('${esc(car.merchant_slug)}')">联系商家</button></div></article>`).join('') : '<div class="empty">还没有收藏车辆。浏览车辆时点爱心，即可在这里统一查看。</div>';
@@ -52,10 +52,12 @@
       const response = await api('/rest/v1/rpc/merchant_auto_customer_center', {method:'POST',body:'{}'});
       const data = await response.json();
       if (!response.ok) throw new Error(data?.message || 'load_failed');
-      state.data = { saved:Array.isArray(data?.saved) ? data.saved : [], leads:Array.isArray(data?.leads) ? data.leads : [] };
+      state.data = { saved:Array.isArray(data?.saved) ? data.saved : [], leads:Array.isArray(data?.leads) ? data.leads : [], sales:Array.isArray(data?.sales) ? data.sales : [] };
       render();
     } catch (error) { app.innerHTML = `${top('我的车辆')}<div class="empty">暂时无法读取你的车辆记录，请稍后刷新重试。</div>`; }
   }
+  const renderAutoMineWithSales = render;
+  render = function(){renderAutoMineWithSales();const sales=state.data.sales||[],note=app.querySelector('.mine-note');if(!note||!sales.length)return;note.insertAdjacentHTML('beforebegin',`<section class="mine-sales"><h2>购车收据</h2>${sales.map(sale=>`<article class="mine-card"><div class="placeholder">✓</div><div><span class="chip">已成交</span><h2>${esc(sale.listing_title||'车辆成交')}</h2><p class="merchant">${esc(sale.merchant_name)}</p><p>收据编号：${esc(sale.receipt_number)}</p><strong>${money(sale.sale_amount)}</strong><p>${esc(new Date(sale.completed_at).toLocaleString('zh-CN'))}</p></div></article>`).join('')}</section>`);};
   window.AutoMine = { tab(tab){state.tab=tab;render()}, openMerchant, openListing, back:exit, close:exit };
   load();
 })();
