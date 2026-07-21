@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.432';
+  const version = '5.433';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -71,6 +71,7 @@
 <script src="./shared/module-runtime.js?v=5.430"></script>
 <script src="./shared/feed-data.js?v=5.431"></script>
 <script src="./shared/feed-cache.js?v=5.432"></script>
+<script src="./shared/feed-render.js?v=5.433"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3342,7 +3343,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.432';
+const APP_VERSION = '5.433';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -11256,6 +11257,29 @@ function restoreFeedCategory(category){
 }
 
 /* ---------------- render: feed ---------------- */
+function feedCardHtml(p){
+  const media = postCardMediaHtml(p, 40);
+  const stub = isSignupEvent(p.event) ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
+  return `
+  <div class="card" onclick="openPost(${p.id})">
+    <div class="card-media">
+      ${media}
+      ${cardCategoryTag(p.category, p.subcategory)}
+      ${mediaWatermarkHtml(p.author)}
+      ${stub}
+    </div>
+    <div class="card-body">
+      <div class="card-title">${p.title}</div>
+      <div class="card-meta">
+        <div class="author">
+          ${avatarHomeLinkHtml(p.user_id, p.author, 20)}
+          <span class="author-name" onclick="event.stopPropagation();openUserPublicPage('${String(p.user_id || '').replace(/'/g, '')}','${String(p.author || '乐生活用户').replace(/'/g, '')}')" style="display:flex;align-items:center;gap:5px;min-width:0;cursor:pointer;">${authorNameHtml(p.author, p.user_id)}</span>
+        </div>
+        <div class="stat-row"><span>${p.liked?'♥':'♡'} ${p.likes}</span></div>
+      </div>
+    </div>
+  </div>`;
+}
 function renderFeed(){
   const el = document.getElementById('feed');
   if(!el) return;
@@ -11269,47 +11293,22 @@ function renderFeed(){
     if(currentSubcategory !== '全部') list = list.filter(p => p.subcategory === currentSubcategory);
   }
   list = orderedFeedPosts(list);
-  if(list.length===0){
-    if(feedIsLoading){
-      el.innerHTML = Array.from({length:4}, () => `<div class="feed-loading-card" aria-label="正在加载笔记"><div class="feed-loading-media"></div><div class="feed-loading-lines"><i></i><i></i></div></div>`).join('');
-      return;
-    }
-    if(feedLoadFailed){
-      el.innerHTML = `<div class="empty" style="grid-column:1/-1;"><span class="display">内容暂时没连上</span>请检查网络后重试<br><button onclick="loadPostsFromSupabase({force:true})" style="margin-top:12px;padding:9px 16px;border-radius:999px;border:1px solid var(--sage);background:#fff;color:var(--sage-dark);font-weight:900;">重新加载</button></div>`;
-      return;
-    }
-    el.innerHTML = `<div class="empty" style="grid-column:1/-1;">
-      <span class="display">这里还空空的</span>
-      ${currentTag ? '暂时没有符合条件的内容,换个分类看看' : '成为第一个分享的人吧'}
-    </div>`;
+  const emptyHtml = `<div class="empty" style="grid-column:1/-1;"><span class="display">这里还空空的</span>${currentTag ? '暂时没有符合条件的内容,换个分类看看' : '成为第一个分享的人吧'}</div>`;
+  const result = window.LeshenghuoFeedRender?.render({
+    element: el,
+    list,
+    loading: feedIsLoading,
+    failed: feedLoadFailed,
+    cardHtml: feedCardHtml,
+    emptyHtml,
+    onRetry: () => loadPostsFromSupabase({force:true})
+  });
+  if(result?.rendered){
+    if(result.hasItems) warmPostMediaCache(list, false);
     return;
   }
-  el.innerHTML = list.map(p=>{
-    const media = postCardMediaHtml(p, 40);
-    const stub = isSignupEvent(p.event) ? `<div class="stub display">${p.event.userJoined?'已报名':(p.event.capacity-p.event.registered)+'席剩余'}</div>` : '';
-    return `
-    <div class="card" onclick="openPost(${p.id})">
-      <div class="card-media">
-        ${media}
-        ${cardCategoryTag(p.category, p.subcategory)}
-        ${mediaWatermarkHtml(p.author)}
-        ${stub}
-      </div>
-      <div class="card-body">
-        <div class="card-title">${p.title}</div>
-        <div class="card-meta">
-          <div class="author">
-            ${avatarHomeLinkHtml(p.user_id, p.author, 20)}
-            <span class="author-name" onclick="event.stopPropagation();openUserPublicPage('${String(p.user_id || '').replace(/'/g, '')}','${String(p.author || '乐生活用户').replace(/'/g, '')}')" style="display:flex;align-items:center;gap:5px;min-width:0;cursor:pointer;">${authorNameHtml(p.author, p.user_id)}</span>
-          </div>
-          <div class="stat-row">
-            <span>${p.liked?'♥':'♡'} ${p.likes}</span>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-  warmPostMediaCache(list, false);
+  el.innerHTML = list.length ? list.map(feedCardHtml).join('') : emptyHtml;
+  if(list.length) warmPostMediaCache(list, false);
 }
 function customPostTagLabel(value){ return String(value || '').trim().replace(/^#+/, '').slice(0, 60); }
 function customPostTagHtml(value){
@@ -17849,9 +17848,9 @@ window.addEventListener('message', event => {
   closeInternalModule();
   if(detail.route === 'home') return switchTab('home');
   if(detail.route === 'profile') return switchTab('profile');
-  if(detail.route === 'week') return openInternalModule('/week/', '5.432');
-  if(detail.route === 'deals') return openInternalModule('/deals/', '5.432');
-  if(detail.route === 'message') return openInternalModule('/messages/', '5.432', detail.params || {});
+  if(detail.route === 'week') return openInternalModule('/week/', '5.433');
+  if(detail.route === 'deals') return openInternalModule('/deals/', '5.433');
+  if(detail.route === 'message') return openInternalModule('/messages/', '5.433', detail.params || {});
   if(detail.route === 'post'){
     switchTab('home');
     return setTimeout(() => openPost(detail.id), 80);
@@ -17870,18 +17869,18 @@ window.switchTab = function(tab){
   if(tab === 'home' || tab === 'profile' || tab === 'admin') closeInternalModule();
   // 消息中心改由独立模块承载，避免通知与私信继续耦合在首页主程序中。
   if(tab === 'message'){
-    openInternalModule('/messages/', '5.432');
+    openInternalModule('/messages/', '5.433');
     return;
   }
   // 本周活动统一进入独立模块：日期筛选、活动笔记与后续票务/报名活动共用同一入口。
   if(tab === 'week'){
-    openInternalModule('/week/', '5.432');
+    openInternalModule('/week/', '5.433');
     return;
   }
   // 省钱页统一使用独立模块。它与主站同域，同一个 App WebView 内跳转，
   // 不使用 window.open，因此不会拉起外部浏览器。
   if(tab === 'deals'){
-    openInternalModule('/deals/', '5.432');
+    openInternalModule('/deals/', '5.433');
     return;
   }
   ensureAdminPageAtRoot();
@@ -18536,7 +18535,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Feed Cache State】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Feed Render Shell】`);
 </script>
 </body>
 </html>
