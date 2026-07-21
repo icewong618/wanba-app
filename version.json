@@ -1,5 +1,5 @@
 {
-  "version": "5.449",
+  "version": "5.450",
   "updated_at": "2026-07-21",
-  "message": "Shared Auth API"
+  "message": "Shared Supabase Client"
 }
