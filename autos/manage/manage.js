@@ -101,7 +101,7 @@ window.AutoAdmin={...window.AutoAdmin,save};
 function openMainTab(tab){
   const target=new URL('/',location.origin);
   target.searchParams.set('tab',tab);
-  target.searchParams.set('app_v','5.409');
+  target.searchParams.set('app_v','5.410');
   if(new URLSearchParams(location.search).get('app_v')) target.searchParams.set('embedded_app','1');
   location.assign(target.toString());
 }
@@ -160,6 +160,35 @@ async function saveLeadFollowUp(){
   render();
 }
 window.AutoAdmin={...window.AutoAdmin,saveLeadFollowUp};
+function privateNumber(id){const value=document.getElementById(id)?.value.trim()||'';return value===''?'':value;}
+const editViewBeforeProfit=editView;
+editView=function(){
+  editViewBeforeProfit();
+  if(document.getElementById('autoPurchaseSource'))return;
+  const description=document.getElementById('autoDescription');
+  if(!description)return;
+  const listing=S.edit||{};
+  description.closest('.field')?.insertAdjacentHTML('beforebegin',`<section class="card auto-private-data"><b>商家经营数据</b><p>仅商家后台可见，不会公开给顾客。</p><label class="field">车辆来源<select id="autoPurchaseSource">${['','置换收购','个人收购','拍卖采购','批发采购','寄售','其他'].map(value=>`<option value="${esc(value)}" ${listing.purchase_source===value?'selected':''}>${esc(value||'未填写')}</option>`).join('')}</select></label><div class="cols"><label class="field">进货价（美元）<input id="autoAcquisitionPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(listing.acquisition_price??'')}"></label><label class="field">整备成本（美元）<input id="autoReconditioningCost" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(listing.reconditioning_cost??'')}"></label></div><label class="field">内部成本备注<textarea id="autoCostNote" maxlength="1000" placeholder="例如：轮胎、保养、清洁、维修等">${esc(listing.cost_note||'')}</textarea></label></section>`);
+};
+async function save(){
+  const get=id=>document.getElementById(id)?.value.trim()||'';
+  const payload={id:S.edit?.id,title:get('autoTitle'),make:get('autoMake'),model:get('autoModel'),year:get('autoYear'),price:get('autoPrice'),mileage:get('autoMileage'),vehicle_type:get('autoType'),fuel_type:get('autoFuel'),transmission:get('autoTransmission'),drivetrain:get('autoDrive'),exterior_color:get('autoColor'),vin:get('autoVin'),features:get('autoFeatures').split(/[，,]/).map(item=>item.trim()).filter(Boolean),photos:S.photos,description:get('autoDescription'),status:get('autoStatus'),is_certified:!!document.getElementById('autoCertified')?.checked,vehicle_report_url:get('autoVehicleReportUrl'),accident_history:get('autoAccidentHistory'),service_history:get('autoServiceHistory'),owner_count:get('autoOwnerCount'),warranty_status:get('autoWarrantyStatus'),title_status:get('autoTitleStatus'),purchase_source:get('autoPurchaseSource'),acquisition_price:privateNumber('autoAcquisitionPrice'),reconditioning_cost:privateNumber('autoReconditioningCost'),cost_note:get('autoCostNote')};
+  if(!payload.title){alert('请填写车辆标题。');return;}
+  if(payload.owner_count&&(!/^\d{1,2}$/.test(payload.owner_count)||Number(payload.owner_count)>99)){alert('过户次数请填写 0 到 99 之间的整数。');return;}
+  for(const field of ['acquisition_price','reconditioning_cost'])if(payload[field]!==''&&(!Number.isFinite(Number(payload[field]))||Number(payload[field])<0)){alert('经营成本请输入大于或等于 0 的金额。');return;}
+  const response=await api('/rest/v1/rpc/merchant_auto_save_listing',{method:'POST',body:JSON.stringify({p_merchant_user_id:S.merchantId,p_listing:payload})});
+  if(!response.ok){alert('保存失败，请确认已运行 v5.410 数据库更新后重试。');return;}
+  S.screen='home';await load();
+}
+function listingDays(listing){const from=new Date(listing.created_at||listing.updated_at||Date.now()).getTime();return Math.max(0,Math.floor((Date.now()-from)/86400000));}
+function autoProfit(listing,saleAmount){const revenue=Number(saleAmount??listing?.price??0),cost=Number(listing?.acquisition_price||0)+Number(listing?.reconditioning_cost||0);return revenue-cost;}
+function autoOperationsView(){
+  const listings=S.listings||[],sales=S.sales||[],available=listings.filter(item=>['available','reserved'].includes(item.status)),sold=sales.map(sale=>({...sale,listing:listings.find(item=>String(item.id)===String(sale.listing_id))})),estimated=available.reduce((sum,item)=>sum+autoProfit(item),0),realized=sold.reduce((sum,sale)=>sum+autoProfit(sale.listing,sale.sale_amount),0),avgDays=available.length?Math.round(available.reduce((sum,item)=>sum+listingDays(item),0)/available.length):0,stages=[['新线索','new'],['已联系','contacted'],['已安排','scheduled'],['已报价','quoted'],['成交 / 完成','closed']];
+  app.innerHTML=`${top('经营统计')}<div class="wrap"><div class="summary auto-ops-summary"><div><b>${money(estimated)}</b><span>在售预计毛利</span></div><div><b>${money(realized)}</b><span>已成交毛利</span></div><div><b>${avgDays}</b><span>平均库存天数</span></div></div><div class="actions"><button class="btn" onclick="AutoAdmin.home()">返回车辆库存</button><button class="btn" onclick="AutoAdmin.refresh()">刷新数据</button></div><section><div class="section-title"><h2>销售漏斗</h2><span>客户线索状态</span></div><div class="card funnel-list">${stages.map(([label,status])=>`<div><span>${label}</span><b>${(S.leads||[]).filter(lead=>lead.status===status).length}</b></div>`).join('')}</div></section><section><div class="section-title"><h2>库存概览</h2><span>仅商家可见</span></div>${available.length?available.sort((a,b)=>listingDays(b)-listingDays(a)).map(item=>`<article class="card auto-profit-row"><div><b>${esc(item.title)}</b><span>${esc(item.purchase_source||'未填写车辆来源')} · 库存 ${listingDays(item)} 天</span><small>进货 ${money(item.acquisition_price)} + 整备 ${money(item.reconditioning_cost)}</small></div><strong>${money(autoProfit(item))}</strong></article>`).join(''):'<div class="empty">暂无在售库存。</div>'}</section></div>`;
+}
+const renderBeforeProfit=render;
+render=function(){if(S.screen==='operations')return autoOperationsView();renderBeforeProfit();if(S.screen==='home'){const actions=document.querySelector('#autoManageApp .actions');if(actions&&!document.getElementById('autoOperationsButton'))actions.insertAdjacentHTML('beforeend','<button id="autoOperationsButton" class="btn" onclick="AutoAdmin.operations()">经营统计</button>');}};
+window.AutoAdmin={...window.AutoAdmin,save,operations(){S.screen='operations';render();}};
 window.AutoAdmin={...window.AutoAdmin,mainTab:openMainTab};
 ensureMainNavigation();
 load();
