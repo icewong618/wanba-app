@@ -28,3 +28,8 @@
 .compare-grid{grid-template-columns:92px repeat(var(--compare-count,2),minmax(180px,1fr))!important;width:max-content;min-width:100%;margin:0!important;overflow:visible!important;border:0!important;border-radius:0!important}
 .compare-grid .compare-row>b,.compare-grid .compare-row>span{min-width:0}
 @media(min-width:650px){.auto-compare-fab{bottom:24px}}
+
+/* v5.406: keep the detail CTA above the host app navigation and favor a compact heart control. */
+.sticky{bottom:calc(82px + env(safe-area-inset-bottom))!important;margin-bottom:8px}
+.saved-card .save-button{width:42px!important;min-width:42px!important;padding:6px!important;font-size:23px!important;line-height:1!important}
+@media(min-width:650px){.sticky{bottom:24px!important}}

@@ -3,7 +3,7 @@
   const SUPABASE_KEY='sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app=document.getElementById('autoApp');
   const query=new URLSearchParams(location.search);
-  const state={merchant:null,listings:[],tab:'buy',screen:'list',selected:null,sellPhotos:[],savedIds:new Set(),compareIds:new Set(),filters:{type:'',fuel:'',price:''}};
+  const state={merchant:null,listings:[],tab:query.get('tab')==='sell'?'sell':'buy',screen:'list',selected:null,sellPhotos:[],savedIds:new Set(),compareIds:new Set(),filters:{type:'',fuel:'',price:''}};
   const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const money=v=>`$${Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
   const tr=key=>window.LeshenghuoI18n?.t?.(key)||key;
@@ -114,7 +114,7 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     event?.stopPropagation();
     toggleCompare(id);
   }
-  function myVehicles(){location.assign(`/autos/mine/?v=5.405&refresh_t=${Date.now()}`);}
+  function myVehicles(){location.assign(`/autos/mine/?v=5.406&refresh_t=${Date.now()}`);}
   function renderCompareView(){
     const cars=state.listings.filter(car=>state.compareIds.has(String(car.id)));
     if(cars.length<2){alert('至少选择两辆车后再对比。');state.screen='list';return renderList();}
@@ -152,7 +152,7 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     const filters=`<section class="filters"><select onchange="Auto.filter('type',this.value)"><option value="">全部车型</option>${['轿车','SUV','VAN','皮卡','跑车','其他'].map(v=>`<option ${state.filters.type===v?'selected':''}>${v}</option>`).join('')}</select><select onchange="Auto.filter('fuel',this.value)"><option value="">全部能源</option>${['汽油','柴油','混动','纯电'].map(v=>`<option ${state.filters.fuel===v?'selected':''}>${v}</option>`).join('')}</select><select onchange="Auto.filter('price',this.value)"><option value="">全部价格</option><option value="10000">$10,000 以下</option><option value="20000">$20,000 以下</option><option value="30000">$30,000 以下</option><option value="50000">$50,000 以下</option></select></section>`;
     const cards=cars.length?cars.map(car=>{
       const id=esc(car.id),saved=state.savedIds.has(String(car.id)),checked=state.compareIds.has(String(car.id)),disabled=!checked&&state.compareIds.size>=3;
-      return `<article class="car-card saved-card"><button type="button" class="car-main" onclick="Auto.openVehicle(event,'${id}')">${photo(car)}<div><span class="chip">${esc(car.vehicle_type||'车辆')}</span>${car.is_certified?'<span class="chip">认证车况</span>':''}<h2>${esc(car.title)}</h2><p>${esc([car.year,car.mileage?`${Number(car.mileage).toLocaleString()} mi`:'里程待补充',car.fuel_type,car.transmission].filter(Boolean).join(' · '))}</p><strong class="price">${money(car.price)}</strong></div></button><div class="auto-card-actions"><button class="compare-toggle ${checked?'on':''}" type="button" ${disabled?'disabled':''} onclick="Auto.toggleCompareCard(event,'${id}')">${checked?'✓ 已选对比':'＋ 对比'}</button><button class="save-button ${saved?'saved':''}" type="button" aria-label="${saved?'取消收藏':'收藏车辆'}" onclick="Auto.toggleFavorite(event,'${id}')">${saved?'♥ 已收藏':'♡ 收藏'}</button></div></article>`;
+      return `<article class="car-card saved-card"><button type="button" class="car-main" onclick="Auto.openVehicle(event,'${id}')">${photo(car)}<div><span class="chip">${esc(car.vehicle_type||'车辆')}</span>${car.is_certified?'<span class="chip">认证车况</span>':''}<h2>${esc(car.title)}</h2><p>${esc([car.year,car.mileage?`${Number(car.mileage).toLocaleString()} mi`:'里程待补充',car.fuel_type,car.transmission].filter(Boolean).join(' · '))}</p><strong class="price">${money(car.price)}</strong></div></button><div class="auto-card-actions"><button class="compare-toggle ${checked?'on':''}" type="button" ${disabled?'disabled':''} onclick="Auto.toggleCompareCard(event,'${id}')">${checked?'✓ 已选对比':'＋ 对比'}</button><button class="save-button ${saved?'saved':''}" type="button" title="${saved?'取消收藏':'收藏车辆'}" aria-label="${saved?'取消收藏':'收藏车辆'}" onclick="Auto.toggleFavorite(event,'${id}')">${saved?'♥':'♡'}</button></div></article>`;
     }).join(''):'<div class="empty">暂无符合条件的车辆。</div>';
     return `${compareBar}${filters}<div class="count">找到 <b>${cars.length}</b> 辆可售车辆</div><section class="cards">${cards}</section>`;
   };
