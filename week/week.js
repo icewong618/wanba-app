@@ -37,7 +37,7 @@
   const isToday = row => { const period = periodFor(row); const {today} = weekRange(); return period ? overlaps(period.start,period.end,today,today) : legacyWeekTag(row); };
   const isWeekend = row => { const {end} = weekRange(); const saturday = addDays(end,-1); const period = periodFor(row); return period ? overlaps(period.start,period.end,saturday,end) : /本周末活动/.test(textFor(row)); };
   const dateLabel = row => { const period = periodFor(row); if(!period) return '本周活动'; const start = formatYmd(period.start).slice(5).replace('-','/'); const end = formatYmd(period.end).slice(5).replace('-','/'); return start === end ? start : `${start} - ${end}`; };
-  const cover = row => row?.image || (Array.isArray(row?.images) ? row.images[0] : '') || '';
+  const cover = row => row?.cover_image || row?.image || (Array.isArray(row?.images) ? row.images[0] : '') || '';
   const clean = value => String(value || '').replace(/\[\[.*?\]\]/g,'').trim();
   const rowMatchesFilter = row => state.filter === 'all' ? true : state.filter === 'today' ? isToday(row) : isWeekend(row);
   const filtered = () => state.rows.filter(isInWeek).filter(rowMatchesFilter).sort((a,b) => {
@@ -48,7 +48,7 @@
   const top = () => `<header class="module-top"><button onclick="WeekEvents.back()" aria-label="返回">‹</button><b>本周活动</b><span class="module-top-actions"><button class="module-language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button onclick="WeekEvents.refresh()" aria-label="刷新">↻</button></span></header>`;
   const card = row => {
     const image = cover(row); const tags = (Array.isArray(row.tags) ? row.tags : []).filter(Boolean).slice(0,2);
-    const event = eventFor(row); const type = event?.registration_enabled || Number(event?.capacity || 0) > 0 ? '可报名' : '活动';
+    const event = eventFor(row); const type = row.calendar_source_type === 'ticket' ? '票务' : (event?.registration_enabled || Number(event?.capacity || 0) > 0 ? '可报名' : '活动');
     return `<article class="event-card" onclick="WeekEvents.open('${esc(row.id)}')"><div class="event-cover">${image ? `<img src="${esc(image)}" alt="">` : ''}<span class="event-type">${type}</span></div><div class="event-content"><h2>${esc(row.title || '未命名活动')}</h2><div class="event-date">▣ ${esc(dateLabel(row))}</div>${row.location ? `<div class="event-location">⌖ ${esc(row.location)}</div>` : ''}<p class="event-desc">${esc(clean(row.excerpt || row.content) || '查看活动详情、时间与报名信息。')}</p>${tags.length ? `<div class="event-tags">${tags.map(tag => `<span>#${esc(tag)}</span>`).join('')}</div>` : ''}</div></article>`;
   };
   const render = () => {
@@ -61,7 +61,31 @@
     try {
       const res = await request(`/rest/v1/posts?select=${select}&or=(visibility.eq.public,visibility.is.null)&order=created_at.desc,id.desc&limit=300`);
       if(!res.ok) throw new Error(await res.text());
-      state.rows = await res.json();
+      const postRows = await res.json();
+      // 票务、报名等独立活动以后写入 activity_calendar_items；表尚未部署时仍保持帖子活动可用。
+      let calendarRows = [];
+      try {
+        const calendarRes = await request('/rest/v1/activity_calendar_items?status=eq.published&select=id,source_type,source_id,source_url,title,summary,cover_image,start_date,end_date,all_day,location,capacity,registered,registration_enabled,created_at&order=start_date.asc&limit=300');
+        if(calendarRes.ok){
+          const sourceRows = await calendarRes.json();
+          calendarRows = sourceRows.map(item => ({
+            id: `calendar-${item.id}`,
+            title: item.title,
+            content: item.summary || '',
+            excerpt: item.summary || '',
+            image: item.cover_image || '',
+            cover_image: item.cover_image || '',
+            location: item.location || '',
+            created_at: item.created_at,
+            calendar_source_type: item.source_type,
+            source_id: item.source_id,
+            source_url: item.source_url,
+            event: { start_date:item.start_date, end_date:item.end_date, all_day:item.all_day, capacity:item.capacity, registered:item.registered, registration_enabled:item.registration_enabled },
+            tags: item.source_type === 'ticket' ? ['票务活动'] : ['报名活动']
+          }));
+        }
+      } catch(e) { console.warn('独立活动读取跳过:', e.message); }
+      state.rows = [...postRows, ...calendarRows];
       render();
     } catch(error) {
       console.warn('本周活动读取失败:', error.message);
@@ -72,7 +96,15 @@
     back: () => history.length > 1 ? history.back() : location.assign('/'),
     refresh: load,
     filter: value => { state.filter = value; render(); },
-    open: id => location.assign(`/?post=${encodeURIComponent(id)}`)
+    open: id => {
+      const row = state.rows.find(item => String(item.id) === String(id));
+      if(String(id).startsWith('calendar-')){
+        if(row?.source_url) return location.assign(row.source_url);
+        if(row?.source_id && /^\d+$/.test(String(row.source_id))) return location.assign(`/?post=${encodeURIComponent(row.source_id)}`);
+        return alert('该活动详情正在准备中，请稍后再试。');
+      }
+      location.assign(`/?post=${encodeURIComponent(id)}`);
+    }
   };
   load();
 })();
