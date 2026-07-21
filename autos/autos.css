@@ -37,3 +37,17 @@
 /* v5.407: reserve space for the host app's persistent bottom navigation. */
 .auto-app{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 @media(min-width:650px){.auto-app{padding-bottom:34px}}
+
+/* v5.408: photo previews in the sell form must never expand the page width. */
+.sell-photo-section{display:grid;gap:8px;min-width:0}
+.sell-photo-heading{display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.sell-photo-heading span{color:var(--soft);font-size:12px;font-weight:800}
+.sell-photo-picker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;width:100%;max-width:100%;min-width:0;overflow:hidden}
+.sell-photo-preview,.sell-photo-add,.sell-photo-limit{position:relative;min-width:0;aspect-ratio:1;overflow:hidden;border-radius:10px}
+.sell-photo-preview{border:1px solid var(--line);background:#ece9df}
+.sell-photo-preview img{display:block;width:100%;height:100%;max-width:100%;object-fit:cover}
+.sell-photo-remove{position:absolute;top:5px;right:5px;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:rgba(38,40,34,.82);color:#fff;font-size:20px;line-height:1;cursor:pointer}
+.sell-photo-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1.5px dashed var(--sage);background:#f1f7f1;color:var(--sage-dark);font-weight:900;cursor:pointer}
+.sell-photo-add b{font-size:29px;line-height:1}.sell-photo-add small{font-size:11px}.sell-photo-add input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.sell-photo-limit{display:grid;place-items:center;padding:8px;background:#f0eee7;color:var(--soft);font-size:11px;text-align:center}
+@media(max-width:380px){.sell-photo-picker{grid-template-columns:repeat(3,minmax(0,1fr))}}
