@@ -1,17 +1,5 @@
 (() => {
-  const routeInAppShell = (route, payload={}) => {
-    if(window.parent === window) return false;
-    window.parent.postMessage({type:'leshenghuo-module-route',route,...payload}, window.location.origin);
-    return true;
-  };
-  document.addEventListener('click', event => {
-    const link = event.target.closest('.module-bottom-nav a');
-    if(!link || window.parent === window) return;
-    const path = new URL(link.href, window.location.origin).pathname.replace(/\/+$/, '') || '/';
-    const route = path === '/' ? 'home' : path === '/week' ? 'week' : path === '/deals' ? 'deals' : path === '/messages' ? 'message' : 'profile';
-    event.preventDefault();
-    routeInAppShell(route);
-  });
+  const routeInAppShell = (route, payload={}) => window.LeshenghuoModuleBridge?.route(route, payload) || false;
   const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app = document.getElementById('messagesApp');
