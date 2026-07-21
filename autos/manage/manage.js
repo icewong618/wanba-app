@@ -101,7 +101,7 @@ window.AutoAdmin={...window.AutoAdmin,save};
 function openMainTab(tab){
   const target=new URL('/',location.origin);
   target.searchParams.set('tab',tab);
-  target.searchParams.set('app_v','5.404');
+  target.searchParams.set('app_v','5.409');
   if(new URLSearchParams(location.search).get('app_v')) target.searchParams.set('embedded_app','1');
   location.assign(target.toString());
 }
@@ -112,6 +112,54 @@ function ensureMainNavigation(){
   if(document.getElementById('autoManageMainNav')) return;
   document.body.insertAdjacentHTML('beforeend',`<nav id="autoManageMainNav" aria-label="主导航" style="position:fixed;z-index:30;left:0;right:0;bottom:0;height:calc(58px + env(safe-area-inset-bottom));padding:7px max(10px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));display:grid;grid-template-columns:repeat(5,1fr);gap:3px;background:rgba(255,255,255,.98);border-top:1px solid #e4e0d4;box-shadow:0 -4px 14px rgba(38,42,37,.06)"><button style="border:0;background:transparent;color:#c93c6d;font:800 11px inherit" onclick="AutoAdmin.mainTab('home')">首页</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('week')">本周</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('deals')">省钱</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('message')">消息</button><button style="border:0;background:transparent;color:#777a71;font:800 11px inherit" onclick="AutoAdmin.mainTab('profile')">我</button></nav>`);
 }
+const loadBeforeLeadOperations=load;
+load=async function(){
+  await loadBeforeLeadOperations();
+  if(!S.merchantId)return;
+  try{
+    const response=await api('/rest/v1/rpc/merchant_auto_manager_list',{method:'POST',body:JSON.stringify({p_merchant_user_id:S.merchantId})});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.message||'lead_operations_load_failed');
+    S.team=Array.isArray(data.team)?data.team:[];
+    S.activities=Array.isArray(data.activities)?data.activities:[];
+    render();
+  }catch(error){
+    S.team=[];
+    S.activities=[];
+  }
+};
+function leadLocalValue(value){
+  if(!value)return '';
+  const date=new Date(value),offset=date.getTimezoneOffset();
+  return new Date(date.getTime()-offset*60000).toISOString().slice(0,16);
+}
+function leadFollowUpLabel(value){
+  return value?new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'未设置';
+}
+function leadActivityLabel(type){return ({note:'跟进备注',assignment:'分配负责人',follow_up:'设置回访',status:'更新状态'})[type]||'线索更新';}
+const leadViewBeforeLeadOperations=leadView;
+leadView=function(){
+  leadViewBeforeLeadOperations();
+  const lead=S.lead,target=document.querySelector('#autoManageApp .wrap');
+  if(!lead||!target||document.getElementById('autoLeadOperations'))return;
+  const rows=(S.activities||[]).filter(row=>String(row.lead_id)===String(lead.id)).slice(0,12);
+  target.insertAdjacentHTML('beforeend',`<section id="autoLeadOperations" class="card lead-operations"><div class="section-title"><h2>销售跟进</h2><span>仅商家团队可见</span></div><label class="field">负责人<select id="leadAssignedTo"><option value="">未分配</option>${(S.team||[]).map(member=>`<option value="${esc(member.user_id)}" ${String(member.user_id)===String(lead.assigned_to)?'selected':''}>${esc(member.name)}${member.role?` · ${esc(member.role)}`:''}</option>`).join('')}</select></label><label class="field">下次回访<input id="leadFollowUpAt" type="datetime-local" value="${leadLocalValue(lead.follow_up_at)}"></label><label class="field">本次跟进记录<textarea id="leadActivityNote" maxlength="1000" placeholder="例如：已电话沟通，客户周末到店试驾"></textarea></label><button class="btn primary" style="width:100%;margin-top:15px" onclick="AutoAdmin.saveLeadFollowUp()">保存销售跟进</button>${rows.length?`<div class="activity-list"><b>最近跟进</b>${rows.map(row=>`<div class="activity-item"><strong>${esc(leadActivityLabel(row.activity_type))}</strong><span>${esc(row.actor_name||'商家团队')} · ${esc(new Date(row.created_at).toLocaleString('zh-CN'))}</span>${row.note?`<p>${esc(row.note)}</p>`:''}${row.next_follow_up_at?`<small>下次回访：${esc(leadFollowUpLabel(row.next_follow_up_at))}</small>`:''}</div>`).join('')}</div>`:'<p class="activity-empty">还没有销售跟进记录。</p>'}</section>`);
+};
+async function saveLeadFollowUp(){
+  const lead=S.lead;
+  if(!lead)return;
+  const assigned=document.getElementById('leadAssignedTo')?.value||null;
+  const followUp=document.getElementById('leadFollowUpAt')?.value||null;
+  const note=document.getElementById('leadActivityNote')?.value.trim()||null;
+  const status=document.getElementById('leadStatus')?.value||lead.status;
+  const response=await api('/rest/v1/rpc/merchant_auto_update_lead_follow_up',{method:'POST',body:JSON.stringify({p_lead_id:lead.id,p_status:status,p_assigned_to:assigned,p_set_assignee:true,p_follow_up_at:followUp?new Date(followUp).toISOString():null,p_set_follow_up:true,p_note:note})});
+  if(!response.ok){alert('保存跟进失败，请确认已运行 v5.409 数据库更新后重试。');return;}
+  await load();
+  S.lead=S.leads.find(item=>String(item.id)===String(lead.id))||null;
+  S.screen=S.lead?'lead':'leads';
+  render();
+}
+window.AutoAdmin={...window.AutoAdmin,saveLeadFollowUp};
 window.AutoAdmin={...window.AutoAdmin,mainTab:openMainTab};
 ensureMainNavigation();
 load();
