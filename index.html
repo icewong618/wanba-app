@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.442';
+  const version = '5.443';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -78,6 +78,7 @@
 <script src="./shared/embedded-module-shell.js?v=5.440"></script>
 <script src="./shared/app-update-manager.js?v=5.441"></script>
 <script src="./shared/native-deep-links.js?v=5.442"></script>
+<script src="./shared/app-gesture-navigation.js?v=5.443"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3349,7 +3350,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.442';
+const APP_VERSION = '5.443';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3411,19 +3412,7 @@ async function checkRemoteAppVersion(){ return appUpdateManager?.checkRemoteVers
 function hideLaunchScreen(){ return appUpdateManager?.hideLaunch(); }
 function notifyAppReady(){ return appUpdateManager?.notifyReady(); }
 
-const APP_GESTURE_EDGE = 28;
-const APP_GESTURE_MIN_X = 74;
-const APP_GESTURE_MAX_Y = 48;
-let appNavBackStack = [];
-let appNavForwardStack = [];
-let appNavRestoring = false;
-let appGestureStart = null;
-function appGestureEnabled(){
-  return isEmbeddedAppEntry();
-}
-function appOverlayOpen(id){
-  return !!document.getElementById(id)?.classList.contains('open');
-}
+function appOverlayOpen(id){ return !!document.getElementById(id)?.classList.contains('open'); }
 function appCurrentRoute(){
   if(appOverlayOpen('searchOverlay')) return { type:'search' };
   if(appOverlayOpen('postOverlay') && activePostId != null) return { type:'post', id:activePostId };
@@ -3431,112 +3420,27 @@ function appCurrentRoute(){
   if(appOverlayOpen('userPublicOverlay')) return { type:'user', userId:document.getElementById('userPublicOverlay')?.dataset.userId || '', name:document.getElementById('userPublicOverlay')?.dataset.name || '' };
   return { type:'tab', tab:currentTab || 'home' };
 }
-function appRouteKey(route){
-  if(!route) return '';
-  return [route.type, route.tab || '', route.id || '', route.userId || '', route.name || ''].join(':');
-}
-function routeTabFromLocation(){
-  const tab = new URLSearchParams(window.location.search).get('tab') || '';
-  return ['home','week','deals','message','profile'].includes(tab) ? tab : '';
-}
-function appRememberRoute(){
-  if(!appGestureEnabled() || appNavRestoring) return;
-  const route = appCurrentRoute();
-  const key = appRouteKey(route);
-  if(!key || appRouteKey(appNavBackStack[appNavBackStack.length - 1]) === key) return;
-  appNavBackStack.push(route);
-  if(appNavBackStack.length > 30) appNavBackStack.shift();
-  appNavForwardStack = [];
-}
-function appCloseTransientViews(){
-  closeSearchPage();
-  closePost();
-  closeMerchantPublicPage();
-  closeUserPublicPage();
-}
-function appNavigateRoute(route){
-  if(!route) return;
-  appNavRestoring = true;
-  appCloseTransientViews();
-  setTimeout(() => {
-    if(route.type === 'tab') switchTab(route.tab || 'home');
-    else if(route.type === 'search') openSearchPage();
-    else if(route.type === 'post') openPost(route.id);
-    else if(route.type === 'merchant') openMerchantPublicPage(route.userId);
-    else if(route.type === 'user') openUserPublicPage(route.userId, route.name || '');
-    appNavRestoring = false;
-  }, 20);
-}
-function appGestureBack(){
-  if(!appGestureEnabled()) return false;
-  const current = appCurrentRoute();
-  const previous = appNavBackStack.pop();
-  if(previous){
-    appNavForwardStack.push(current);
-    appNavigateRoute(previous);
-    return true;
+const appGestureNavigation = window.LeshenghuoAppGestureNavigation?.create({
+  isEnabled: isEmbeddedAppEntry,
+  getCurrentRoute: appCurrentRoute,
+  getCurrentTab: () => currentTab || 'home',
+  navigate: (route, done) => {
+    closeSearchPage(); closePost(); closeMerchantPublicPage(); closeUserPublicPage();
+    setTimeout(() => {
+      if(route.type === 'tab') switchTab(route.tab || 'home');
+      else if(route.type === 'search') openSearchPage();
+      else if(route.type === 'post') openPost(route.id);
+      else if(route.type === 'merchant') openMerchantPublicPage(route.userId);
+      else if(route.type === 'user') openUserPublicPage(route.userId, route.name || '');
+      done?.();
+    }, 20);
   }
-  if(current.type !== 'tab'){
-    appNavForwardStack.push(current);
-    appNavigateRoute({ type:'tab', tab:currentTab || 'home' });
-    return true;
-  }
-  return false;
-}
-function appGestureForward(){
-  if(!appGestureEnabled()) return false;
-  const next = appNavForwardStack.pop();
-  if(!next) return false;
-  appNavBackStack.push(appCurrentRoute());
-  appNavigateRoute(next);
-  return true;
-}
-function isInteractiveGestureTarget(el){
-  return !!(el && el.closest && el.closest('input, textarea, select, button, iframe, video, .post-image-wrap, .xhs-video-wrap, .merchant-product-thumb, .avatar-crop-frame, .cover-crop-sheet'));
-}
-function bindAppEdgeGestures(){
-  if(window.__leshenghuoEdgeGesturesBound) return;
-  window.__leshenghuoEdgeGesturesBound = true;
-  const start = e => {
-    if(!appGestureEnabled() || !e.touches || e.touches.length !== 1) return;
-    const t = e.touches[0];
-    const w = window.innerWidth || document.documentElement.clientWidth || 390;
-    const fromLeft = t.clientX <= APP_GESTURE_EDGE;
-    const fromRight = t.clientX >= w - APP_GESTURE_EDGE;
-    if(!fromLeft && !fromRight) return;
-    if(isInteractiveGestureTarget(e.target)) return;
-    appGestureStart = { x:t.clientX, y:t.clientY, dir:fromLeft ? 'back' : 'forward', active:true };
-  };
-  const move = e => {
-    if(!appGestureStart || !appGestureStart.active || !e.touches || e.touches.length !== 1) return;
-    const t = e.touches[0];
-    const dx = t.clientX - appGestureStart.x;
-    const dy = Math.abs(t.clientY - appGestureStart.y);
-    const rightSwipe = appGestureStart.dir === 'back' && dx > APP_GESTURE_MIN_X;
-    const leftSwipe = appGestureStart.dir === 'forward' && dx < -APP_GESTURE_MIN_X;
-    if(dy > APP_GESTURE_MAX_Y){
-      appGestureStart.active = false;
-      return;
-    }
-    if(rightSwipe || leftSwipe) e.preventDefault();
-  };
-  const end = e => {
-    if(!appGestureStart || !appGestureStart.active) { appGestureStart = null; return; }
-    const t = (e.changedTouches && e.changedTouches[0]) || {};
-    const dx = (t.clientX || 0) - appGestureStart.x;
-    const dy = Math.abs((t.clientY || 0) - appGestureStart.y);
-    const handled = dy <= APP_GESTURE_MAX_Y && (
-      (appGestureStart.dir === 'back' && dx > APP_GESTURE_MIN_X && appGestureBack())
-      || (appGestureStart.dir === 'forward' && dx < -APP_GESTURE_MIN_X && appGestureForward())
-    );
-    if(handled) e.preventDefault();
-    appGestureStart = null;
-  };
-  document.addEventListener('touchstart', start, { passive:true });
-  document.addEventListener('touchmove', move, { passive:false });
-  document.addEventListener('touchend', end, { passive:false });
-  document.addEventListener('touchcancel', () => { appGestureStart = null; }, { passive:true });
-}
+});
+function routeTabFromLocation(){ return appGestureNavigation?.routeTabFromLocation() || ''; }
+function appRememberRoute(){ return appGestureNavigation?.remember(); }
+function appGestureBack(){ return appGestureNavigation?.back(); }
+function appGestureForward(){ return appGestureNavigation?.forward(); }
+function bindAppEdgeGestures(){ return appGestureNavigation?.bind(); }
 
 let currentUser = {
   name: '未登录用户',
@@ -18314,7 +18218,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Native Deep Links】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared App Gesture Navigation】`);
 </script>
 </body>
 </html>
