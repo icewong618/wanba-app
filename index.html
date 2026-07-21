@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.430';
+  const version = '5.431';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -69,6 +69,7 @@
 <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
 <script src="./i18n/i18n.js?v=5.404"></script>
 <script src="./shared/module-runtime.js?v=5.430"></script>
+<script src="./shared/feed-data.js?v=5.431"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3340,7 +3341,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.430';
+const APP_VERSION = '5.431';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17475,6 +17476,9 @@ function clearPostsRetry(){
   postsRetryDelayMs = POSTS_NETWORK_BACKOFF_MS;
 }
 function compactFeedPost(raw){
+  if(window.LeshenghuoFeedData?.compactPost){
+    return window.LeshenghuoFeedData.compactPost(raw, { isValidSubcategory: isValidPostSubcategory });
+  }
   return {
     id: raw.id,
     title: raw.title || '无标题',
@@ -17532,14 +17536,14 @@ async function loadPostsFromSupabase(options = {}){
     console.log('📥 从 Supabase 加载帖子...');
     
     // 首页只取封面与摘要。多图原图在用户打开详情时才读取，避免 Base64 图片让首屏请求过大。
-    const basePostSelect = [
-      'id','title','content','excerpt','category','subcategory','author','image','image_thumbnail','image_thumbnails',
-      'youtube','likes','event','tags','user_id','visibility','pinned','created_at','location'
-    ].join(',');
-    // 首页一直使用公开帖子。此前没有此限制时，RLS 会对全表评估互相关注条件，数据增长后可能超时。
-    const publicFilter = 'or=(visibility.eq.public,visibility.is.null)';
-    const url = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&${publicFilter}&order=created_at.desc,id.desc&limit=${POSTS_FEED_LIMIT}`;
-    const fallbackUrl = `${SUPABASE_URL}/rest/v1/posts?select=${basePostSelect}&${publicFilter}&order=created_at.desc,id.desc&limit=${POSTS_FEED_FALLBACK_LIMIT}`;
+    // Homepage data shape and public filtering are shared with future feed modules.
+    const feedUrls = window.LeshenghuoFeedData?.buildPublicFeedUrls({
+      baseUrl: SUPABASE_URL,
+      limit: POSTS_FEED_LIMIT,
+      fallbackLimit: POSTS_FEED_FALLBACK_LIMIT
+    });
+    const url = feedUrls?.url || `${SUPABASE_URL}/rest/v1/posts?select=*&order=created_at.desc,id.desc&limit=${POSTS_FEED_LIMIT}`;
+    const fallbackUrl = feedUrls?.fallbackUrl || `${SUPABASE_URL}/rest/v1/posts?select=*&order=created_at.desc,id.desc&limit=${POSTS_FEED_FALLBACK_LIMIT}`;
     
     console.log('🔗 API请求:', url.slice(0, 60) + '...');
     
@@ -17824,9 +17828,9 @@ window.addEventListener('message', event => {
   closeInternalModule();
   if(detail.route === 'home') return switchTab('home');
   if(detail.route === 'profile') return switchTab('profile');
-  if(detail.route === 'week') return openInternalModule('/week/', '5.430');
-  if(detail.route === 'deals') return openInternalModule('/deals/', '5.430');
-  if(detail.route === 'message') return openInternalModule('/messages/', '5.430', detail.params || {});
+  if(detail.route === 'week') return openInternalModule('/week/', '5.431');
+  if(detail.route === 'deals') return openInternalModule('/deals/', '5.431');
+  if(detail.route === 'message') return openInternalModule('/messages/', '5.431', detail.params || {});
   if(detail.route === 'post'){
     switchTab('home');
     return setTimeout(() => openPost(detail.id), 80);
@@ -17845,18 +17849,18 @@ window.switchTab = function(tab){
   if(tab === 'home' || tab === 'profile' || tab === 'admin') closeInternalModule();
   // 消息中心改由独立模块承载，避免通知与私信继续耦合在首页主程序中。
   if(tab === 'message'){
-    openInternalModule('/messages/', '5.430');
+    openInternalModule('/messages/', '5.431');
     return;
   }
   // 本周活动统一进入独立模块：日期筛选、活动笔记与后续票务/报名活动共用同一入口。
   if(tab === 'week'){
-    openInternalModule('/week/', '5.430');
+    openInternalModule('/week/', '5.431');
     return;
   }
   // 省钱页统一使用独立模块。它与主站同域，同一个 App WebView 内跳转，
   // 不使用 window.open，因此不会拉起外部浏览器。
   if(tab === 'deals'){
-    openInternalModule('/deals/', '5.430');
+    openInternalModule('/deals/', '5.431');
     return;
   }
   ensureAdminPageAtRoot();
@@ -18511,7 +18515,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Network Runtime】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Feed Data Contract】`);
 </script>
 </body>
 </html>
