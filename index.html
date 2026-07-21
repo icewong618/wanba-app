@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.447';
+  const version = '5.448';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -83,6 +83,7 @@
 <script src="./shared/app-fixed-layout.js?v=5.445"></script>
 <script src="./shared/app-module-router.js?v=5.446"></script>
 <script src="./shared/auth-verification-limits.js?v=5.447"></script>
+<script src="./shared/auth-session.js?v=5.448"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3354,7 +3355,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.447';
+const APP_VERSION = '5.448';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3467,24 +3468,14 @@ let merchantApplicationBusy = {};
 let authMode = 'login';
 let session = null; // {access_token, user}
 let sessionRefreshInFlight = null;
+const authSessionStore = window.LeshenghuoAuthSession?.create({ supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
 
 function accessTokenExpiresSoon(token){
-  if(!token) return true;
-  try {
-    const encoded = token.split('.')[1];
-    if(!encoded) return true;
-    const payload = JSON.parse(atob(encoded.replace(/-/g, '+').replace(/_/g, '/')));
-    return !payload.exp || (Number(payload.exp) * 1000) <= Date.now() + 60000;
-  } catch(e){
-    return true;
-  }
+  return authSessionStore?.accessTokenExpiresSoon(token) ?? true;
 }
 
 function loadSession(){
-  try {
-    const s = localStorage.getItem('wanba_session');
-    if(s){ session = JSON.parse(s); }
-  } catch(e){}
+  session = authSessionStore?.read() || null;
   // 启动先续期，再显示已登录 UI。否则资料、反馈和管理员请求会抢在旧令牌前面发出 401。
   if(session && session.refresh_token){
     return refreshSession().then(ok => {
@@ -3709,7 +3700,7 @@ async function createAccountFromAuth(email, pass, name, msg){
   }
   if(rd.access_token){
     session = { access_token:rd.access_token, refresh_token:rd.refresh_token, user:rd.user };
-    localStorage.setItem('wanba_session', JSON.stringify(session));
+    authSessionStore?.write(session);
     updateAuthUI(); closeAuth(); fetchProfileFromDb(); fetchMerchantProfile();
     setTimeout(maybeOpenFeedOnboarding, 350);
     showToast('注册成功，已登录');
@@ -3774,7 +3765,7 @@ async function submitAuth(){
 
     if(res.ok){
       session = { access_token: data.access_token, refresh_token: data.refresh_token, user: data.user };
-      localStorage.setItem('wanba_session', JSON.stringify(session));
+      authSessionStore?.write(session);
       updateAuthUI(); closeAuth(); initProfilePage();
       fetchProfileFromDb();
       fetchMerchantProfile();
@@ -3838,7 +3829,7 @@ async function requestPasswordReset(){
 }
 function logoutUser(silent){
   session = null;
-  localStorage.removeItem('wanba_session');
+  authSessionStore?.clear();
   currentMerchant = null;
   currentMerchantApplication = null;
   dealReviewRows = [];
@@ -3866,7 +3857,7 @@ async function handleEmailConfirmRedirect(){
     if(!res.ok) return;
     const user = await res.json();
     session = { access_token, refresh_token, user };
-    localStorage.setItem('wanba_session', JSON.stringify(session));
+    authSessionStore?.write(session);
     updateAuthUI();
     initProfilePage();
     fetchProfileFromDb();
@@ -4331,7 +4322,7 @@ async function syncAuthDisplayName(name){
     const data = await res.json();
     session.user = data.user || session.user;
     session.user.user_metadata = Object.assign({}, session.user.user_metadata || {}, { name, display_name: name });
-    localStorage.setItem('wanba_session', JSON.stringify(session));
+    authSessionStore?.write(session);
     return true;
   } catch(error){
     console.warn('Auth 昵称同步异常:', error.message);
@@ -16131,18 +16122,11 @@ async function refreshSession(){
   if(sessionRefreshInFlight) return sessionRefreshInFlight;
   if(!session || !session.refresh_token) return false;
   sessionRefreshInFlight = (async () => {
-    try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-        body: JSON.stringify({ refresh_token: session.refresh_token })
-      });
-      if(!res.ok) return false;
-      const d = await res.json();
-      session = { access_token: d.access_token, refresh_token: d.refresh_token, user: d.user || session.user };
-      localStorage.setItem('wanba_session', JSON.stringify(session));
-      return true;
-    } catch(e){ return false; }
+    const next = await authSessionStore?.refresh(session);
+    if(!next) return false;
+    session = next;
+    authSessionStore?.write(session);
+    return true;
   })().finally(() => { sessionRefreshInFlight = null; });
   return sessionRefreshInFlight;
 }
@@ -18063,7 +18047,7 @@ async function launchMerchantAdminAction(){
   const clear = () => { try { const next = new URL(window.location.href); next.searchParams.delete('merchant_admin'); next.searchParams.delete('merchant_id'); next.searchParams.delete('from'); window.history.replaceState({},'',next.pathname + next.search + next.hash); } catch(error) {} };
   // bootApp normally restores this. The local fallback protects a cold app start.
   if(!(session && session.user)){
-    try { session = JSON.parse(localStorage.getItem('wanba_session') || 'null'); } catch(error) {}
+    session = authSessionStore?.read() || null;
   }
   if(!(session && session.user)){
     showToast('请先登录后再打开商家管理后台');
@@ -18106,7 +18090,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Auth Verification Limits】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Auth Session】`);
 </script>
 </body>
 </html>
