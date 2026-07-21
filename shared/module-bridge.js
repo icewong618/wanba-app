@@ -17,7 +17,10 @@
     return 'profile';
   };
   const back = (fallback = '/') => {
-    if(route('home')) return true;
+    if(isEmbedded()){
+      window.parent.postMessage({ type:'leshenghuo-module-close' }, window.location.origin);
+      return true;
+    }
     if(window.history.length > 1){
       window.history.back();
       return true;
