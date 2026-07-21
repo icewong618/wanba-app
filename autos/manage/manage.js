@@ -101,7 +101,7 @@ window.AutoAdmin={...window.AutoAdmin,save};
 function openMainTab(tab){
   const target=new URL('/',location.origin);
   target.searchParams.set('tab',tab);
-  target.searchParams.set('app_v','5.410');
+  target.searchParams.set('app_v','5.412');
   if(new URLSearchParams(location.search).get('app_v')) target.searchParams.set('embedded_app','1');
   location.assign(target.toString());
 }
@@ -189,6 +189,25 @@ function autoOperationsView(){
 const renderBeforeProfit=render;
 render=function(){if(S.screen==='operations')return autoOperationsView();renderBeforeProfit();if(S.screen==='home'){const actions=document.querySelector('#autoManageApp .actions');if(actions&&!document.getElementById('autoOperationsButton'))actions.insertAdjacentHTML('beforeend','<button id="autoOperationsButton" class="btn" onclick="AutoAdmin.operations()">经营统计</button>');}};
 window.AutoAdmin={...window.AutoAdmin,save,operations(){S.screen='operations';render();}};
+/* v5.412: inventory status changes are deliberate, logged, and visible to affected customers. */
+const editViewBeforeStatusWorkflow=editView;
+editView=function(){
+  editViewBeforeStatusWorkflow();
+  if(!S.edit?.id||document.getElementById('autoStatusWorkflow'))return;
+  const status=document.getElementById('autoStatus');
+  if(!status)return;
+  status.closest('.field')?.insertAdjacentHTML('afterend',`<section id="autoStatusWorkflow" class="card auto-status-workflow"><b>库存状态与客户说明</b><p>预留、已售或下架时，可填写说明；收藏或预约过该车的客户会在“我的提醒”看到状态变化。</p><label class="field">状态说明（可选）<textarea id="autoStatusNote" maxlength="1000" placeholder="例如：已为客户保留至 7 月 25 日，或车辆已完成交付">${esc(S.edit.status_note||'')}</textarea></label><button class="btn" type="button" onclick="AutoAdmin.changeStatus()">仅更新库存状态</button></section>`);
+};
+async function changeStatus(){
+  const listing=S.edit,status=document.getElementById('autoStatus')?.value,note=document.getElementById('autoStatusNote')?.value.trim()||null;
+  if(!listing?.id||!status)return;
+  if(status==='sold'&&!confirm('标记为已售后，此车辆不会再出现在公开库存中。是否继续？'))return;
+  const response=await api('/rest/v1/rpc/merchant_auto_change_listing_status',{method:'POST',body:JSON.stringify({p_listing_id:listing.id,p_status:status,p_note:note})});
+  if(!response.ok){let message='';try{message=(await response.json())?.message||''}catch(error){}alert(message==='sold_listing_locked'?'已售车辆不能恢复为在售，请新增一条库存记录。':'状态更新失败，请确认已运行 v5.412 数据库更新后重试。');return;}
+  S.screen='home';
+  await load();
+}
+window.AutoAdmin={...window.AutoAdmin,changeStatus};
 window.AutoAdmin={...window.AutoAdmin,mainTab:openMainTab};
 ensureMainNavigation();
 load();

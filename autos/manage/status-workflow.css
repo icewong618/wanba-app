@@ -1,0 +1,3 @@
+/* v5.412: inventory status workflow. */
+.auto-status-workflow{margin-top:16px;border-top:3px solid #8d7552}
+.auto-status-workflow>p{margin:7px 0 0;color:var(--muted);font-size:12px;line-height:1.55}

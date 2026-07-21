@@ -166,6 +166,7 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
   /* v5.411: searchable vehicle alerts are stored per customer and checked in-app. */
   state.searchAlerts=[];
   state.priceDrops=[];
+  state.vehicleUpdates=[];
   const alertFilterLabel=filters=>{
     const names=[];
     if(filters?.type)names.push(filters.type);
@@ -178,20 +179,22 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     (!filters?.fuel||drop.fuel_type===filters.fuel)&&
     (!filters?.price||Number(drop.current_price||0)<=Number(filters.price));
   async function loadSearchAlerts(){
-    if(!session()?.user||!state.merchant?.user_id){state.searchAlerts=[];state.priceDrops=[];return;}
+    if(!session()?.user||!state.merchant?.user_id){state.searchAlerts=[];state.priceDrops=[];state.vehicleUpdates=[];return;}
     try{
       const response=await api('/rest/v1/rpc/merchant_auto_list_search_alerts',{method:'POST',body:JSON.stringify({p_merchant_user_id:state.merchant.user_id})});
       const data=await response.json();
       if(!response.ok)throw new Error(data?.message||'load_failed');
       state.searchAlerts=Array.isArray(data?.searches)?data.searches:[];
       state.priceDrops=Array.isArray(data?.price_drops)?data.price_drops:[];
+      state.vehicleUpdates=Array.isArray(data?.vehicle_updates)?data.vehicle_updates:[];
     }catch(error){
       state.searchAlerts=[];
       state.priceDrops=[];
+      state.vehicleUpdates=[];
     }
   }
   function alertCount(){
-    return state.searchAlerts.filter(alert=>alert.price_drop_enabled).reduce((count,alert)=>count+state.priceDrops.filter(drop=>priceDropMatches(drop,alert.filters)).length,0);
+    return state.searchAlerts.filter(alert=>alert.price_drop_enabled).reduce((count,alert)=>count+state.priceDrops.filter(drop=>priceDropMatches(drop,alert.filters)).length,0)+state.vehicleUpdates.length;
   }
   function saveSearchView(){
     if(!session()?.user){alert('请先登录后保存筛选和开启降价提醒。');return;}
@@ -226,12 +229,15 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     await loadSearchAlerts();
     const alerts=state.searchAlerts;
     const drops=state.priceDrops;
+    const vehicleUpdates=state.vehicleUpdates;
     const alertRows=alerts.length?alerts.map(alert=>{
       const matches=drops.filter(drop=>alert.price_drop_enabled&&priceDropMatches(drop,alert.filters));
       return `<article class="auto-alert-card"><div><span class="chip">${alert.price_drop_enabled?'降价提醒已开启':'仅保存筛选'}</span><h2>${esc(alert.name||alertFilterLabel(alert.filters))}</h2><p>${esc(alertFilterLabel(alert.filters))}</p>${matches.length?`<p class="auto-alert-hit">${matches.length} 辆车辆最近降价</p>`:'<p>目前没有新的降价车辆。</p>'}</div><button class="outline" type="button" onclick="Auto.deleteSearch('${esc(alert.id)}')">删除</button></article>`;
     }).join(''):'<div class="empty">还没有保存筛选。先按车型、能源或预算筛选，再点“保存筛选”。</div>';
     const dropRows=drops.length?`<section class="section auto-drop-list"><h2>最近降价</h2>${drops.map(drop=>`<button class="auto-drop-row" type="button" onclick="Auto.openVehicle(event,'${esc(drop.listing_id)}')"><span>${esc(drop.title)}</span><b>${money(drop.previous_price)} → ${money(drop.current_price)}</b></button>`).join('')}</section>`:'';
-    app.innerHTML=`${top('我的提醒')}<section class="section"><h2>保存筛选与降价提醒</h2><p>提醒会在你下次打开这家车行时检查价格变化。系统推送会在 App 通知功能接入后开放。</p></section><section class="auto-alert-list">${alertRows}</section>${dropRows}<button class="primary" type="button" onclick="Auto.back()">返回车辆列表</button>`;
+    const statusLabel=status=>({available:'恢复在售',reserved:'已被预留',sold:'已售出',hidden:'暂时下架'}[status]||status);
+    const vehicleRows=vehicleUpdates.length?`<section class="section auto-drop-list"><h2>车辆动态</h2>${vehicleUpdates.map(update=>`<article class="auto-status-row"><div><b>${esc(update.title)}</b><span>${esc(statusLabel(update.current_status))}${update.note?` · ${esc(update.note)}`:''}</span></div><small>${esc(new Date(update.changed_at).toLocaleString('zh-CN'))}</small></article>`).join('')}</section>`:'';
+    app.innerHTML=`${top('我的提醒')}<section class="section"><h2>保存筛选与降价提醒</h2><p>提醒会在你下次打开这家车行时检查价格变化。系统推送会在 App 通知功能接入后开放。</p></section><section class="auto-alert-list">${alertRows}</section>${dropRows}${vehicleRows}<button class="primary" type="button" onclick="Auto.back()">返回车辆列表</button>`;
     api('/rest/v1/rpc/merchant_auto_mark_search_alerts_checked',{method:'POST',body:JSON.stringify({p_merchant_user_id:state.merchant.user_id})}).catch(()=>{});
   }
   const renderListBeforeSearchAlerts=renderList;
