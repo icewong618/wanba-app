@@ -3,7 +3,7 @@
   const SUPABASE_KEY='sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app=document.getElementById('autoApp');
   const query=new URLSearchParams(location.search);
-  const state={merchant:null,listings:[],tab:'buy',screen:'list',selected:null,sellPhotos:[],savedIds:new Set(),filters:{type:'',fuel:'',price:''}};
+  const state={merchant:null,listings:[],tab:'buy',screen:'list',selected:null,sellPhotos:[],savedIds:new Set(),compareIds:new Set(),filters:{type:'',fuel:'',price:''}};
   const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const money=v=>`$${Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
   const tr=key=>window.LeshenghuoI18n?.t?.(key)||key;
@@ -46,6 +46,52 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
   const quotesHtmlWithArrivalBase=quotesHtml;
   quotesHtml=function(){const rows=Array.isArray(state.quotes)?state.quotes:[],statusText={new:'已提交',contacted:'商家已联系',scheduled:'已安排',arrived:'已确认到店',reschedule_requested:'已申请改期',cancelled:'已取消',quoted:'等待你确认',quote_accepted:'已接受报价',quote_declined:'已拒绝报价',closed:'已完成',archived:'已归档'};return `<section class="section"><h2>我的估价与试驾</h2><p>这里显示你的估价、试驾和咨询进度。</p></section><section class="cards">${rows.length?rows.map(row=>{const testDrive=row.lead_type==='test_drive',title=testDrive?(row.listing_title||'预约试驾'):(row.lead_type==='sell_quote'?[row.vehicle_data?.year,row.vehicle_data?.make,row.vehicle_data?.model].filter(Boolean).join(' ')||'车辆估价':row.listing_title||'车辆咨询'),schedule=testDrive?(row.confirmed_at?`<p><b>确认试驾：</b>${esc(new Date(row.confirmed_at).toLocaleString('zh-CN'))}</p>${row.appointment_location?`<p><b>地点：</b>${esc(row.appointment_location)}</p>`:''}`:row.preferred_at?`<p>希望时间：${esc(new Date(row.preferred_at).toLocaleString('zh-CN'))}</p>`:'等待商家安排时间。'):'';const arrival=testDrive&&row.status==='scheduled'?`<div class="lead-actions"><button class="primary" onclick="Auto.confirmArrival('${esc(row.id)}')">确认已到店</button><button class="outline" onclick="Auto.testDriveAction('${esc(row.id)}','cancel')">取消预约</button></div>`:testDrive&&row.status==='arrived'?'<p><b style="color:#315a40">已通知商家你已到店。</b></p>':'';return `<article class="car-card" style="grid-template-columns:1fr"><div><span class="chip">${esc(testDrive?'预约试驾':row.lead_type==='sell_quote'?'卖车估价':'车辆咨询')}</span><span class="chip">${esc(statusText[row.status]||row.status)}</span><h2>${esc(title)}</h2>${schedule}${row.merchant_note?`<p>${esc(row.merchant_note)}</p>`:''}${arrival}</div></article>`}).join(''):'<div class="empty">还没有提交记录。</div>'}</section>`;};
   async function confirmArrival(id){if(!confirm('确认你已经到达试驾地点吗？商家会立即看到此状态。'))return;const response=await api('/rest/v1/rpc/merchant_auto_customer_confirm_test_drive',{method:'POST',body:JSON.stringify({p_lead_id:id})});if(!response.ok){alert('暂时无法确认到店，请检查预约状态后重试。');return;}await loadQuotes();}
-  window.Auto={list(){state.tab='buy';state.screen='list';renderList()},buy(){state.tab='buy';state.screen='list';renderList()},sell(){state.tab='sell';state.screen='list';renderList()},saved(){state.tab='saved';state.screen='list';renderList()},myVehicles(){location.assign('/autos/mine/')},quotes:loadQuotes,filter(k,v){state.filters[k]=v;renderList()},open(id){state.selected=state.listings.find(v=>String(v.id)===String(id))||null;state.screen='detail';renderDetail()},toggleSaved,testDrive(){if(!session()?.user){alert('请先登录后预约试驾。');return}state.screen='lead';renderLead('test_drive')},uploadSellPhotos,removeSellPhoto(index){state.sellPhotos.splice(index,1);renderList()},submitLead,submitSell,testDriveAction,quoteResponse,confirmArrival,back(){if(state.screen==='detail'||state.screen==='lead'){state.screen='list';renderList()}else exit()},close:exit};
+  const buyHtmlWithVehicleDetails=buyHtml;
+  buyHtml=function(cars){
+    const content=buyHtmlWithVehicleDetails(cars);
+    const compareBar=state.compareIds.size?`<section class="auto-compare-bar"><span>已选 ${state.compareIds.size}/3 辆</span>${state.compareIds.size>=2?'<button class="primary" onclick="Auto.compare()">对比车辆</button>':'<span>再选一辆即可对比</span>'}<button class="outline" onclick="Auto.clearCompare()">清空</button></section>`:'';
+    const wrapped=content.replace(/<\/article>/g,(closing,offset,source)=>{
+      const prior=source.slice(0,offset);
+      const matches=[...prior.matchAll(/Auto\.open\('([^']+)'\)/g)];
+      const id=matches[matches.length-1]?.[1]||'';
+      if(!id)return closing;
+      const checked=state.compareIds.has(String(id));
+      const disabled=!checked&&state.compareIds.size>=3;
+      return `<button class="compare-toggle ${checked?'on':''}" ${disabled?'disabled':''} onclick="Auto.toggleCompare('${esc(id)}')">${checked?'✓ 已选对比':'＋ 对比'}</button>${closing}`;
+    });
+    return compareBar+wrapped;
+  };
+  const renderAutoDetailWithDetails=renderDetail;
+  renderDetail=function(){
+    renderAutoDetailWithDetails();
+    const car=state.selected;
+    if(!car||document.getElementById('autoVehicleDetails'))return;
+    const detail=document.querySelector('.detail-title');
+    if(!detail)return;
+    const cell=(name,value)=>`<div><span>${esc(name)}</span><b>${esc(value||'商家未提供')}</b></div>`;
+    const report=car.vehicle_report_url?`<a class="outline report-link" href="${esc(car.vehicle_report_url)}" target="_blank" rel="noopener">查看车况报告 / PDF</a>`:'<p class="auto-muted">商家暂未提供第三方车况报告。</p>';
+    detail.insertAdjacentHTML('afterend',`<section id="autoVehicleDetails" class="section auto-vehicle-details"><h2>车辆资料</h2><div class="vehicle-facts">${cell('事故记录',car.accident_history)}${cell('保养记录',car.service_history)}${cell('过户次数',car.owner_count===null||car.owner_count===undefined?'':`${car.owner_count} 次`)}${cell('产权状态',car.title_status)}${cell('保修状态',car.warranty_status)}</div>${report}</section><section class="section loan-tool"><h2>贷款月供估算</h2><p>仅供预算参考，实际年利率、税费与贷款审批以金融机构为准。</p><div class="loan-fields"><label>首付<input id="autoLoanDown" inputmode="decimal" type="number" min="0" value="${Math.round(Number(car.price||0)*.2)}" oninput="Auto.updateLoan()"></label><label>年利率<input id="autoLoanApr" inputmode="decimal" type="number" min="0" max="99" step="0.1" value="7.2" oninput="Auto.updateLoan()"></label><label>期限<select id="autoLoanMonths" onchange="Auto.updateLoan()"><option value="36">36 个月</option><option value="48">48 个月</option><option value="60" selected>60 个月</option><option value="72">72 个月</option></select></label></div><div class="loan-result">预计月供 <b id="autoLoanPayment">—</b><span id="autoLoanPrincipal"></span></div></section>`);
+    updateLoan();
+  };
+  function updateLoan(){
+    const price=Number(state.selected?.price||0),down=Math.max(0,Number(document.getElementById('autoLoanDown')?.value||0)),apr=Math.max(0,Number(document.getElementById('autoLoanApr')?.value||0)),months=Math.max(1,Number(document.getElementById('autoLoanMonths')?.value||60)),principal=Math.max(0,price-down),rate=apr/1200,payment=rate===0?principal/months:principal*rate*Math.pow(1+rate,months)/(Math.pow(1+rate,months)-1),target=document.getElementById('autoLoanPayment'),meta=document.getElementById('autoLoanPrincipal');
+    if(target)target.textContent=money(payment);
+    if(meta)meta.textContent=`贷款本金约 ${money(principal)} · ${months} 期`;
+  }
+  function toggleCompare(id){
+    const key=String(id);
+    if(state.compareIds.has(key))state.compareIds.delete(key);
+    else if(state.compareIds.size<3)state.compareIds.add(key);
+    else {alert('最多可同时对比 3 辆车。');return;}
+    state.compareIds=new Set(state.compareIds);renderList();
+  }
+  function clearCompare(){state.compareIds=new Set();renderList();}
+  function compareView(){
+    const cars=state.listings.filter(car=>state.compareIds.has(String(car.id)));
+    if(cars.length<2){alert('至少选择两辆车后再对比。');state.screen='list';return renderList();}
+    const row=(label,key,format=value=>value||'—')=>`<div class="compare-row"><b>${esc(label)}</b>${cars.map(car=>`<span>${esc(format(car[key]))}</span>`).join('')}</div>`;
+    app.innerHTML=`${top('车辆对比')}<section class="compare-grid"><div class="compare-row compare-head"><b>项目</b>${cars.map(car=>`<span><strong>${esc(car.title)}</strong><button class="outline" onclick="Auto.open('${esc(car.id)}')">查看详情</button></span>`).join('')}</div>${row('售价','price',money)}${row('年份','year')}${row('里程','mileage',value=>value?`${Number(value).toLocaleString()} mi`:'—')}${row('车型','vehicle_type')}${row('能源','fuel_type')}${row('变速箱','transmission')}${row('驱动','drivetrain')}${row('事故记录','accident_history')}${row('过户次数','owner_count',value=>value===null||value===undefined?'—':`${value} 次`)}${row('产权状态','title_status')}${row('保修状态','warranty_status')}</section><button class="outline" style="width:100%;margin-top:15px" onclick="Auto.clearCompare()">清空对比</button>`;
+  }
+  window.Auto={...window.Auto,updateLoan,toggleCompare,clearCompare,compare(){state.screen='compare';compareView()},back(){if(state.screen==='detail'||state.screen==='lead'||state.screen==='compare'){state.screen='list';renderList()}else exit()}};
   load();
 })();

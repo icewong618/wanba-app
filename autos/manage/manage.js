@@ -77,5 +77,25 @@ const editAutoWithSale=editView;
 editView=function(){editAutoWithSale();const saveButton=document.querySelector('#autoManageApp .form .btn.primary');if(!saveButton||!S.edit?.id||!['available','reserved'].includes(S.edit.status)||document.getElementById('autoCompleteSaleButton'))return;saveButton.insertAdjacentHTML('beforebegin',`<button id="autoCompleteSaleButton" class="btn danger" style="width:100%;margin-top:14px" onclick="AutoAdmin.sale('${esc(S.edit.id)}')">登记成交</button>`);};
 render=function(){if(S.screen==='sale')return saleView();if(S.screen==='sales')return salesView();renderAutoAdminWithSales();if(S.screen==='home'){const actions=document.querySelector('#autoManageApp .actions');if(actions&&!document.getElementById('autoSalesHistoryButton'))actions.insertAdjacentHTML('beforeend',`<button id="autoSalesHistoryButton" class="btn" onclick="AutoAdmin.sales()">成交记录${S.sales?.length?` (${S.sales.length})`:''}</button>`);}};
 window.AutoAdmin={...window.AutoAdmin,sale(id){S.saleListing=S.listings.find(item=>String(item.id)===String(id))||S.edit;S.screen='sale';render();},completeSale,sales(){S.screen='sales';render();}};
+const editAutoWithVehicleDetails=editView;
+editView=function(){
+  editAutoWithVehicleDetails();
+  if(document.getElementById('autoVehicleReportUrl'))return;
+  const description=document.getElementById('autoDescription');
+  if(!description)return;
+  const x=S.edit||{};
+  const options=(values,current,empty='未提供')=>`<option value="">${empty}</option>${values.map(value=>`<option value="${esc(value)}" ${x[current]===value?'selected':''}>${esc(value)}</option>`).join('')}`;
+  description.closest('.field')?.insertAdjacentHTML('beforebegin',`<section class="card" style="margin-top:16px"><b>公开车辆资料</b><p style="margin:7px 0 0;color:#777;font-size:12px;line-height:1.5">以下资料会显示在客户车辆详情页。完整 VIN 仍只限商家后台可见。</p><label class="field">车况报告链接 / PDF<input id="autoVehicleReportUrl" type="url" maxlength="1000" value="${esc(x.vehicle_report_url||'')}" placeholder="https://..."></label><div class="cols"><label class="field">事故记录<select id="autoAccidentHistory">${options(['无事故记录','有事故记录','记录待核验'],'accident_history')}</select></label><label class="field">保养记录<select id="autoServiceHistory">${options(['保养记录齐全','有部分保养记录','记录待核验'],'service_history')}</select></label></div><div class="cols"><label class="field">过户次数<input id="autoOwnerCount" type="number" min="0" max="99" inputmode="numeric" value="${esc(x.owner_count??'')}" placeholder="例如 1"></label><label class="field">产权状态<select id="autoTitleStatus">${options(['Clean Title','Salvage Title','Rebuilt Title','记录待核验'],'title_status')}</select></label></div><label class="field">保修状态<select id="autoWarrantyStatus">${options(['原厂保修有效','延长保修有效','无保修','保修待核验'],'warranty_status')}</select></label></section>`);
+};
+async function save(){
+  const get=id=>document.getElementById(id)?.value.trim()||'';
+  const payload={id:S.edit?.id,title:get('autoTitle'),make:get('autoMake'),model:get('autoModel'),year:get('autoYear'),price:get('autoPrice'),mileage:get('autoMileage'),vehicle_type:get('autoType'),fuel_type:get('autoFuel'),transmission:get('autoTransmission'),drivetrain:get('autoDrive'),exterior_color:get('autoColor'),vin:get('autoVin'),features:get('autoFeatures').split(/[，,]/).map(x=>x.trim()).filter(Boolean),photos:S.photos,description:get('autoDescription'),status:get('autoStatus'),is_certified:!!document.getElementById('autoCertified')?.checked,vehicle_report_url:get('autoVehicleReportUrl'),accident_history:get('autoAccidentHistory'),service_history:get('autoServiceHistory'),owner_count:get('autoOwnerCount'),warranty_status:get('autoWarrantyStatus'),title_status:get('autoTitleStatus')};
+  if(!payload.title){alert('请填写车辆标题。');return;}
+  if(payload.owner_count && (!/^\d{1,2}$/.test(payload.owner_count)||Number(payload.owner_count)>99)){alert('过户次数请填写 0 到 99 之间的整数。');return;}
+  const r=await api('/rest/v1/rpc/merchant_auto_save_listing',{method:'POST',body:JSON.stringify({p_merchant_user_id:S.merchantId,p_listing:payload})});
+  if(!r.ok){alert('保存失败，请确认已运行 v5.403 数据库更新后重试。');return;}
+  S.screen='home';await load();
+}
+window.AutoAdmin={...window.AutoAdmin,save};
 load();
 })();
