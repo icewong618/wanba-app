@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.428';
+  const version = '5.429';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -985,7 +985,7 @@
     max-height:92vh;
   }
   /* 笔记详情单独使用全屏滚动容器：避免桌面浏览器沿用普通弹窗高度，图片撑满后正文和评论无法滑到。 */
-  #postOverlay{padding:0;background:#fff;align-items:stretch;overflow:hidden;z-index:520;}
+  #postOverlay{padding:0;background:#fff;align-items:stretch;overflow:hidden;z-index:13010;}
   #postModal{
     width:100%;max-width:var(--container-w);min-width:0;height:100vh;height:100svh;height:100dvh;max-height:none;
     border-radius:0;box-shadow:none;animation:none;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;overflow:hidden;
@@ -1937,7 +1937,7 @@
   }
   html.embedded-app-entry #page-home .feed,
   html.app-webview-entry #page-home .feed{
-    margin-top:calc(var(--home-fixed-top, 138px) - 45px) !important;
+    margin-top:calc(var(--home-fixed-top, 138px) - 105px) !important;
   }
   html.embedded-app-entry .deals-meta-row,
   html.app-webview-entry .deals-meta-row{
@@ -3339,7 +3339,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.428';
+const APP_VERSION = '5.429';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17593,6 +17593,9 @@ async function loadPostsFromSupabase(options = {}){
     if(Array.isArray(data) && data.length > 0){
       console.log('✓ 已从数据库加载', data.length, '条帖子');
       posts = data.map(compactFeedPost);
+      // Keep a lightweight local snapshot so the next App launch can paint the
+      // feed before the remote version and database checks complete.
+      savePosts();
       hydratedPostIds.clear();
       window._postsLastFetchedAt = Date.now();
       window._postsNextRetryAt = 0;
@@ -17817,9 +17820,9 @@ window.addEventListener('message', event => {
   closeInternalModule();
   if(detail.route === 'home') return switchTab('home');
   if(detail.route === 'profile') return switchTab('profile');
-  if(detail.route === 'week') return openInternalModule('/week/', '5.428');
-  if(detail.route === 'deals') return openInternalModule('/deals/', '5.428');
-  if(detail.route === 'message') return openInternalModule('/messages/', '5.428', detail.params || {});
+  if(detail.route === 'week') return openInternalModule('/week/', '5.429');
+  if(detail.route === 'deals') return openInternalModule('/deals/', '5.429');
+  if(detail.route === 'message') return openInternalModule('/messages/', '5.429', detail.params || {});
   if(detail.route === 'post'){
     switchTab('home');
     return setTimeout(() => openPost(detail.id), 80);
@@ -17832,20 +17835,24 @@ window.addEventListener('message', event => {
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
+  // The native App keeps standalone modules in an iframe above the main page.
+  // Always dismiss that host before returning to a root navigation destination.
+  // Otherwise Home/Profile switches underneath the still-visible module layer.
+  if(tab === 'home' || tab === 'profile' || tab === 'admin') closeInternalModule();
   // 消息中心改由独立模块承载，避免通知与私信继续耦合在首页主程序中。
   if(tab === 'message'){
-    openInternalModule('/messages/', '5.428');
+    openInternalModule('/messages/', '5.429');
     return;
   }
   // 本周活动统一进入独立模块：日期筛选、活动笔记与后续票务/报名活动共用同一入口。
   if(tab === 'week'){
-    openInternalModule('/week/', '5.428');
+    openInternalModule('/week/', '5.429');
     return;
   }
   // 省钱页统一使用独立模块。它与主站同域，同一个 App WebView 内跳转，
   // 不使用 window.open，因此不会拉起外部浏览器。
   if(tab === 'deals'){
-    openInternalModule('/deals/', '5.428');
+    openInternalModule('/deals/', '5.429');
     return;
   }
   ensureAdminPageAtRoot();
@@ -17951,12 +17958,24 @@ async function bootApp(){
     return;
   }
 
+  // Show the last verified feed immediately. Version checks and fresh network data
+  // continue in the background so cached App starts never wait on the network.
+  const hasCachedPosts = loadPosts();
+  if(hasCachedPosts){
+    feedIsLoading = false;
+    feedLoadFailed = false;
+    renderChips();
+    renderQuicklinks();
+    renderFeed();
+    updateFixedTopLayout();
+  }
+
   try {
     const updating = await checkRemoteAppVersion();
     if(updating) return;
     clearOldVersionCache();
     setLaunchStatus('正在检查登录状态…');
-    if(!loadPosts()){
+    if(!hasCachedPosts){
       posts = [];
       feedIsLoading = true;
     } else {
@@ -18488,7 +18507,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Messages Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Root Navigation Recovery】`);
 </script>
 </body>
 </html>
