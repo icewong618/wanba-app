@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.444';
+  const version = '5.445';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -80,6 +80,7 @@
 <script src="./shared/native-deep-links.js?v=5.442"></script>
 <script src="./shared/app-gesture-navigation.js?v=5.443"></script>
 <script src="./shared/app-pull-refresh.js?v=5.444"></script>
+<script src="./shared/app-fixed-layout.js?v=5.445"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3351,7 +3352,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.444';
+const APP_VERSION = '5.445';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17387,44 +17388,9 @@ function ensureAdminPageAtRoot(){
   }
 }
 
-function updateFixedTopLayout(){
-  requestAnimationFrame(() => {
-    const root = document.documentElement;
-    const isEmbeddedApp = isEmbeddedAppEntry();
-    root.classList.toggle('app-webview-entry', !!isEmbeddedApp);
-    root.classList.toggle('embedded-app-entry', !!isEmbeddedApp);
-    const fixedGap = 3;
-    const topHeader = document.querySelector('header.top:not(.is-hidden)');
-    const homeTop = topHeader ? Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap : 138;
-    root.style.setProperty('--home-fixed-top', `${homeTop}px`);
-    const homeFeed = document.querySelector('#page-home .feed');
-    if(homeFeed){
-      // Native iPhone WebViews report a larger fixed header box than the visually
-      // occupied header. Compensate it so the first row stays close to "For You".
-      const embeddedFeedOffset = 105;
-      homeFeed.style.marginTop = isEmbeddedApp ? `${Math.max(24, homeTop - embeddedFeedOffset)}px` : '';
-    }
-
-    const weekHeader = document.querySelector('#page-week.active .page-header');
-    root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
-
-    const msgHeader = document.querySelector('#page-message.active .page-header');
-    const msgCats = document.querySelector('#page-message.active .msg-cat-row');
-    const msgHeaderH = msgHeader ? Math.ceil(msgHeader.getBoundingClientRect().height) : 0;
-    const msgCatsH = msgCats ? Math.ceil(msgCats.getBoundingClientRect().height) : 0;
-    root.style.setProperty('--message-header-height', `${msgHeaderH}px`);
-    root.style.setProperty('--message-fixed-top', `${msgHeaderH + msgCatsH}px`);
-
-    const dealsHero = document.querySelector('#page-deals.active .deals-hero');
-    const dealsTop = dealsHero ? Math.ceil(dealsHero.getBoundingClientRect().height) + fixedGap : 205;
-    root.style.setProperty('--deals-fixed-top', `${dealsTop}px`);
-    document.querySelectorAll('.deals-meta-row').forEach(row => {
-      row.style.marginTop = isEmbeddedApp ? `${Math.max(42, dealsTop - 75)}px` : '';
-    });
-  });
-}
-window.addEventListener('resize', updateFixedTopLayout);
-window.addEventListener('orientationchange', () => setTimeout(updateFixedTopLayout, 250));
+const appFixedLayout = window.LeshenghuoAppFixedLayout?.create({ isEmbedded:isEmbeddedAppEntry });
+function updateFixedTopLayout(){ return appFixedLayout?.update(); }
+appFixedLayout?.bind();
 
 /* ---------- App 下拉刷新：仅在各页面顶部触发 ---------- */
 async function refreshActiveAppPage(){
@@ -18157,7 +18123,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared App Pull Refresh】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Fixed Layout】`);
 </script>
 </body>
 </html>
