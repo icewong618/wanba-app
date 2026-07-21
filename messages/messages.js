@@ -1,4 +1,17 @@
 (() => {
+  const routeInAppShell = (route, payload={}) => {
+    if(window.parent === window) return false;
+    window.parent.postMessage({type:'leshenghuo-module-route',route,...payload}, window.location.origin);
+    return true;
+  };
+  document.addEventListener('click', event => {
+    const link = event.target.closest('.module-bottom-nav a');
+    if(!link || window.parent === window) return;
+    const path = new URL(link.href, window.location.origin).pathname.replace(/\/+$/, '') || '/';
+    const route = path === '/' ? 'home' : path === '/week' ? 'week' : path === '/deals' ? 'deals' : path === '/messages' ? 'message' : 'profile';
+    event.preventDefault();
+    routeInAppShell(route);
+  });
   const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app = document.getElementById('messagesApp');
@@ -78,6 +91,6 @@
   const follow = async id => { const current=state.follows.find(row=>row.follower_id===state.me.id&&row.followee_id===id);const active=!current?.active;try{let res;if(current){res=await request(`/rest/v1/follows?id=eq.${current.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({active})});const rows=res.ok?await res.json():[];if(rows[0])Object.assign(current,rows[0]);}else{res=await request('/rest/v1/follows',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({follower_id:state.me.id,follower_name:nick(),followee_id:id,active:true})});const rows=res.ok?await res.json():[];if(rows[0])state.follows.push(rows[0]);}if(!res.ok)throw new Error();renderCategory('fans');}catch(e){toast('关注操作失败，请稍后重试');}};
   const send = async (toId,toName) => {const input=document.getElementById('threadInput');const text=input?.value.trim();if(!text)return;try{const res=await request('/rest/v1/messages',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({from_id:state.me.id,from_name:nick(),to_id:toId,text})});if(!res.ok)throw new Error();const rows=await res.json();if(rows[0])state.messages.push(rows[0]);renderThread(toId,toName);}catch(e){toast('发送失败，请稍后重试');}};
   const toast = value => {document.querySelector('.toast')?.remove();const el=document.createElement('div');el.className='toast';el.textContent=value;document.body.appendChild(el);setTimeout(()=>el.remove(),2200);};
-  window.Messages={back:()=>history.length>1?history.back():location.assign('/'),refresh:load,home:renderHome,category:renderCategory,thread:(id)=>renderThread(id),follow,send,openPost:id=>location.assign(`/?post=${encodeURIComponent(id)}`),openUser:id=>location.assign(`/?user=${encodeURIComponent(id)}`)};
+  window.Messages={back:()=>routeInAppShell('home') || (history.length>1?history.back():location.assign('/')),refresh:load,home:renderHome,category:renderCategory,thread:(id)=>renderThread(id),follow,send,openPost:id=>routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`),openUser:id=>routeInAppShell('user',{id}) || location.assign(`/?user=${encodeURIComponent(id)}`)};
   load();
 })();

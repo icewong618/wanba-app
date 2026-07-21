@@ -1,4 +1,17 @@
 (() => {
+  const routeInAppShell = (route, payload={}) => {
+    if(window.parent === window) return false;
+    window.parent.postMessage({type:'leshenghuo-module-route',route,...payload}, window.location.origin);
+    return true;
+  };
+  document.addEventListener('click', event => {
+    const link = event.target.closest('.module-bottom-nav a');
+    if(!link || window.parent === window) return;
+    const path = new URL(link.href, window.location.origin).pathname.replace(/\/+$/, '') || '/';
+    const route = path === '/' ? 'home' : path === '/week' ? 'week' : path === '/deals' ? 'deals' : path === '/messages' ? 'message' : 'profile';
+    event.preventDefault();
+    routeInAppShell(route);
+  });
   const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app = document.getElementById('dealsApp');
@@ -83,7 +96,7 @@
     openSheet('<section class="sheet-card"><div class="sheet-head"><h2>实时热榜</h2><button onclick="Deals.closeSheet()">×</button></div><div class="module-loading">正在读取热榜...</div></section>');
     try { const select='id,deal_date,retailer_key,retailer_name,category,product_name,product_name_cn,original_price,current_price,unit,percent_off,save_amount,location,source_url,is_hot,is_food_low_price,stock_status,price_note,ai_summary_cn,source_type,updated_at,hot_score'; const res=await request(`/rest/v1/deal_rankings?select=${select}&order=hot_score.desc&limit=20`); if(!res.ok) throw new Error(await res.text()); const rows=await res.json(); state.rankingRows=rows; openSheet(`<section class="sheet-card"><div class="sheet-head"><h2>实时热榜</h2><button onclick="Deals.closeSheet()">×</button></div><p class="sheet-note">按热门标记、食品低价和近期互动排序。</p><div class="deal-list">${cards(rows)}</div></section>`); } catch(e) { openSheet(`<section class="sheet-card"><div class="sheet-head"><h2>实时热榜</h2><button onclick="Deals.closeSheet()">×</button></div><div class="empty">热榜暂时不可用，请稍后再试。</div></section>`); }
   };
-  window.Deals = { back:()=>history.length>1?history.back():location.assign('/'),refresh:load,render,filter:key=>{state.filter=key;render();},search,open:id=>{const row=findRow(id);if(row)openUrl(dealSource(row),id);},favorite:id=>{const all=favorites();all[id]=!all[id];saveFavorites(all);render();},share:async id=>{const row=findRow(id);if(!row)return;const text=`${dealName(row)}｜${dealStore(row)}｜${isLanding(row)?'官网优惠':money(row.current_price)}｜${dealSource(row)}`;try{if(navigator.share)await navigator.share({title:dealName(row),text,url:dealSource(row)});else await navigator.clipboard.writeText(text);record(id,'copy');toast('优惠信息已复制');}catch(e){}},report,submitReport,rankings,closeSheet };
+  window.Deals = { back:()=>routeInAppShell('home') || (history.length>1?history.back():location.assign('/')),refresh:load,render,filter:key=>{state.filter=key;render();},search,open:id=>{const row=findRow(id);if(row)openUrl(dealSource(row),id);},favorite:id=>{const all=favorites();all[id]=!all[id];saveFavorites(all);render();},share:async id=>{const row=findRow(id);if(!row)return;const text=`${dealName(row)}｜${dealStore(row)}｜${isLanding(row)?'官网优惠':money(row.current_price)}｜${dealSource(row)}`;try{if(navigator.share)await navigator.share({title:dealName(row),text,url:dealSource(row)});else await navigator.clipboard.writeText(text);record(id,'copy');toast('优惠信息已复制');}catch(e){}},report,submitReport,rankings,closeSheet };
   sheet.addEventListener('click',event=>{if(event.target===sheet)closeSheet();});
   load();
 })();

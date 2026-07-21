@@ -1,4 +1,17 @@
 (() => {
+  const routeInAppShell = (route, payload={}) => {
+    if(window.parent === window) return false;
+    window.parent.postMessage({type:'leshenghuo-module-route',route,...payload}, window.location.origin);
+    return true;
+  };
+  document.addEventListener('click', event => {
+    const link = event.target.closest('.module-bottom-nav a');
+    if(!link || window.parent === window) return;
+    const path = new URL(link.href, window.location.origin).pathname.replace(/\/+$/, '') || '/';
+    const route = path === '/' ? 'home' : path === '/week' ? 'week' : path === '/deals' ? 'deals' : path === '/messages' ? 'message' : 'profile';
+    event.preventDefault();
+    routeInAppShell(route);
+  });
   const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app = document.getElementById('weekApp');
@@ -93,17 +106,17 @@
     }
   };
   window.WeekEvents = {
-    back: () => history.length > 1 ? history.back() : location.assign('/'),
+    back: () => routeInAppShell('home') || (history.length > 1 ? history.back() : location.assign('/')),
     refresh: load,
     filter: value => { state.filter = value; render(); },
     open: id => {
       const row = state.rows.find(item => String(item.id) === String(id));
       if(String(id).startsWith('calendar-')){
         if(row?.source_url) return location.assign(row.source_url);
-        if(row?.source_id && /^\d+$/.test(String(row.source_id))) return location.assign(`/?post=${encodeURIComponent(row.source_id)}`);
+        if(row?.source_id && /^\d+$/.test(String(row.source_id))) return routeInAppShell('post',{id:row.source_id}) || location.assign(`/?post=${encodeURIComponent(row.source_id)}`);
         return alert('该活动详情正在准备中，请稍后再试。');
       }
-      location.assign(`/?post=${encodeURIComponent(id)}`);
+      routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`);
     }
   };
   load();
