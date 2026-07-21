@@ -4,7 +4,7 @@
   const app = document.getElementById('orderApp');
   const query = new URLSearchParams(location.search);
   const state = {
-    merchant: null, products: [], category: '全部', cart: {}, claims: [], recentOrders: [], screen: 'menu',
+    merchant: null, products: [], category: '全部', cart: {}, claims: [], recentOrders: [], orderItems: {}, screen: 'menu',
     mode: query.get('mode') === 'takeout' ? 'takeout' : 'dinein',
     dinein: { tableCode: String(query.get('table') || '').trim().toLowerCase(), tableName: '', note: '' },
     takeout: { fulfillment: 'delivery', speed: 'standard', name: '', phone: '', address: '', note: '', scheduledAt: '', couponId: null, payment: 'apple_pay', tipPercent: 0, customTip: '', quote: null }
@@ -30,6 +30,7 @@
     return { priorityFee: Number(raw.takeout_priority_fee ?? 3.99), standardMinutes: Number(raw.takeout_standard_minutes ?? 40), pickupMinutes: Number(raw.takeout_pickup_minutes ?? 20) };
   };
   const formatTime = value => value ? new Intl.DateTimeFormat('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'America/Los_Angeles' }).format(new Date(value)) : '等待商家确认';
+  const orderStatusLabel = status => ({pending:'等待商家确认',confirmed:'商家已接单',preparing:'制作中',served:'已上齐',completed:'已完成',cancelled:'已取消'}[status] || '处理中');
   const nav = screen => { state.screen = screen; render(); window.scrollTo(0, 0); };
   const persistFields = () => {
     const get = id => document.getElementById(id)?.value;
@@ -151,7 +152,7 @@
 
   function renderOrders() {
     const orders = state.recentOrders;
-    app.innerHTML = `${top('已点外卖')}${orders.length ? `<div class="order-history">${orders.map(order => `<article class="history-card"><div class="history-heading"><span><b>${esc(order.order_code || '外卖订单')}</b><small>${formatTime(order.created_at)} 下单</small></span><em>${esc(order.status === 'completed' ? '已完成' : order.status === 'cancelled' ? '已取消' : '处理中')}</em></div><p><b>${order.fulfillment === 'delivery' ? '派送地址' : '到店自取'}</b>　${esc(order.delivery_address || state.merchant?.address || '')}</p><p><b>预计${order.fulfillment === 'delivery' ? '送达' : '取餐'}</b>　${formatTime(order.estimated_at || order.delivery_at || new Date(new Date(order.created_at).getTime() + settings().standardMinutes * 60000).toISOString())}</p><div class="summary-line"><span>订单金额</span><b>${money(order.subtotal)}</b></div><button class="contact-driver" disabled>联系外卖员（即将开放）</button></article>`).join('')}</div>` : '<div class="empty">暂时没有进行中的外卖订单。</div>'}`;
+    app.innerHTML = `${top('已点外卖')}${orders.length ? `<div class="order-history">${orders.map(order => { const items = state.orderItems[String(order.id)] || []; const served = items.reduce((count, item) => count + (item.is_served ? Number(item.quantity || 0) : 0), 0); const totalItems = items.reduce((count, item) => count + Number(item.quantity || 0), 0); const discount = Number(order.quoted_discount_amount || 0); const tip = Number(order.tip_amount || 0); const estimated = order.estimated_at || order.delivery_at || new Date(new Date(order.created_at).getTime() + settings().standardMinutes * 60000).toISOString(); return `<article class="history-card"><div class="history-heading"><span><b>${esc(order.order_code || '外卖订单')}</b><small>${formatTime(order.created_at)} 下单</small></span><em>${esc(orderStatusLabel(order.status))}</em></div><p><b>${order.fulfillment === 'delivery' ? '派送地址' : '到店自取'}</b>　${esc(order.delivery_address || state.merchant?.address || '')}</p><p><b>预计${order.fulfillment === 'delivery' ? '送达' : '取餐'}</b>　${formatTime(estimated)}</p>${items.length ? `<div class="history-items"><b>订单内容${totalItems ? ` · 已完成 ${served}/${totalItems}` : ''}</b>${items.map(item => `<div class="summary-line"><span>${esc(item.product_name || '菜品')} × ${Number(item.quantity || 0)}${item.is_served ? ' · 已完成' : item.kitchen_done ? ' · 待上桌' : ' · 制作中'}</span><b>${money(Number(item.unit_price || 0) * Number(item.quantity || 0))}</b></div>`).join('')}</div>` : '<p class="muted">正在读取订单菜品…</p>'}<div class="summary-line"><span>菜品小计</span><b>${money(order.subtotal)}</b></div>${discount ? `<div class="summary-line"><span>优惠券优惠</span><b class="danger">-${money(discount)}</b></div>` : ''}${tip ? `<div class="summary-line"><span>小费</span><b>${money(tip)}</b></div>` : ''}<div class="summary-line total"><span>当前订单金额</span><b>${money(Math.max(0, Number(order.subtotal || 0) - discount + tip))}</b></div><button class="contact-driver" disabled>联系外卖员（即将开放）</button></article>`; }).join('')}</div>` : '<div class="empty">暂时没有进行中的外卖订单。</div>'}`;
   }
 
   function renderSuccess() {
@@ -190,6 +191,16 @@
     if (!currentUser?.id) return [];
     const response = await api(`/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(state.merchant.user_id)}&user_id=eq.${encodeURIComponent(currentUser.id)}&order_type=eq.takeout&select=*&order=created_at.desc&limit=20`);
     return response.ok ? response.json() : [];
+  }
+  async function loadOrderItems(orders) {
+    const ids = (orders || []).map(order => String(order.id || '')).filter(Boolean);
+    state.orderItems = {};
+    if (!ids.length) return;
+    try {
+      const response = await api(`/rest/v1/merchant_order_items?order_id=in.(${ids.map(encodeURIComponent).join(',')})&select=order_id,product_name,quantity,unit_price,price_label,is_served,kitchen_done,batch_no&order=batch_no.asc,id.asc`);
+      const rows = response.ok ? await response.json() : [];
+      rows.forEach(item => { const key = String(item.order_id); (state.orderItems[key] ||= []).push(item); });
+    } catch (error) { console.warn('订单菜品读取失败。', error); }
   }
   async function lookupAddress() {
     persistFields();
@@ -252,11 +263,11 @@
     }) });
     if (!response.ok) { console.warn(await response.text()); alert('订单提交失败，请稍后再试。'); return; }
     state.orderId = await response.json();
-    state.cart = {}; state.recentOrders = await loadRecentOrders(); nav('success');
+    state.cart = {}; state.recentOrders = await loadRecentOrders(); await loadOrderItems(state.recentOrders); nav('success');
   }
 
   window.Order = {
-    back, close, menu: () => nav('menu'), cart: () => nav('cart'), details: async () => { if (isTakeout()) { state.claims = await loadClaims(); await refreshCheckoutQuote(); } nav('details'); }, orders: async () => { state.recentOrders = await loadRecentOrders(); nav('orders'); },
+    back, close, menu: () => nav('menu'), cart: () => nav('cart'), details: async () => { if (isTakeout()) { state.claims = await loadClaims(); await refreshCheckoutQuote(); } nav('details'); }, orders: async () => { state.recentOrders = await loadRecentOrders(); await loadOrderItems(state.recentOrders); nav('orders'); },
     category: value => { state.category = value; render(); }, qty: (id, delta) => { const next = Math.max(0, Math.min(99, Number(state.cart[id] || 0) + Number(delta))); if (next) state.cart[id] = next; else delete state.cart[id]; render(); },
     fulfillment: value => { persistFields(); state.takeout.fulfillment = value; state.takeout.speed = 'standard'; render(); }, speed: value => { persistFields(); state.takeout.speed = value; render(); },
     coupon: async id => { persistFields(); state.takeout.couponId = Number(state.takeout.couponId) === id ? null : id; await refreshCheckoutQuote(); render(); }, payment: async value => { persistFields(); state.takeout.payment = value; await refreshCheckoutQuote(); render(); },
@@ -282,7 +293,7 @@
       state.dinein.tableName = context.table_name || '扫码点餐';
     }
     state.products = Array.isArray(state.merchant.products) ? state.merchant.products : [];
-    if (isTakeout()) state.recentOrders = await loadRecentOrders();
+    if (isTakeout()) { state.recentOrders = await loadRecentOrders(); await loadOrderItems(state.recentOrders); }
     render();
   })().catch(error => { console.error(error); app.innerHTML = '<div class="empty">点餐页面暂时无法打开，请稍后再试。</div>'; });
 })();
