@@ -76,6 +76,7 @@
 <script src="./shared/media-cache.js?v=5.435"></script>
 <script src="./shared/media-upload.js?v=5.436"></script>
 <script src="./shared/embedded-module-shell.js?v=5.440"></script>
+<script src="./shared/app-update-manager.js?v=5.441"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3347,34 +3348,25 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.440';
+const APP_VERSION = '5.441';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
 console.info(`乐生活 当前版本：v${APP_VERSION}`);
 
-function updateNetworkOfflineOverlay(){
-  const overlay = document.getElementById('networkOfflineOverlay');
-  if(!overlay) return;
-  const offline = navigator.onLine === false;
-  overlay.classList.toggle('open', offline);
-  overlay.setAttribute('aria-hidden', offline ? 'false' : 'true');
-}
-function retryNetworkConnection(){
-  updateNetworkOfflineOverlay();
-  if(navigator.onLine){
-    window.location.reload();
-  }
-}
+const appUpdateManager = window.LeshenghuoAppUpdateManager?.create({
+  version: APP_VERSION,
+  cacheVersionKey: APP_CACHE_VERSION_KEY,
+  reloadVersionKey: APP_RELOAD_VERSION_KEY,
+  manifestPath: APP_VERSION_MANIFEST,
+  isEmbedded: isEmbeddedAppEntry
+});
+function updateNetworkOfflineOverlay(){ return appUpdateManager?.updateOfflineOverlay(); }
+function retryNetworkConnection(){ return appUpdateManager?.retryNetwork(); }
 window.retryNetworkConnection = retryNetworkConnection;
-window.addEventListener('offline', updateNetworkOfflineOverlay);
-window.addEventListener('online', updateNetworkOfflineOverlay);
+appUpdateManager?.bindNetwork();
 
-function syncVisibleAppVersion(){
-  document.querySelectorAll('[data-app-version]').forEach(el => {
-    el.textContent = `v${APP_VERSION}`;
-  });
-}
+function syncVisibleAppVersion(){ return appUpdateManager?.syncVisibleVersion(); }
 
 function isEmbeddedAppEntry(){
   try {
@@ -3456,110 +3448,14 @@ function bindNativeRestaurantDeepLinks(){
 
 bindNativeRestaurantDeepLinks();
 
-function clearOldVersionCache(){
-  const last = localStorage.getItem(APP_CACHE_VERSION_KEY);
-  if(last === APP_VERSION) return;
-  [
-    'wanba_posts',
-    'userProfile',
-    'userProfile_guest'
-  ].forEach(key => localStorage.removeItem(key));
-  localStorage.setItem(APP_CACHE_VERSION_KEY, APP_VERSION);
-}
-
-function setLaunchStatus(text){
-  const el = document.getElementById('launchStatus');
-  if(el) el.textContent = text;
-}
-
-async function clearWebRuntimeCaches(){
-  try {
-    if('serviceWorker' in navigator){
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map(reg => reg.unregister()));
-    }
-  } catch(e){ console.warn('Service Worker 清理失败:', e.message); }
-  try {
-    if('caches' in window){
-      const keys = await caches.keys();
-      await Promise.all(keys.map(key => caches.delete(key)));
-    }
-  } catch(e){ console.warn('Cache Storage 清理失败:', e.message); }
-}
-
-function versionManifestUrl(){
-  const url = new URL(APP_VERSION_MANIFEST, window.location.href);
-  url.searchParams.set('t', String(Date.now()));
-  return url.href;
-}
-
-async function replaceDocumentWithFreshIndex(version){
-  const target = new URL('index.html', window.location.href);
-  target.searchParams.set('app_v', version || APP_VERSION);
-  if(isEmbeddedAppEntry()) target.searchParams.set('embedded_app', '1');
-  target.searchParams.set('refresh_t', String(Date.now()));
-  if(isEmbeddedAppEntry()){
-    try { sessionStorage.setItem('leshenghuo_embedded_app_entry', '1'); } catch(e){}
-  }
-  const res = await fetch(target.href, {
-    cache: 'no-store',
-    headers: { 'Cache-Control': 'no-cache' }
-  });
-  if(!res.ok) throw new Error('index http ' + res.status);
-  const html = await res.text();
-  document.open();
-  document.write(html);
-  document.close();
-}
-
-async function checkRemoteAppVersion(){
-  if(window.location.protocol === 'file:') return false;
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timeoutId = controller ? setTimeout(() => controller.abort(), 1400) : null;
-  try {
-    setLaunchStatus('正在检查最新版本…');
-    const res = await fetch(versionManifestUrl(), {
-      method: 'GET',
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache' },
-      signal: controller?.signal
-    });
-    if(!res.ok) return false;
-    const manifest = await res.json();
-    const remoteVersion = String(manifest.version || '').trim();
-    if(!remoteVersion || remoteVersion === APP_VERSION) return false;
-
-    setLaunchStatus(manifest.message || '检测到新版本，正在更新…');
-    await clearWebRuntimeCaches();
-    const reloadKey = `${APP_VERSION}->${remoteVersion}`;
-    if(sessionStorage.getItem(APP_RELOAD_VERSION_KEY) === reloadKey){
-      console.warn(`已尝试更新到 v${remoteVersion}，本次不再重复刷新`);
-      return false;
-    }
-    sessionStorage.setItem(APP_RELOAD_VERSION_KEY, reloadKey);
-    await replaceDocumentWithFreshIndex(remoteVersion);
-    return true;
-  } catch(e){
-    console.warn('版本检查失败，继续使用当前页面:', e.message);
-    return false;
-  } finally {
-    if(timeoutId) clearTimeout(timeoutId);
-  }
-}
-
-function hideLaunchScreen(){
-  const el = document.getElementById('launchScreen');
-  if(!el) return;
-  el.classList.add('done');
-  setTimeout(() => { el.remove(); }, 520);
-}
-function notifyAppReady(){
-  try {
-    if(isEmbeddedAppEntry() && window.parent && window.parent !== window){
-      window.parent.postMessage({ type:'leshenghuo_app_ready', version: APP_VERSION }, '*');
-    }
-  } catch(e){}
-}
+function clearOldVersionCache(){ return appUpdateManager?.clearOldVersionCache(); }
+function setLaunchStatus(text){ return appUpdateManager?.setLaunchStatus(text); }
+async function clearWebRuntimeCaches(){ return appUpdateManager?.clearRuntimeCaches(); }
+function versionManifestUrl(){ return appUpdateManager?.manifestUrl(); }
+async function replaceDocumentWithFreshIndex(version){ return appUpdateManager?.replaceDocument(version); }
+async function checkRemoteAppVersion(){ return appUpdateManager?.checkRemoteVersion(); }
+function hideLaunchScreen(){ return appUpdateManager?.hideLaunch(); }
+function notifyAppReady(){ return appUpdateManager?.notifyReady(); }
 
 const APP_GESTURE_EDGE = 28;
 const APP_GESTURE_MIN_X = 74;
@@ -18464,7 +18360,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Embedded Module Shell】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared App Update Manager】`);
 </script>
 </body>
 </html>
