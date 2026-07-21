@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.446';
+  const version = '5.447';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -82,6 +82,7 @@
 <script src="./shared/app-pull-refresh.js?v=5.444"></script>
 <script src="./shared/app-fixed-layout.js?v=5.445"></script>
 <script src="./shared/app-module-router.js?v=5.446"></script>
+<script src="./shared/auth-verification-limits.js?v=5.447"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3353,7 +3354,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.446';
+const APP_VERSION = '5.447';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3645,27 +3646,10 @@ function onProfileCoverSelected(event){
 }
 
 /* ---- 验证邮件频率限制：每邮箱1分钟1次，30分钟内最多5次 ---- */
-function getVerifyLog(email){
-  try { return (JSON.parse(localStorage.getItem('wanba_verify_log')||'{}')[email]) || []; } catch(e){ return []; }
-}
-function pushVerifyLog(email){
-  let all = {};
-  try { all = JSON.parse(localStorage.getItem('wanba_verify_log')||'{}'); } catch(e){}
-  const now = Date.now();
-  const list = (all[email]||[]).filter(t => now - t < 30*60*1000);
-  list.push(now);
-  all[email] = list;
-  localStorage.setItem('wanba_verify_log', JSON.stringify(all));
-  return list.length; // 返回30分钟内第几次
-}
-function canSendVerify(email){
-  const now = Date.now();
-  const list = getVerifyLog(email).filter(t => now - t < 30*60*1000);
-  if(list.length >= 5) return { ok:false, reason:'limit' };
-  const last = list[list.length-1];
-  if(last && now - last < 60*1000) return { ok:false, reason:'cooldown', wait: Math.ceil((60*1000-(now-last))/1000) };
-  return { ok:true };
-}
+const authVerificationLimits = window.LeshenghuoAuthVerificationLimits?.create();
+function getVerifyLog(email){ return authVerificationLimits?.get(email) || []; }
+function pushVerifyLog(email){ return authVerificationLimits?.record(email) || 0; }
+function canSendVerify(email){ return authVerificationLimits?.canSend(email) || { ok:true }; }
 async function resendVerifyEmail(email){
   const {res} = await authRequest(`${SUPABASE_URL}/auth/v1/resend`, {
     method:'POST',
@@ -18122,7 +18106,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared App Module Router】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Auth Verification Limits】`);
 </script>
 </body>
 </html>
