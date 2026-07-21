@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.450';
+  const version = '5.451';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -86,6 +86,7 @@
 <script src="./shared/auth-session.js?v=5.448"></script>
 <script src="./shared/auth-api.js?v=5.449"></script>
 <script src="./shared/supabase-client.js?v=5.450"></script>
+<script src="./shared/identity-cache.js?v=5.451"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3214,22 +3215,19 @@ window._merchantLogoCache = window._merchantLogoCache || {};
 window._merchantVerifiedCache = window._merchantVerifiedCache || {};
 window._merchantNameCache = window._merchantNameCache || {};
 window._merchantIdentityCache = window._merchantIdentityCache || {};
+const identityCache = window.LeshenghuoIdentityCache?.create({
+  getSession: () => session,
+  getCurrentUser: () => currentUser,
+  getCurrentMerchant: () => currentMerchant
+});
 function setMerchantLogoCache(userId, logo){
-  if(!userId) return;
-  window._merchantLogoCache[userId] = logo || null;
+  identityCache?.setMerchantLogo(userId, logo);
 }
 function setMerchantIdentityCache(userId, merchant){
-  if(!userId) return;
-  const m = merchant || {};
-  window._merchantIdentityCache[userId] = Object.assign({}, window._merchantIdentityCache[userId] || {}, m);
-  window._merchantVerifiedCache[userId] = !!m.verified;
-  if(m.logo !== undefined) setMerchantLogoCache(userId, m.logo || null);
-  if(m.business_name) window._merchantNameCache[userId] = m.business_name;
+  identityCache?.setMerchantIdentity(userId, merchant);
 }
 function isVerifiedMerchantUser(userId){
-  if(!userId) return false;
-  if(session && session.user && userId === session.user.id && currentMerchant && currentMerchant.verified) return true;
-  return !!window._merchantVerifiedCache[userId];
+  return identityCache?.isVerifiedMerchant(userId) || false;
 }
 function refreshAvatarDisplays(userId){
   if(!userId) return;
@@ -3241,9 +3239,7 @@ function refreshAvatarDisplays(userId){
   if(document.getElementById('followDirectoryOverlay')?.classList.contains('open')) renderFollowDirectory();
 }
 function cacheUserAvatar(userId, avatar){
-  if(!userId) return;
-  window._avatarCache[userId] = avatar || null;
-  setProfileCache(Object.assign({}, window._profileCache[userId] || {}, { user_id:userId, avatar:avatar || null, updated_at:new Date().toISOString() }));
+  identityCache?.cacheAvatar(userId, avatar);
 }
 function syncCurrentUserAuthorName(name){
   if(!(session && session.user) || !name) return;
@@ -3263,33 +3259,16 @@ function syncCurrentUserAuthorName(name){
   }
 }
 function resolveAvatarUrl(user_id){
-  if(!user_id) return null;
-  // 商家笔记优先显示店铺Logo；自己的商家资料用内存里的 currentMerchant，最新且不用等网络
-  if(session && session.user && user_id === session.user.id && currentMerchant && currentMerchant.logo) return currentMerchant.logo;
-  if(window._merchantLogoCache[user_id]) return window._merchantLogoCache[user_id];
-  // 普通用户头像仍然沿用 profiles.avatar
-  if(session && session.user && user_id === session.user.id && currentUser.avatar) return currentUser.avatar;
-  return window._avatarCache[user_id] || null;
+  return identityCache?.resolveAvatar(user_id) || null;
 }
 function avatarImageSrc(userId, url){
-  const source = String(url || '');
-  if(!source || source.startsWith('data:') || source.startsWith('blob:')) return source;
-  const updatedAt = window._profileCache[userId]?.updated_at || (session?.user?.id === userId ? currentUser?.avatarUpdatedAt : '');
-  if(!updatedAt) return source;
-  try {
-    const parsed = new URL(source, window.location.href);
-    parsed.searchParams.set('avatar_v', String(new Date(updatedAt).getTime() || updatedAt));
-    return parsed.toString();
-  } catch(error){ return source; }
+  return identityCache?.avatarImageSrc(userId, url) || String(url || '');
 }
 function setProfileCache(profile){
-  if(!profile || !profile.user_id) return;
-  window._profileCache[profile.user_id] = Object.assign({}, window._profileCache[profile.user_id] || {}, profile);
-  if(profile.avatar !== undefined) window._avatarCache[profile.user_id] = profile.avatar || null;
+  identityCache?.setProfile(profile);
 }
 function cachedProfile(userId, fallbackName){
-  const row = window._profileCache[userId] || {};
-  return Object.assign({ user_id:userId, name:fallbackName || '乐生活用户', avatar:resolveAvatarUrl(userId), bio:'', tags:[], gender:'', birth:'', cover:'' }, row);
+  return identityCache?.cachedProfile(userId, fallbackName) || { user_id:userId, name:fallbackName || '乐生活用户', avatar:null, bio:'', tags:[], gender:'', birth:'', cover:'' };
 }
 async function loadProfilesForIds(userIds){
   const ids = [...new Set((userIds || []).filter(Boolean))];
@@ -3357,7 +3336,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.450';
+const APP_VERSION = '5.451';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -18060,7 +18039,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Supabase Client】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Identity Cache】`);
 </script>
 </body>
 </html>
