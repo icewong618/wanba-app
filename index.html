@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.418';
+  const version = '5.419';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -3323,7 +3323,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.418';
+const APP_VERSION = '5.419';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -5406,8 +5406,8 @@ window._merchantOrderState = window._merchantOrderState || { merchant:null, tabl
 function merchantOrderState(){ return window._merchantOrderState; }
 function merchantOrderPriceNumber(value){ const match = String(value || '').match(/\d+(?:\.\d{1,2})?/); return match ? Number(match[0]) : 0; }
 function merchantOrderMoney(value){ return `$${Number(value || 0).toFixed(2)}`; }
-function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&restaurant_v=5.418&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
-function merchantTakeoutUrl(m){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&restaurant_v=5.418&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantOrderUrl(m, tableCode){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&table=${encodeURIComponent(tableCode)}&restaurant_v=5.419&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantTakeoutUrl(m){ return `${window.location.origin}/restaurant/order/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&mode=takeout&restaurant_v=5.419&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantQueueUrl(m){ return `https://escoopcity.com/restaurant/queue/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&queue_v=5.382`; }
 function merchantOrderStatusText(status){ return ({pending:'待确认',confirmed:'已确认',preparing:'制作中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '待确认'; }
 function merchantOrderProducts(m){ return merchantProducts(m).filter(p => merchantProductAvailable(p) && p.orderable !== false); }
@@ -17769,7 +17769,7 @@ window.switchTab = function(tab){
   // 避免 iOS 将模块 URL 交给外部 Safari。
   if(tab === 'deals' && !isEmbeddedAppEntry()){
     const url = new URL('./deals/', window.location.href);
-    url.searchParams.set('module_v', '5.418');
+    url.searchParams.set('module_v', '5.419');
     window.location.assign(url.href);
     return;
   }

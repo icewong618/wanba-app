@@ -30,11 +30,15 @@
     if(!merchant) return;
     if(action === 'orders' || action === 'takeout'){
       const view = action === 'takeout' ? 'takeout' : 'dinein';
-      location.assign(`/restaurant/operations/?merchant=${encodeURIComponent(query.get('merchant') || '')}&view=${view}&restaurant_v=5.418`);
+      location.assign(`/restaurant/operations/?merchant=${encodeURIComponent(query.get('merchant') || '')}&view=${view}&restaurant_v=5.419`);
       return;
     }
     if(action === 'queue'){
-      location.assign(`/restaurant/queue/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}&restaurant_v=5.418`);
+      location.assign(`/restaurant/queue/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}&restaurant_v=5.419`);
+      return;
+    }
+    if(action === 'store'){
+      location.assign(`/restaurant/store/?merchant=${encodeURIComponent(query.get('merchant') || '')}&restaurant_v=5.419`);
       return;
     }
     location.assign(`/?merchant_admin=${encodeURIComponent(action)}&merchant_id=${encodeURIComponent(merchant.user_id)}&from=merchant_manage`);
