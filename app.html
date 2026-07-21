@@ -72,6 +72,7 @@
 <script src="./shared/feed-data.js?v=5.431"></script>
 <script src="./shared/feed-cache.js?v=5.432"></script>
 <script src="./shared/feed-render.js?v=5.433"></script>
+<script src="./shared/retry-controller.js?v=5.434"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3343,7 +3344,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.433';
+const APP_VERSION = '5.434';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17353,6 +17354,10 @@ const POSTS_FEED_FALLBACK_LIMIT = 12;
 let postsRetryTimer = null;
 let postsRetryDelayMs = POSTS_NETWORK_BACKOFF_MS;
 let postsRetryAt = 0;
+const postsRetryController = window.LeshenghuoRetryController?.create({
+  initialDelay: POSTS_NETWORK_BACKOFF_MS,
+  onRetry: () => loadPostsFromSupabase({force:true})
+});
 const hydratedPostIds = new Set();
 
 function isDataImageUrl(value){ return typeof value === 'string' && value.startsWith('data:image/'); }
@@ -17479,6 +17484,13 @@ async function fetchPostFeed(url, options, timeoutMs = 6500){
   }
 }
 function schedulePostsRetry(){
+  if(postsRetryController){
+    const scheduled = postsRetryController.schedule();
+    postsRetryTimer = postsRetryController.scheduled ? true : null;
+    postsRetryAt = postsRetryController.nextAt;
+    postsRetryDelayMs = postsRetryController.delay;
+    return scheduled;
+  }
   if(postsRetryTimer || !navigator.onLine) return;
   const delay = postsRetryDelayMs;
   postsRetryAt = Date.now() + delay;
@@ -17490,6 +17502,13 @@ function schedulePostsRetry(){
   }, delay);
 }
 function clearPostsRetry(){
+  if(postsRetryController){
+    postsRetryController.clear();
+    postsRetryTimer = null;
+    postsRetryAt = 0;
+    postsRetryDelayMs = POSTS_NETWORK_BACKOFF_MS;
+    return;
+  }
   if(postsRetryTimer) clearTimeout(postsRetryTimer);
   postsRetryTimer = null;
   postsRetryAt = 0;
@@ -18535,7 +18554,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Feed Render Shell】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Feed Retry Controller】`);
 </script>
 </body>
 </html>
