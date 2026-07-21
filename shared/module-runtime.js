@@ -20,5 +20,14 @@
     if(options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
     return fetch(`${SUPABASE_URL}${path}`, Object.assign({}, options, { headers }));
   };
-  window.LeshenghuoModuleRuntime = { SUPABASE_URL, SUPABASE_KEY, session, esc, request };
+  const fetchWithTimeout = async (input, options = {}, timeoutMs = 6500) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, Object.assign({}, options, { signal: controller.signal }));
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  window.LeshenghuoModuleRuntime = { SUPABASE_URL, SUPABASE_KEY, session, esc, request, fetchWithTimeout };
 })();
