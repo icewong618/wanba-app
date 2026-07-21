@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.424';
+  const version = '5.425';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -3323,7 +3323,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.424';
+const APP_VERSION = '5.425';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -9340,8 +9340,10 @@ function openPublicUserDm(userId, name){
   if(!(session && session.user)){ showToast('请先登录后再发私信'); openAuth(); return; }
   closePublicProfileMenu();
   closeUserPublicPage();
-  switchTab('message');
-  setTimeout(() => openThread(userId, name), 0);
+  const url = new URL('./messages/', window.location.href);
+  url.searchParams.set('to', userId);
+  if(name) url.searchParams.set('name', name);
+  window.location.assign(url.href);
 }
 async function openUserPublicPage(userId, fallbackName){
   if(!userId){ showToast('没有找到用户主页'); return; }
@@ -17764,6 +17766,14 @@ initAppPullToRefresh();
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
+  // 消息中心改由独立模块承载，避免通知与私信继续耦合在首页主程序中。
+  if(tab === 'message'){
+    const url = new URL('./messages/', window.location.href);
+    url.searchParams.set('module_v', '5.425');
+    url.searchParams.set('app_v', APP_VERSION);
+    window.location.assign(url.href);
+    return;
+  }
   // 本周活动统一进入独立模块：日期筛选、活动笔记与后续票务/报名活动共用同一入口。
   if(tab === 'week'){
     const url = new URL('./week/', window.location.href);
@@ -18421,7 +18431,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Activity Calendar Foundation】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Messages Module】`);
 </script>
 </body>
 </html>
