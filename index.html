@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.421';
+  const version = '5.422';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -3323,7 +3323,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.421';
+const APP_VERSION = '5.422';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17764,12 +17764,12 @@ initAppPullToRefresh();
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
-  // 省钱页面已迁移为独立模块，避免其业务代码继续耦合社区主程序。
-  // 浏览器仍进入独立的省钱模块；封装 App 保留在当前 WebView，
-  // 避免 iOS 将模块 URL 交给外部 Safari。
-  if(tab === 'deals' && !isEmbeddedAppEntry()){
+  // 省钱页统一使用独立模块。它与主站同域，同一个 App WebView 内跳转，
+  // 不使用 window.open，因此不会拉起外部浏览器。
+  if(tab === 'deals'){
     const url = new URL('./deals/', window.location.href);
-    url.searchParams.set('module_v', '5.419');
+    url.searchParams.set('module_v', '5.422');
+    url.searchParams.set('app_v', APP_VERSION);
     window.location.assign(url.href);
     return;
   }
@@ -18413,7 +18413,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Restaurant Analytics Workbench】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Deals Module Unification】`);
 </script>
 </body>
 </html>
