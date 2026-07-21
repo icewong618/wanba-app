@@ -45,6 +45,10 @@
       location.assign(`/restaurant/benefits/?merchant=${encodeURIComponent(query.get('merchant') || '')}&restaurant_v=5.420`);
       return;
     }
+    if(action === 'analytics'){
+      location.assign(`/restaurant/analytics/?merchant=${encodeURIComponent(query.get('merchant') || '')}&restaurant_v=5.421`);
+      return;
+    }
     location.assign(`/?merchant_admin=${encodeURIComponent(action)}&merchant_id=${encodeURIComponent(merchant.user_id)}&from=merchant_manage`);
   };
   const count = async path => {
@@ -124,6 +128,7 @@
       <div class="section-head"><b>基础运营</b><span>开通商家即有</span></div>
       <div class="grid">
         ${entry('◉', '会员与核销', '会员、优惠券、奖励和账单', 'benefits', data.claims > 0)}
+        ${entry('◌', '经营统计', '订单、优惠、会员与账单汇总', 'analytics')}
         ${entry('✦', '内容运营', 'AI 发文、动态和优惠发布', 'content')}
         ${entry('▣', '店铺与商品', '编辑店铺资料、商品与服务', 'store')}
         ${entry('♟', '团队权限', '店长、员工与矩阵账号', 'team')}
