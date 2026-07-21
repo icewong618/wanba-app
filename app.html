@@ -74,6 +74,7 @@
 <script src="./shared/feed-render.js?v=5.433"></script>
 <script src="./shared/retry-controller.js?v=5.434"></script>
 <script src="./shared/media-cache.js?v=5.435"></script>
+<script src="./shared/media-upload.js?v=5.436"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3345,7 +3346,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.435';
+const APP_VERSION = '5.436';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17369,71 +17370,16 @@ const mediaCacheController = window.LeshenghuoMediaCache?.create({
   maxEntries: MEDIA_CACHE_MAX_ENTRIES
 });
 function isR2MediaUrl(value){ return mediaCacheController ? mediaCacheController.isMediaUrl(value) : typeof value === 'string' && value.startsWith(R2_MEDIA_PUBLIC_ORIGIN + '/'); }
-async function dataUrlToBlob(dataUrl){
-  const source = await fetch(dataUrl);
-  if(!source.ok) throw new Error('图片读取失败');
-  return source.blob();
-}
-async function createThumbnailDataUrl(dataUrl){
-  const source = await dataUrlToBlob(dataUrl);
-  const objectUrl = URL.createObjectURL(source);
-  try {
-    const image = await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = objectUrl;
-    });
-    const scale = Math.min(1, 480 / Math.max(image.width, image.height));
-    const width = Math.max(1, Math.round(image.width * scale));
-    const height = Math.max(1, Math.round(image.height * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = width; canvas.height = height;
-    canvas.getContext('2d').drawImage(image, 0, 0, width, height);
-    let quality = 0.74;
-    let value = canvas.toDataURL('image/jpeg', quality);
-    while(value.length > 160000 && quality > 0.54){ quality -= 0.05; value = canvas.toDataURL('image/jpeg', quality); }
-    return value;
-  } finally { URL.revokeObjectURL(objectUrl); }
-}
-function mediaKindForUpload(kind){
-  return ['posts','avatars','covers','merchant-logos','merchant-covers','text-covers','coupons','products'].includes(kind) ? kind : 'posts';
-}
-async function uploadMediaBlob(blob, kind){
-  if(!(session && session.access_token)) throw new Error('请先登录后再上传图片');
-  if(!blob || !blob.size) throw new Error('图片不能为空');
-  if(blob.size > 5 * 1024 * 1024) throw new Error('图片压缩后仍超过 5MB，请换一张图片');
-  const send = token => fetch(`${R2_MEDIA_API_URL}/upload`, {
-    method:'POST',
-    headers:{ Authorization:`Bearer ${token}`, 'Content-Type':blob.type || 'image/jpeg', 'x-media-kind':mediaKindForUpload(kind) },
-    body:blob
-  });
-  let response = await send(session.access_token);
-  if(response.status === 401 && typeof refreshSession === 'function' && await refreshSession()) response = await send(session.access_token);
-  const payload = await response.json().catch(() => ({}));
-  if(!response.ok || !payload.url) throw new Error(payload.error || `图片上传失败（${response.status}）`);
-  return payload.url;
-}
-async function uploadMediaDataUrl(value, kind){
-  if(!isDataImageUrl(value)) return value || null;
-  return uploadMediaBlob(await dataUrlToBlob(value), kind);
-}
-async function uploadPostMediaAssets(values, existingThumbnails=[]){
-  const originals = [];
-  const thumbnails = [];
-  for(let index = 0; index < values.length; index += 1){
-    const value = values[index];
-    if(isDataImageUrl(value)){
-      const thumbnailData = await createThumbnailDataUrl(value);
-      const [original, thumbnail] = await Promise.all([uploadMediaDataUrl(value, 'posts'), uploadMediaDataUrl(thumbnailData, 'posts')]);
-      originals.push(original); thumbnails.push(thumbnail);
-    } else {
-      originals.push(value);
-      thumbnails.push(existingThumbnails[index] || value);
-    }
-  }
-  return { originals, thumbnails };
-}
+const mediaUploadController = window.LeshenghuoMediaUpload?.create({
+  apiUrl: R2_MEDIA_API_URL,
+  getAccessToken: () => session?.access_token || null,
+  refreshAccessToken: () => typeof refreshSession === 'function' ? refreshSession() : false
+});
+async function dataUrlToBlob(dataUrl){ return mediaUploadController?.dataUrlToBlob(dataUrl); }
+async function createThumbnailDataUrl(dataUrl){ return mediaUploadController?.createThumbnailDataUrl(dataUrl); }
+async function uploadMediaBlob(blob, kind){ return mediaUploadController?.uploadBlob(blob, kind); }
+async function uploadMediaDataUrl(value, kind){ return mediaUploadController?.uploadDataUrl(value, kind); }
+async function uploadPostMediaAssets(values, existingThumbnails=[]){ return mediaUploadController?.uploadPostAssets(values, existingThumbnails); }
 async function warmMediaCache(url){
   if(mediaCacheController) return mediaCacheController.warm(url);
 }
@@ -18530,7 +18476,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Media Cache】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Media Upload】`);
 </script>
 </body>
 </html>
