@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.406';
+  const version = '5.407';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -84,6 +84,8 @@
     --container-w:1080px;
     --shadow: 0 2px 10px rgba(42,39,33,0.06), 0 1px 2px rgba(42,39,33,0.04);
     --shadow-lift: 0 12px 32px rgba(42,39,33,0.14), 0 2px 8px rgba(42,39,33,0.08);
+    --app-bottom-nav-height:calc(56px + env(safe-area-inset-bottom));
+    --app-bottom-clearance:calc(var(--app-bottom-nav-height) + 60px);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   @keyframes spin{to{transform:rotate(360deg);}}
@@ -732,7 +734,7 @@
   .merchant-public-action{position:absolute;top:calc(12px + env(safe-area-inset-top));z-index:8;width:40px;height:40px;border-radius:999px;background:rgba(255,255,255,.88);color:var(--ink);border:1px solid rgba(255,255,255,.68);box-shadow:0 8px 18px rgba(0,0,0,.14);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
   .merchant-public-share{left:max(12px, env(safe-area-inset-left));}
   .merchant-public-close{right:max(12px, env(safe-area-inset-right));}
-  #merchantPublicBody{height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 0 calc(24px + env(safe-area-inset-bottom));}
+  #merchantPublicBody{height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 0 var(--app-bottom-clearance);}
   .merchant-fullscreen-sheet{position:fixed;inset:0;background:#fff;z-index:430;display:none;flex-direction:column;overflow:hidden;}
   .merchant-fullscreen-sheet.open{display:flex;}
   .merchant-fullscreen-head{height:calc(58px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:#fff;flex-shrink:0;}
@@ -1341,7 +1343,7 @@
     background:rgba(255,255,252,.96);border-top:1px solid var(--line);
     backdrop-filter:blur(10px);
     display:flex;justify-content:space-around;align-items:center;gap:0;
-    height:calc(56px + env(safe-area-inset-bottom));
+    height:var(--app-bottom-nav-height);
     padding-bottom:env(safe-area-inset-bottom);
     z-index:12000;isolation:isolate;box-shadow:0 -2px 8px rgba(42,39,33,0.08);
     pointer-events:auto;
@@ -1363,7 +1365,7 @@
   /* ---- pages ---- */
   .page{
     display:none;animation:fadeIn .3s ease;
-    max-width:var(--container-w);margin:0 auto;padding-bottom:calc(100px + env(safe-area-inset-bottom));
+    max-width:var(--container-w);margin:0 auto;padding-bottom:var(--app-bottom-clearance);
     overflow-x:hidden;
   }
   .page.active{display:block;}
@@ -1423,11 +1425,13 @@
   #page-message .msg-cat-row>button>span:last-of-type{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   #page-message #msgHome{padding-top:var(--message-fixed-top, 142px);}
   #page-message #msgDetail{padding-top:var(--message-header-height, 60px);}
+  #page-message #msgHome,
+  #page-message #msgDetail{padding-bottom:var(--app-bottom-clearance)!important;}
   .profile-header{
     background:var(--card);border-bottom:1px solid var(--line);
     padding-bottom:0;position:relative;
   }
-  .profile-page-shell{background:#fff;min-height:100vh;padding-bottom:calc(70px + env(safe-area-inset-bottom));}
+  .profile-page-shell{background:#fff;min-height:100vh;padding-bottom:var(--app-bottom-clearance);}
   .profile-cover-card{position:relative;margin:0;background:#fff;}
   .profile-cover-bg{
     position:relative;min-height:350px;padding:14px 16px 18px;
@@ -3319,7 +3323,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.406';
+const APP_VERSION = '5.407';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7291,7 +7295,7 @@ async function saveMerchantEnabledFeatures(merchant, values){
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
 function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.365&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
-function merchantAutoUrl(m, tab='buy'){ return `https://escoopcity.com/autos/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tab=${encodeURIComponent(tab === 'sell' ? 'sell' : 'buy')}&auto_v=5.406&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantAutoUrl(m, tab='buy'){ return `https://escoopcity.com/autos/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tab=${encodeURIComponent(tab === 'sell' ? 'sell' : 'buy')}&auto_v=5.407&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 async function openMerchantAutoPage(merchantUserId, tab='buy'){
   try {
     const merchant = await getMerchantOrderMerchant(merchantUserId);
@@ -7310,7 +7314,7 @@ async function openMerchantAutoManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/autos/manage/?merchant=${encodeURIComponent(id)}&manage_v=5.406&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/autos/manage/?merchant=${encodeURIComponent(id)}&manage_v=5.407&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开二手车管理失败:', error.message); showToast('二手车管理暂时无法打开，请稍后再试'); }
@@ -17765,7 +17769,7 @@ window.switchTab = function(tab){
   // 避免 iOS 将模块 URL 交给外部 Safari。
   if(tab === 'deals' && !isEmbeddedAppEntry()){
     const url = new URL('./deals/', window.location.href);
-    url.searchParams.set('module_v', '5.406');
+    url.searchParams.set('module_v', '5.407');
     window.location.assign(url.href);
     return;
   }

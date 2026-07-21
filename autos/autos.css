@@ -33,3 +33,7 @@
 .sticky{bottom:calc(82px + env(safe-area-inset-bottom))!important;margin-bottom:8px}
 .saved-card .save-button{width:42px!important;min-width:42px!important;padding:6px!important;font-size:23px!important;line-height:1!important}
 @media(min-width:650px){.sticky{bottom:24px!important}}
+
+/* v5.407: reserve space for the host app's persistent bottom navigation. */
+.auto-app{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+@media(min-width:650px){.auto-app{padding-bottom:34px}}

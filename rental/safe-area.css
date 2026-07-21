@@ -1,0 +1,3 @@
+/* Shared host-app clearance for the rental module. */
+.rental-app{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+@media(min-width:720px){.rental-app{padding-bottom:34px}}
