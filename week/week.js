@@ -87,7 +87,7 @@
     }
   };
   window.WeekEvents = {
-    back: () => routeInAppShell('home') || (history.length > 1 ? history.back() : location.assign('/')),
+    back: () => window.LeshenghuoModuleBridge?.back('/') || (history.length > 1 ? history.back() : location.assign('/')),
     refresh: load,
     filter: value => { state.filter = value; render(); },
     open: id => {

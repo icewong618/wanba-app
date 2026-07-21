@@ -16,11 +16,20 @@
     if(path === '/messages') return 'message';
     return 'profile';
   };
+  const back = (fallback = '/') => {
+    if(route('home')) return true;
+    if(window.history.length > 1){
+      window.history.back();
+      return true;
+    }
+    window.location.assign(fallback);
+    return true;
+  };
   document.addEventListener('click', event => {
     const link = event.target.closest?.('.module-bottom-nav a');
     if(!link || !isEmbedded()) return;
     event.preventDefault();
     route(routeFromPath(link.href));
   });
-  window.LeshenghuoModuleBridge = { isEmbedded, route, routeFromPath };
+  window.LeshenghuoModuleBridge = { isEmbedded, route, routeFromPath, back };
 })();
