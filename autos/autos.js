@@ -3,7 +3,7 @@
   const SUPABASE_KEY='sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app=document.getElementById('autoApp');
   const query=new URLSearchParams(location.search);
-  const state={merchant:null,listings:[],tab:query.get('tab')==='sell'?'sell':'buy',screen:'list',selected:null,sellPhotos:[],savedIds:new Set(),compareIds:new Set(),filters:{type:'',fuel:'',price:''}};
+  const state={merchant:null,listings:[],tab:query.get('tab')==='sell'?'sell':'buy',screen:'list',selected:null,sellPhotos:[],savedIds:new Set(),compareIds:new Set(),filters:{type:'',fuel:'',price:''},routeStack:[]};
   const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const money=v=>`$${Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
   const tr=key=>window.LeshenghuoI18n?.t?.(key)||key;
@@ -99,6 +99,7 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     event?.stopPropagation();
     const car=state.listings.find(item=>String(item.id)===String(id));
     if(!car){alert('暂时找不到这辆车，请刷新后重试。');return;}
+    state.routeStack.push({screen:state.screen,tab:state.tab,selectedId:state.selected?.id||null});
     state.selected=car;
     state.screen='detail';
     renderDetail();
@@ -120,6 +121,19 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
     if(cars.length<2){alert('至少选择两辆车后再对比。');state.screen='list';return renderList();}
     const row=(label,key,format=value=>value||'—')=>`<div class="compare-row"><b>${esc(label)}</b>${cars.map(car=>`<span>${esc(format(car[key]))}</span>`).join('')}</div>`;
     app.innerHTML=`${top('车辆对比')}<p class="compare-hint">左右滑动即可查看全部车辆和参数。</p><section class="compare-scroll"><section class="compare-grid" style="--compare-count:${cars.length}"><div class="compare-row compare-head"><b>项目</b>${cars.map(car=>`<span><strong>${esc(car.title)}</strong><button class="outline" type="button" onclick="Auto.openVehicle(event,'${esc(car.id)}')">查看详情</button></span>`).join('')}</div>${row('售价','price',money)}${row('年份','year')}${row('里程','mileage',value=>value?`${Number(value).toLocaleString()} mi`:'—')}${row('车型','vehicle_type')}${row('能源','fuel_type')}${row('变速箱','transmission')}${row('驱动','drivetrain')}${row('事故记录','accident_history')}${row('过户次数','owner_count',value=>value===null||value===undefined?'—':`${value} 次`)}${row('产权状态','title_status')}${row('保修状态','warranty_status')}</section></section><button class="outline" type="button" style="width:100%;margin-top:15px" onclick="Auto.clearCompare()">清空对比</button>`;
+  }
+  function restorePreviousRoute(){
+    const previous=state.routeStack.pop();
+    if(!previous)return false;
+    state.screen=previous.screen;
+    state.tab=previous.tab;
+    state.selected=previous.selectedId?state.listings.find(item=>String(item.id)===String(previous.selectedId))||null:null;
+    if(state.screen==='detail')renderDetail();
+    else if(state.screen==='lead')renderLead('test_drive');
+    else if(state.screen==='compare')renderCompareView();
+    else renderList();
+    window.scrollTo({top:0,behavior:'instant'});
+    return true;
   }
   const legacyRenderList=renderList;
   renderList=function(){
@@ -198,6 +212,7 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
   }
   function saveSearchView(){
     if(!session()?.user){alert('请先登录后保存筛选和开启降价提醒。');return;}
+    state.routeStack.push({screen:state.screen,tab:state.tab,selectedId:state.selected?.id||null});
     state.screen='save-search';
     const suggested=alertFilterLabel(state.filters);
     app.innerHTML=`${top('保存筛选')}<section class="section"><h2>保存当前条件</h2><p>下次进入这家车行时，可直接查看符合条件的车辆和新近降价信息。</p></section><section class="form"><label class="field">提醒名称<input id="autoSearchName" maxlength="50" value="${esc(suggested)}" placeholder="例如：预算 $20,000 内的 SUV"></label><div class="auto-alert-summary"><b>当前筛选</b><span>${esc(suggested)}</span></div><label class="auto-alert-toggle"><input id="autoPriceAlert" type="checkbox" checked><span><b>开启降价提醒</b><small>车辆价格下调后，会在“我的提醒”中显示。</small></span></label><button class="primary" type="button" onclick="Auto.saveSearch()">保存筛选</button></section>`;
@@ -210,6 +225,7 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
       if(!response.ok)throw new Error('save_failed');
       await loadSearchAlerts();
       alert('筛选已保存。');
+      state.routeStack=[];
       state.screen='list';
       renderList();
     }catch(error){alert('保存失败，请确认已运行 v5.411 数据库更新后重试。');}
@@ -225,6 +241,7 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
   }
   async function alertsView(){
     if(!session()?.user){alert('请先登录后查看提醒。');return;}
+    if(state.screen!=='alerts')state.routeStack.push({screen:state.screen,tab:state.tab,selectedId:state.selected?.id||null});
     state.screen='alerts';
     await loadSearchAlerts();
     const alerts=state.searchAlerts;
@@ -257,18 +274,18 @@ async function testDriveAction(id,action){if(action==='cancel'&&!confirm(tr('确
   load=async function(){await loadBeforeSearchAlerts();await loadSearchAlerts();renderList();};
   window.Auto={...window.Auto,
     close:exit,
-    list(){state.tab='buy';state.screen='list';renderList();},
-    buy(){state.tab='buy';state.screen='list';renderList();},
-    sell(){state.tab='sell';state.screen='list';renderList();},
-    saved(){state.tab='saved';state.screen='list';renderList();},
+    list(){state.routeStack=[];state.tab='buy';state.screen='list';renderList();},
+    buy(){state.routeStack=[];state.tab='buy';state.screen='list';renderList();},
+    sell(){state.routeStack=[];state.tab='sell';state.screen='list';renderList();},
+    saved(){state.routeStack=[];state.tab='saved';state.screen='list';renderList();},
     filter(key,value){state.filters[key]=value;state.screen='list';renderList();},
     open(id){openVehicle(null,id);},openVehicle,toggleFavorite,toggleCompareCard,
     toggleSaved,uploadSellPhotos,removeSellPhoto(index){state.sellPhotos.splice(index,1);renderList();},
-    submitSell,testDrive(){state.screen='lead';renderLead('test_drive');},submitLead,
+    submitSell,testDrive(){state.routeStack.push({screen:state.screen,tab:state.tab,selectedId:state.selected?.id||null});state.screen='lead';renderLead('test_drive');},submitLead,
     quotes:loadQuotes,myVehicles,testDriveAction,quoteResponse,confirmArrival,
-    updateLoan,toggleCompare,clearCompare,compare(){state.screen='compare';renderCompareView();},
+    updateLoan,toggleCompare,clearCompare,compare(){state.routeStack.push({screen:state.screen,tab:state.tab,selectedId:state.selected?.id||null});state.screen='compare';renderCompareView();},
     saveSearchView,saveSearch,alertsView,deleteSearch,
-    back(){document.getElementById('autoCompareFab')?.remove();if(['detail','lead','compare','save-search','alerts'].includes(state.screen)){state.screen='list';renderList()}else exit()}
+    back(){document.getElementById('autoCompareFab')?.remove();if(restorePreviousRoute())return;if(['detail','lead','compare','save-search','alerts'].includes(state.screen)){state.screen='list';renderList()}else exit()}
   };
   load();
 })();
