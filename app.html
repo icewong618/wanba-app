@@ -103,6 +103,7 @@
 <script src="./shared/feedback-attachments-api.js?v=5.467"></script>
 <script src="./shared/content-report-api.js?v=5.468"></script>
 <script src="./shared/admin-feedback-api.js?v=5.471"></script>
+<script src="./shared/admin-center-api.js?v=5.473"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3324,7 +3325,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.472';
+const APP_VERSION = '5.473';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3494,6 +3495,10 @@ const contentReportApi = window.LeshenghuoContentReportApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const adminFeedbackApi = window.LeshenghuoAdminFeedbackApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const adminCenterApi = window.LeshenghuoAdminCenterApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -12048,12 +12053,10 @@ async function loadAdminCenter(force){
   const body = document.getElementById('adminBody');
   if(body) body.innerHTML = '<div class="admin-empty">正在读取管理数据...</div>';
   try {
-    const rpcRes = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/admin_center_snapshot`, {
-      method:'POST',
-      body: JSON.stringify({})
-    });
-    if(rpcRes.ok){
-      const snap = await rpcRes.json();
+    if(!adminCenterApi) throw new Error('管理员中心接口未初始化');
+    const snapshot = await adminCenterApi.readSnapshot();
+    if(snapshot.ok){
+      const snap = snapshot.data;
       adminUsers = Array.isArray(snap.users) ? snap.users : [];
       adminPosts = Array.isArray(snap.posts) ? snap.posts : [];
       adminComments = Array.isArray(snap.comments) ? snap.comments : [];
@@ -12064,20 +12067,12 @@ async function loadAdminCenter(force){
       renderAdminPanel();
       return;
     }
-    console.warn('管理员 RPC 不可用，回退旧查询:', await rpcRes.text());
-    const [uRes, pRes, cRes, bRes] = await Promise.all([
-      authedFetch(`${SUPABASE_URL}/rest/v1/profiles?select=user_id,name,avatar,updated_at&order=updated_at.desc&limit=120`, { method:'GET' }),
-      authedFetch(`${SUPABASE_URL}/rest/v1/posts?select=id,user_id,author,title,content,category,subcategory,community_meta,created_at,likes&order=created_at.desc&limit=80`, { method:'GET' }),
-      authedFetch(`${SUPABASE_URL}/rest/v1/comments?select=id,post_id,user_id,name,text,created_at,parent_id,reply_to_name&order=created_at.desc&limit=120`, { method:'GET' }),
-      authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses?select=user_id,status,reason,created_at,created_by&order=created_at.desc&limit=120`, { method:'GET' })
-    ]);
-    if(!uRes.ok) throw new Error(await uRes.text());
-    if(!pRes.ok) throw new Error(await pRes.text());
-    if(!cRes.ok) throw new Error(await cRes.text());
-    adminUsers = await uRes.json();
-    adminPosts = await pRes.json();
-    adminComments = await cRes.json();
-    adminBanned = bRes.ok ? await bRes.json() : [];
+    console.warn('管理员 RPC 不可用，回退旧查询:', snapshot.error);
+    const fallback = await adminCenterApi.readFallback();
+    adminUsers = fallback.users;
+    adminPosts = fallback.posts;
+    adminComments = fallback.comments;
+    adminBanned = fallback.banned;
     await loadAdminDealPrices(false);
     await loadAdminFeedback();
     await loadAdminContentReports();
@@ -12587,8 +12582,8 @@ async function adminDeletePost(id){
   if(!adminHasAccess()) return;
   if(!confirm('确认删除这篇帖子？删除后不可恢复。')) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/posts?id=eq.${id}`, { method:'DELETE' });
-    if(!res.ok) throw new Error(await res.text());
+    if(!adminCenterApi) throw new Error('管理员中心接口未初始化');
+    await adminCenterApi.deletePost(id);
     posts = posts.filter(p => String(p.id) !== String(id));
     adminPosts = adminPosts.filter(p => String(p.id) !== String(id));
     savePosts();
@@ -12601,8 +12596,8 @@ async function adminDeleteComment(id){
   if(!adminHasAccess()) return;
   if(!confirm('确认删除这条评论/回复？')) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?id=eq.${id}`, { method:'DELETE' });
-    if(!res.ok) throw new Error(await res.text());
+    if(!adminCenterApi) throw new Error('管理员中心接口未初始化');
+    await adminCenterApi.deleteComment(id);
     adminComments = adminComments.filter(c => String(c.id) !== String(id));
     posts.forEach(p => { if(Array.isArray(p.comments)) p.comments = p.comments.filter(c => String(c.id) !== String(id)); });
     savePosts();
@@ -17846,7 +17841,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Supabase Startup Ordering Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Admin Center API Module】`);
 </script>
 </body>
 </html>
