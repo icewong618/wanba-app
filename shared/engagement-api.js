@@ -17,7 +17,19 @@
       method:'POST', body: JSON.stringify(payload)
     });
     const deleteComment = id => request(`${supabaseUrl}/rest/v1/comments?id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
-    return { setReaction, createComment, deleteComment };
+    const loadPostStats = async postId => {
+      if(postId === null || postId === undefined || postId === '') return { views:0, likes:0, comments:0, favorites:0 };
+      const encodedId = encodeURIComponent(postId);
+      const responses = await Promise.all([
+        request(`${supabaseUrl}/rest/v1/post_views?post_id=eq.${encodedId}&select=id`, { method:'GET' }),
+        request(`${supabaseUrl}/rest/v1/likes?post_id=eq.${encodedId}&select=user_id`, { method:'GET' }),
+        request(`${supabaseUrl}/rest/v1/comments?post_id=eq.${encodedId}&select=id`, { method:'GET' }),
+        request(`${supabaseUrl}/rest/v1/favorites?post_id=eq.${encodedId}&select=user_id`, { method:'GET' })
+      ]);
+      const values = await Promise.all(responses.map(async response => response.ok ? response.json() : []));
+      return { views:values[0].length, likes:values[1].length, comments:values[2].length, favorites:values[3].length };
+    };
+    return { setReaction, createComment, deleteComment, loadPostStats };
   };
 
   window.LeshenghuoEngagementApi = { create };

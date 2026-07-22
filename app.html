@@ -92,7 +92,7 @@
 <script src="./shared/message-data.js?v=5.454"></script>
 <script src="./shared/profile-storage.js?v=5.455"></script>
 <script src="./shared/profile-api.js?v=5.481"></script>
-<script src="./shared/engagement-api.js?v=5.457"></script>
+<script src="./shared/engagement-api.js?v=5.486"></script>
 <script src="./shared/follow-api.js?v=5.458"></script>
 <script src="./shared/comment-threading.js?v=5.459"></script>
 <script src="./shared/post-detail-api.js?v=5.460"></script>
@@ -3336,7 +3336,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.485';
+const APP_VERSION = '5.486';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -9940,17 +9940,8 @@ function renderMerchantDashboard(){
 /* 拉取某条笔记的真实浏览量/互动数(赞+评论)/收藏数 */
 async function fetchPostStats(postId){
   try {
-    const [vRes, lRes, cRes, fRes] = await Promise.all([
-      authedFetch(`${SUPABASE_URL}/rest/v1/post_views?post_id=eq.${postId}&select=id`),
-      authedFetch(`${SUPABASE_URL}/rest/v1/likes?post_id=eq.${postId}&select=user_id`),
-      authedFetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${postId}&select=id`),
-      authedFetch(`${SUPABASE_URL}/rest/v1/favorites?post_id=eq.${postId}&select=user_id`)
-    ]);
-    const views = vRes.ok ? (await vRes.json()).length : 0;
-    const likesN = lRes.ok ? (await lRes.json()).length : 0;
-    const commentsN = cRes.ok ? (await cRes.json()).length : 0;
-    const favsN = fRes.ok ? (await fRes.json()).length : 0;
-    return { views, engagement: likesN + commentsN, favs: favsN };
+    const stats = await engagementApi.loadPostStats(postId);
+    return { views:stats.views, engagement:stats.likes + stats.comments, favs:stats.favorites };
   } catch(e){ console.warn('数据统计加载失败:', e.message); return { views:0, engagement:0, favs:0 }; }
 }
 let merchantAnalyticsRangeDays = 7;
@@ -17772,7 +17763,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Membership Transaction API】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Engagement Stats API】`);
 </script>
 </body>
 </html>
