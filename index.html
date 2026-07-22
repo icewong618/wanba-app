@@ -106,6 +106,7 @@
 <script src="./shared/admin-center-api.js?v=5.473"></script>
 <script src="./shared/admin-access-api.js?v=5.474"></script>
 <script src="./shared/merchant-application-api.js?v=5.475"></script>
+<script src="./shared/merchant-team-api.js?v=5.476"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3327,7 +3328,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.475';
+const APP_VERSION = '5.476';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3509,6 +3510,10 @@ const adminAccessApi = window.LeshenghuoAdminAccessApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const merchantApplicationApi = window.LeshenghuoMerchantApplicationApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const merchantTeamApi = window.LeshenghuoMerchantTeamApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -4453,8 +4458,8 @@ function merchantMatrixWorkspaceCardHtml(){
 }
 async function respondMerchantMatrixInvite(id, accept){
   try {
-    const res = await authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_respond_invite', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_team_member_id:Number(id),p_accept:!!accept}) });
-    if(!res.ok) throw new Error(await res.text());
+    if(!merchantTeamApi) throw new Error('商家团队接口未初始化');
+    await merchantTeamApi.respondInvite(id, accept);
     await loadMerchantMatrixState();
     if(currentTab === 'profile') initProfilePage();
     showToast(accept ? '已加入商家团队' : '已拒绝邀请');
@@ -4534,9 +4539,8 @@ async function searchMerchantMatrixPeople(query){
   if(!text){ merchantMatrixPeople = []; renderMerchantMatrixPeople(); return; }
   target.innerHTML = '<div style="font-size:12px;color:var(--ink-faint);padding:8px 0;">正在搜索...</div>';
   try {
-    const res = await authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_search_people', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_query:text})});
-    if(!res.ok) throw new Error(await res.text());
-    merchantMatrixPeople = await res.json();
+    if(!merchantTeamApi) throw new Error('商家团队接口未初始化');
+    merchantMatrixPeople = await merchantTeamApi.searchPeople(text);
     merchantMatrixPeople.forEach(setProfileCache);
     renderMerchantMatrixPeople();
   } catch(error){
@@ -4571,8 +4575,8 @@ async function inviteMerchantMatrixMember(){
 async function revokeMerchantMatrixMember(id){
   if(!confirm('撤销后，该账号将不能再进入会员核销工作台。确定继续吗？')) return;
   try {
-    const res = await authedFetch(SUPABASE_URL + '/rest/v1/rpc/merchant_matrix_revoke_member', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_team_member_id:Number(id)})});
-    if(!res.ok) throw new Error(await res.text());
+    if(!merchantTeamApi) throw new Error('商家团队接口未初始化');
+    await merchantTeamApi.revoke(id);
     showToast('已撤销商家授权');
     await renderMerchantTeamManager();
   } catch(error){ showToast('撤销失败，请稍后重试'); }
@@ -6394,12 +6398,10 @@ function merchantStaffPickerValues(prefix,kind){ return Array.from(document.quer
 async function loadMerchantMatrixState(){
   if(!(session&&session.user)){merchantMatrixWorkspaces=[];merchantMatrixInvites=[];merchantMatrixActiveWorkspace=null;return;}
   try{
-    const [accessRes,inviteRes]=await Promise.all([
-      authedFetch(SUPABASE_URL+'/rest/v1/rpc/merchant_matrix_my_access',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}),
-      authedFetch(SUPABASE_URL+'/rest/v1/merchant_team_members?member_user_id=eq.'+encodeURIComponent(session.user.id)+'&status=eq.pending&select=id,merchant_user_id,role,roles,permissions,invited_at&order=invited_at.desc',{method:'GET'})
-    ]);
-    merchantMatrixWorkspaces=accessRes.ok?(await accessRes.json()).map(row=>Object.assign({},row,{merchant:row.merchant||{}})):[];
-    merchantMatrixInvites=inviteRes.ok?await inviteRes.json():[];
+    if(!merchantTeamApi)throw new Error('商家团队接口未初始化');
+    const state=await merchantTeamApi.loadState(session.user.id);
+    merchantMatrixWorkspaces=(state.workspaces||[]).map(row=>Object.assign({},row,{merchant:row.merchant||{}}));
+    merchantMatrixInvites=state.invites||[];
     const ids=merchantMatrixInvites.map(row=>row.merchant_user_id).filter(Boolean);
     if(ids.length){const res=await authedFetch(SUPABASE_URL+'/rest/v1/merchants?user_id=in.('+ids.map(encodeURIComponent).join(',')+')&select=user_id,business_name,logo');if(res.ok)(await res.json()).forEach(row=>setMerchantIdentityCache(row.user_id,row));}
   }catch(error){console.warn('商家矩阵账号读取失败:',error.message);merchantMatrixWorkspaces=[];merchantMatrixInvites=[];}
@@ -6433,7 +6435,7 @@ async function openMerchantMatrixOperations(merchantUserId){
 async function renderMerchantTeamManager(){
   const body=document.getElementById('merchantTeamManagerBody');if(!body||!currentMerchant)return;body.innerHTML='<div class="deals-empty-panel">正在读取团队成员...</div>';
   try{
-    const res=await authedFetch(SUPABASE_URL+'/rest/v1/merchant_team_members?merchant_user_id=eq.'+encodeURIComponent(currentMerchant.user_id)+'&select=id,member_user_id,role,roles,permissions,status,invited_at,responded_at,updated_at&order=updated_at.desc',{method:'GET'});if(!res.ok)throw new Error(await res.text());const rows=await res.json();await loadProfilesForIds(rows.map(row=>row.member_user_id));const selected=merchantMatrixSelectedPerson,selectedName=selected?(selected.name||'已选择用户'):'还没有选择用户';
+    if(!merchantTeamApi)throw new Error('商家团队接口未初始化');const rows=await merchantTeamApi.listMembers(currentMerchant.user_id);await loadProfilesForIds(rows.map(row=>row.member_user_id));const selected=merchantMatrixSelectedPerson,selectedName=selected?(selected.name||'已选择用户'):'还没有选择用户';
     const members=rows.map(row=>{const p=cachedProfile(row.member_user_id),name=p.name||'乐生活用户',avatar=p.avatar||resolveAvatarUrl(row.member_user_id),status=row.status==='active'?'已授权':row.status==='pending'?'待确认':row.status==='declined'?'已拒绝':'已撤销',editing=Number(window._merchantMatrixEditingId)===Number(row.id);const details=editing?'<div style="grid-column:1/-1;padding-top:7px;">'+merchantStaffAccessPickerHtml('merchantEdit'+Number(row.id),row.roles||[row.role],row.permissions||[])+'<div style="display:flex;gap:8px;margin-top:10px;"><button class="primary" style="padding:7px 10px;border:0;border-radius:8px;background:var(--sage);color:#fff;font-weight:900;" onclick="saveMerchantMatrixMemberAccess('+Number(row.id)+')">保存权限</button><button style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:900;" onclick="closeMerchantMatrixMemberAccess()">取消</button></div></div>':'<button onclick="editMerchantMatrixMemberAccess('+Number(row.id)+')" style="padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:11px;font-weight:900;">权限</button>';const actions=(row.status==='active'||row.status==='pending')?'<button onclick="revokeMerchantMatrixMember('+Number(row.id)+')" style="padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--berry-dark);font-size:11px;font-weight:900;">撤销</button>':'';return '<div style="display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);"><span class="merchant-member-avatar" style="width:38px;height:38px;background:var(--bg-alt);color:var(--sage-dark);">'+(avatar?'<img src="'+escAttr(avatar)+'" alt="">':escHtml(initials(name)))+'</span><div style="min-width:0;"><b style="display:block;font-size:13px;">'+escHtml(name)+'</b><small style="display:block;margin-top:3px;color:var(--ink-faint);">'+escHtml(merchantMatrixRolesText(row.roles,row.role))+' · '+status+'</small></div><div style="display:flex;gap:6px;">'+details+actions+'</div></div>';}).join('')||'<div class="deals-empty-panel" style="margin:12px 0 0;">还没有矩阵账号。</div>';
     body.innerHTML='<div class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:16px;">邀请矩阵账号</b><p style="font-size:12px;line-height:1.6;color:var(--ink-faint);margin:7px 0 12px;">成员用自己的乐生活账号接受邀请后，只能进入你分配的工作区；不会共享商家密码。</p><div class="merchant-checkin-form"><input id="merchantMatrixSearch" placeholder="输入乐生活昵称搜索" oninput="searchMerchantMatrixPeople(this.value)" autocomplete="off"><button onclick="searchMerchantMatrixPeople(document.getElementById(&quot;merchantMatrixSearch&quot;).value)">搜索</button></div><div id="merchantMatrixPeople" style="margin-top:8px;"></div><div style="margin-top:12px;padding:10px;border-radius:9px;background:var(--bg-alt);font-size:12px;">已选择：<b id="merchantMatrixSelected">'+escHtml(selectedName)+'</b></div>'+merchantStaffAccessPickerHtml('merchantInvite',window._merchantMatrixInviteRoles||[],window._merchantMatrixInvitePermissions||[])+'<button class="merchant-reward-redeem-btn" style="margin:12px 0 0;" onclick="inviteMerchantMatrixMember()">发送授权邀请</button></div><div style="font-size:14px;font-weight:900;margin:18px 0 6px;">团队成员</div>'+members;
     renderMerchantMatrixPeople();
@@ -6441,8 +6443,8 @@ async function renderMerchantTeamManager(){
 }
 function editMerchantMatrixMemberAccess(id){window._merchantMatrixEditingId=Number(id);renderMerchantTeamManager();}
 function closeMerchantMatrixMemberAccess(){window._merchantMatrixEditingId=null;renderMerchantTeamManager();}
-async function saveMerchantMatrixMemberAccess(id){const roles=merchantStaffPickerValues('merchantEdit'+Number(id),'role'),permissions=merchantStaffPickerValues('merchantEdit'+Number(id),'permission');if(!roles.length){showToast('请至少选择一个岗位');return;}try{const res=await authedFetch(SUPABASE_URL+'/rest/v1/rpc/merchant_matrix_update_member_access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_team_member_id:Number(id),p_roles:roles,p_permissions:permissions})});if(!res.ok)throw new Error(await res.text());window._merchantMatrixEditingId=null;showToast('员工权限已更新');renderMerchantTeamManager();}catch(error){console.warn('权限更新失败:',error.message);showToast('权限更新失败');}}
-async function inviteMerchantMatrixMember(){const roles=merchantStaffPickerValues('merchantInvite','role'),permissions=merchantStaffPickerValues('merchantInvite','permission');if(!merchantMatrixSelectedPerson){showToast('请先搜索并选择一个乐生活用户');return;}if(!roles.length){showToast('请至少选择一个岗位');return;}try{const res=await authedFetch(SUPABASE_URL+'/rest/v1/rpc/merchant_matrix_invite_member_v2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_member_user_id:merchantMatrixSelectedPerson.user_id,p_roles:roles,p_permissions:permissions})});if(!res.ok)throw new Error(await res.text());merchantMatrixSelectedPerson=null;merchantMatrixPeople=[];showToast('授权邀请已发送，等待对方确认');renderMerchantTeamManager();}catch(error){console.warn('矩阵邀请失败:',error.message);showToast('邀请失败，请确认对方已完成注册');}}
+async function saveMerchantMatrixMemberAccess(id){const roles=merchantStaffPickerValues('merchantEdit'+Number(id),'role'),permissions=merchantStaffPickerValues('merchantEdit'+Number(id),'permission');if(!roles.length){showToast('请至少选择一个岗位');return;}try{if(!merchantTeamApi)throw new Error('商家团队接口未初始化');await merchantTeamApi.updateAccess({id,roles,permissions});window._merchantMatrixEditingId=null;showToast('员工权限已更新');renderMerchantTeamManager();}catch(error){console.warn('权限更新失败:',error.message);showToast('权限更新失败');}}
+async function inviteMerchantMatrixMember(){const roles=merchantStaffPickerValues('merchantInvite','role'),permissions=merchantStaffPickerValues('merchantInvite','permission');if(!merchantMatrixSelectedPerson){showToast('请先搜索并选择一个乐生活用户');return;}if(!roles.length){showToast('请至少选择一个岗位');return;}try{if(!merchantTeamApi)throw new Error('商家团队接口未初始化');await merchantTeamApi.invite({userId:merchantMatrixSelectedPerson.user_id,roles,permissions});merchantMatrixSelectedPerson=null;merchantMatrixPeople=[];showToast('授权邀请已发送，等待对方确认');renderMerchantTeamManager();}catch(error){console.warn('矩阵邀请失败:',error.message);showToast('邀请失败，请确认对方已完成注册');}}
 
 async function openMerchantOrderManager(merchantUserId){
   const id=merchantUserId||merchantOrderManagerMerchantId();
@@ -17802,7 +17804,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Application API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Team API Module】`);
 </script>
 </body>
 </html>
