@@ -8,9 +8,8 @@
   const money=v=>`$${Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
   const tr=key=>window.LeshenghuoI18n?.t?.(key)||key;
   const session=()=>{try{return JSON.parse(localStorage.getItem('wanba_session')||'null')}catch(e){return null}};
-  let refreshInFlight=null;
-  async function refreshSession(){const current=session();if(!current?.refresh_token)return false;if(!refreshInFlight)refreshInFlight=fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:current.refresh_token})}).then(async response=>{if(!response.ok)return false;const next=await response.json();if(!next?.access_token)return false;localStorage.setItem('wanba_session',JSON.stringify({...current,...next,user:next.user||current.user}));return true}).catch(()=>false).finally(()=>{refreshInFlight=null});return refreshInFlight}
-  async function api(path,options={}){const request=()=>fetch(SUPABASE_URL+path,{...options,headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${session()?.access_token||SUPABASE_KEY}`,'Content-Type':'application/json',...(options.headers||{})}});let response=await request();if(response.status===401&&await refreshSession())response=await request();return response}
+  const autoSalesApi=window.LeshenghuoAutoSalesApi?.create({supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_KEY});
+  const api=(path,options={})=>autoSalesApi.request(path,options);
   const top=title=>`<header class="top"><button onclick="Auto.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span><button onclick="Auto.close()" aria-label="关闭">×</button></span></header>`;
   const exit=()=>{if(window.parent!==window){window.parent.postMessage({type:'leshenghuo-close-auto'},'*');return}location.assign('/');};
   const photo=car=>Array.isArray(car?.photos)&&car.photos[0]?`<img src="${esc(car.photos[0])}" alt="">`:'<div class="placeholder">🚘</div>';

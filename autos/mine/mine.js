@@ -8,23 +8,8 @@
   const session = () => { try { return JSON.parse(localStorage.getItem('wanba_session') || 'null'); } catch { return null; } };
   const top = title => `<header class="top"><button onclick="AutoMine.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span><button onclick="AutoMine.close()" aria-label="关闭">×</button></span></header>`;
   const exit = () => { if (window.parent !== window) { window.parent.postMessage({type:'leshenghuo-close-auto'}, '*'); return; } history.length > 1 ? history.back() : location.assign('/'); };
-  async function refreshSession() {
-    const current = session();
-    if (!current?.refresh_token) return false;
-    try {
-      const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method:'POST', headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'}, body:JSON.stringify({refresh_token:current.refresh_token}) });
-      if (!response.ok) return false;
-      const next = await response.json();
-      localStorage.setItem('wanba_session', JSON.stringify({...current,...next,user:next.user || current.user}));
-      return !!next.access_token;
-    } catch { return false; }
-  }
-  async function api(path, options={}) {
-    const request = () => fetch(SUPABASE_URL + path, { ...options, headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${session()?.access_token || SUPABASE_KEY}`,'Content-Type':'application/json',...(options.headers || {})} });
-    let response = await request();
-    if (response.status === 401 && await refreshSession()) response = await request();
-    return response;
-  }
+  const autoSalesApi=window.LeshenghuoAutoSalesApi?.create({supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_KEY});
+  const api=(path,options={})=>autoSalesApi.request(path,options);
   function typeText(type) { return type === 'sell_quote' ? '卖车估价' : type === 'test_drive' ? '预约试驾' : '车辆咨询'; }
   function statusText(status) { return ({new:'已提交',contacted:'商家已联系',scheduled:'已安排',reschedule_requested:'已申请改期',cancelled:'已取消',quoted:'等待你确认',quote_accepted:'已接受报价',quote_declined:'已拒绝报价',closed:'已完成',archived:'已归档'})[status] || status; }
   function openMerchant(slug) { location.assign(`/autos/?merchant=${encodeURIComponent(slug)}&auto_v=5.403`); }

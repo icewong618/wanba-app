@@ -3,30 +3,8 @@ const URL='https://ptxdxepmggmjcndgukjk.supabase.co',KEY='sb_publishable_h3x-jnC
 const app=document.getElementById('autoManageApp'),q=new URLSearchParams(location.search),S={merchantId:q.get('merchant')||'',listings:[],leads:[],screen:'home',edit:null,photos:[],lead:null,leadFilter:'all'};
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const session=()=>{try{return JSON.parse(localStorage.getItem('wanba_session')||'null')}catch{return null}};
-let refreshInFlight=null;
-async function refreshSession(){
-  const current=session();
-  if(!current?.refresh_token) return false;
-  if(!refreshInFlight){
-    refreshInFlight=fetch(`${URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:current.refresh_token})})
-      .then(async response=>{
-        if(!response.ok) return false;
-        const next=await response.json();
-        if(!next?.access_token) return false;
-        localStorage.setItem('wanba_session',JSON.stringify({...current,...next,user:next.user||current.user}));
-        return true;
-      })
-      .catch(()=>false)
-      .finally(()=>{refreshInFlight=null;});
-  }
-  return refreshInFlight;
-}
-async function api(path,opt={}){
-  const request=()=>fetch(URL+path,{...opt,headers:{apikey:KEY,Authorization:`Bearer ${session()?.access_token||KEY}`,'Content-Type':'application/json',...(opt.headers||{})}});
-  let response=await request();
-  if(response.status===401 && await refreshSession()) response=await request();
-  return response;
-}
+const autoSalesApi=window.LeshenghuoAutoSalesApi?.create({supabaseUrl:URL,supabaseKey:KEY});
+const api=(path,opt={})=>autoSalesApi.request(path,opt);
 const money=v=>`$${Number(v||0).toLocaleString('en-US',{maximumFractionDigits:0})}`;
 const close=()=>{if(parent!==window){parent.postMessage({type:'leshenghuo-close-auto'},'*');return}history.length>1?history.back():location.assign('/');};
 const top=t=>`<header class="top"><button onclick="AutoAdmin.back()">‹</button><b>${esc(t)}</b><span class="right"><button onclick="AutoAdmin.close()">×</button></span></header>`;
