@@ -3,6 +3,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
+const paymentMethodName = async (stripe: Stripe, intent: Stripe.PaymentIntent) => {
+  try {
+    const paymentMethodId = typeof intent.payment_method === "string" ? intent.payment_method : intent.payment_method?.id;
+    if (!paymentMethodId) return intent.payment_method_types?.[0] || "card";
+    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+    const wallet = paymentMethod.card?.wallet?.type;
+    return wallet || paymentMethod.type || intent.payment_method_types?.[0] || "card";
+  } catch (error) {
+    console.warn("Unable to identify Stripe payment method", error);
+    return intent.payment_method_types?.[0] || "card";
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
@@ -28,8 +41,21 @@ Deno.serve(async (req) => {
   if (!bookingId) return json({ received: true });
 
   if (event.type === "payment_intent.succeeded") {
-    await admin.from("merchant_rental_payment_attempts").update({ status: "succeeded", updated_at: new Date().toISOString() }).eq("provider_payment_id", intent.id);
-    await admin.from("merchant_rental_bookings").update({ payment_status: "paid", payment_paid_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", bookingId);
+    const method = await paymentMethodName(stripe, intent);
+    const isTest = String(intent.metadata?.payment_environment || "") !== "live";
+    const storedMethod = `${isTest ? "stripe_test" : "stripe"}_${method}`;
+    const paidAt = new Date().toISOString();
+    await admin.from("merchant_rental_payment_attempts").update({
+      status: "succeeded",
+      metadata: { payment_environment: isTest ? "test" : "live", payment_method: method },
+      updated_at: paidAt,
+    }).eq("provider_payment_id", intent.id);
+    await admin.from("merchant_rental_bookings").update({
+      payment_status: "paid",
+      payment_method: storedMethod,
+      payment_paid_at: paidAt,
+      updated_at: paidAt,
+    }).eq("id", bookingId);
   }
   if (event.type === "payment_intent.payment_failed" || event.type === "payment_intent.canceled") {
     await admin.from("merchant_rental_payment_attempts").update({ status: "failed", failure_message: String(intent.last_payment_error?.message || "Payment failed"), updated_at: new Date().toISOString() }).eq("provider_payment_id", intent.id);
