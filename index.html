@@ -107,6 +107,7 @@
 <script src="./shared/admin-access-api.js?v=5.474"></script>
 <script src="./shared/merchant-application-api.js?v=5.475"></script>
 <script src="./shared/merchant-team-api.js?v=5.476"></script>
+<script src="./shared/restaurant-order-api.js?v=5.477"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3328,7 +3329,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.476';
+const APP_VERSION = '5.477';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3514,6 +3515,10 @@ const merchantApplicationApi = window.LeshenghuoMerchantApplicationApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const merchantTeamApi = window.LeshenghuoMerchantTeamApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const restaurantOrderApi = window.LeshenghuoRestaurantOrderApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -5223,12 +5228,12 @@ async function renderMerchantOrderManager(){
   try {const [merchant,tables,orders]=await Promise.all([getMerchantOrderMerchant(merchantUserId),loadMerchantOrderTables(merchantUserId,true),(async()=>{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&select=*&order=updated_at.desc&limit=100`,{method:'GET'});if(!res.ok)throw new Error(await res.text());return await res.json();})()]);const ids=orders.map(row=>row.id).filter(Boolean);let items=[];if(ids.length){const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_items?order_id=in.(${ids.map(encodeURIComponent).join(',')})&select=*&order=batch_no.asc,created_at.asc`,{method:'GET'});if(res.ok)items=await res.json();}Object.assign(merchantOrderState(),{merchant,tables,orders,items});const status=merchantOrderState().managerStatus||'active',list=orders.filter(row=>status==='active'?!['completed','cancelled'].includes(row.status):row.status===status),tabs=[['active','处理中'],['pending','待确认'],['preparing','制作中'],['served','已上桌'],['completed','已完成']];body.innerHTML=`<div class="merchant-order-top-actions"><button class="primary" onclick="openMerchantTableManager()">${uiIcon('store',17)} 餐桌二维码</button><button onclick="renderMerchantOrderManager()">${uiIcon('refresh',17)} 刷新订单</button></div><div class="order-notice">${escHtml(merchant&&merchant.business_name||'商家')} · 顾客提交的订单会显示在这里。订单仅作到店点餐记录，不含线上支付。</div><div class="merchant-order-status-tabs">${tabs.map(row=>`<button class="${status===row[0]?'on':''}" onclick="merchantOrderManagerStatus('${row[0]}')">${row[1]} ${row[0]==='active'?`(${orders.filter(o=>!['completed','cancelled'].includes(o.status)).length})`:''}</button>`).join('')}</div>${list.length?list.map(order=>merchantOrderCardHtml(order,items.filter(item=>String(item.order_id)===String(order.id)))).join(''):'<div class="deals-empty-panel">这里暂时没有订单。</div>'}`;}catch(error){console.warn('订单管理读取失败:',error.message);body.innerHTML='<div class="deals-empty-panel">订单读取失败，请确认已运行 5.210 SQL。</div>';}
 }
 function merchantOrderCardHtml(order,items){const actions=order.status==='pending'?[['confirmed','确认接单'],['cancelled','取消']]:order.status==='confirmed'?[['preparing','开始制作'],['cancelled','取消']]:order.status==='preparing'?[['served','已上桌']]:order.status==='served'?[['completed','完成订单']]:[];return `<div class="merchant-order-card"><div class="merchant-order-card-head"><div><b>${escHtml(order.table_name||'餐桌')} · ${escHtml(order.order_code||'')}</b><span>${escHtml(order.user_name||'乐生活用户')} · ${order.created_at?new Date(order.created_at).toLocaleString('zh-CN'):''}${Number(order.addition_count||0)?` · 加菜 ${order.addition_count} 次`:''}</span></div><i class="merchant-order-state">${merchantOrderStatusText(order.status)}</i></div><div class="merchant-order-lines">${items.map(item=>`<div class="merchant-order-line"><span>${item.batch_no>1?'加菜 · ':''}${escHtml(item.product_name)} × ${Number(item.quantity||0)}</span><b>${merchantOrderMoney(Number(item.unit_price||0)*Number(item.quantity||0))}</b></div>`).join('')}${order.note?`<div style="margin-top:4px;color:var(--berry-dark);">备注：${escHtml(order.note)}</div>`:''}<div class="merchant-order-line" style="margin-top:5px;font-size:13px;color:var(--ink);"><b>合计 ${Number(order.item_count||0)} 件</b><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div></div>${actions.length?`<div class="merchant-order-card-actions">${actions.map(([status,label],i)=>`<button class="${i===0?'primary':''}" onclick="setMerchantOrderStatus('${String(order.id).replace(/'/g,'')}','${status}')">${label}</button>`).join('')}</div>`:''}</div>`;}
-async function setMerchantOrderStatus(orderId,status){try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_set_status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_order_id:orderId,p_status:status})});if(!res.ok)throw new Error(await res.text());showToast(`订单已${merchantOrderStatusText(status)}`);renderMerchantOrderManager();}catch(error){showToast('更新订单状态失败');}}
+async function setMerchantOrderStatus(orderId,status){try{await restaurantOrderApi.setOrderStatus(orderId,status);showToast(`订单已${merchantOrderStatusText(status)}`);renderMerchantOrderManager();}catch(error){showToast('更新订单状态失败');}}
 function closeMerchantTableManager(){document.getElementById('merchantTableManager')?.classList.remove('open');}
 async function openMerchantTableManager(){if(!merchantWorkspaceHasPermission('table_manage')){showToast('你没有餐桌二维码管理权限');return;}const sheet=document.getElementById('merchantTableManager');if(!sheet)return;sheet.classList.add('open');await renderMerchantTableManager();}
 async function renderMerchantTableManager(){const body=document.getElementById('merchantTableManagerBody'),merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId();if(!body||!merchantUserId)return;body.innerHTML='<div class="deals-empty-panel">正在读取餐桌...</div>';try{const[m,tables]=await Promise.all([getMerchantOrderMerchant(merchantUserId),loadMerchantOrderTables(merchantUserId,true)]);merchantOrderState().merchant=m;merchantOrderState().tables=tables;body.innerHTML=`<div class="order-notice">新增桌位后会生成专属二维码。将二维码贴在桌上，顾客扫码后即可从该桌点餐。</div><div class="merchant-form-field"><label>新增餐桌</label><div style="display:grid;grid-template-columns:1fr auto;gap:8px;"><input id="merchantOrderTableName" maxlength="24" placeholder="例如：A01、靠窗 1 号桌"><button class="primary" onclick="addMerchantOrderTable()" style="border:0;border-radius:10px;background:var(--sage);color:#fff;font:900 13px inherit;padding:0 14px;">添加</button></div></div>${tables.length?tables.map(table=>merchantOrderTableCardHtml(m,table)).join(''):'<div class="deals-empty-panel">还没有餐桌二维码。</div>'}`;}catch(error){body.innerHTML='<div class="deals-empty-panel">餐桌读取失败，请稍后重试。</div>';}}
 function merchantOrderTableCardHtml(m,table){const url=merchantOrderUrl(m,table.table_code);return `<div class="merchant-table-card" style="opacity:${table.is_active?1:.58};"><div class="merchant-table-qr">${memberCardQrHtml(url)}</div><div style="min-width:0;flex:1;"><b>${escHtml(table.table_name)}</b><span>${table.is_active?'顾客可以扫码点餐':'已暂停使用'}</span></div><div style="display:grid;gap:5px;"><button onclick="copyMerchantOrderTableLink('${escAttr(url).replace(/'/g,"\\'")}')">复制链接</button><button onclick="toggleMerchantOrderTable(${Number(table.id)},${table.is_active?'false':'true'})">${table.is_active?'暂停':'启用'}</button></div></div>`;}
-async function addMerchantOrderTable(){const name=document.getElementById('merchantOrderTableName')?.value.trim(),merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId();if(!name||!merchantUserId){showToast('请填写餐桌名称');return;}const code=`t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_tables`,{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({merchant_user_id:merchantUserId,table_name:name,table_code:code,is_active:true})});if(!res.ok)throw new Error(await res.text());showToast('餐桌二维码已生成');renderMerchantTableManager();}catch(error){showToast('新增餐桌失败，请确认你有管理权限');}}
+async function addMerchantOrderTable(){const name=document.getElementById('merchantOrderTableName')?.value.trim(),merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId();if(!name||!merchantUserId){showToast('请填写餐桌名称');return;}const code=`t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;try{await restaurantOrderApi.addTable({merchantUserId,tableName:name,tableCode:code});showToast('餐桌二维码已生成');renderMerchantTableManager();}catch(error){showToast('新增餐桌失败，请确认你有管理权限');}}
 async function toggleMerchantOrderTable(id,enabled){try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_tables?id=eq.${Number(id)}`,{method:'PATCH',body:JSON.stringify({is_active:!!enabled,updated_at:new Date().toISOString()})});if(!res.ok)throw new Error(await res.text());renderMerchantTableManager();}catch(error){showToast('更新餐桌失败');}}
 function copyMerchantOrderTableLink(url){if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>showToast('点餐链接已复制')).catch(()=>window.prompt('请复制点餐链接',url));else window.prompt('请复制点餐链接',url);}
 
@@ -5416,9 +5421,13 @@ async function submitMerchantOrder(){
   const note = window.prompt('备注（可选，例如少冰、不要辣）','');
   if(note === null) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_create`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ p_merchant_user_id:state.merchant.user_id, p_table_code:state.table.table_code, p_items:rows.map(row => ({ product_id:row.id, quantity:row.quantity })), p_note:note || '', p_existing_order_id:state.activeOrderId || null }) });
-    if(!res.ok) throw new Error(await res.text());
-    const id = await res.json();
+    const id = await restaurantOrderApi.createDineInOrder({
+      merchantUserId:state.merchant.user_id,
+      tableCode:state.table.table_code,
+      items:rows.map(row => ({ product_id:row.id, quantity:row.quantity })),
+      note:note || '',
+      existingOrderId:state.activeOrderId || null
+    });
     state.activeOrderId = id;
     state.cart = {};
     await loadMerchantCustomerActiveOrder();
@@ -5519,8 +5528,8 @@ async function submitMerchantTakeoutOrder(){
   const name=document.getElementById('merchantTakeoutName')?.value.trim()||'',phone=document.getElementById('merchantTakeoutPhone')?.value.trim()||'',address=document.getElementById('merchantTakeoutAddress')?.value.trim()||'',timeMode=document.getElementById('merchantTakeoutTimeMode')?.value||'now',deliveryAt=document.getElementById('merchantTakeoutDeliveryAt')?.value||'';
   if(!name||!phone){showToast('请填写姓名和电话');return;} if(delivery&&!address){showToast('请填写配送地址');return;} if(delivery&&timeMode==='scheduled'&&!deliveryAt){showToast('请选择送餐时间');return;}
   try{
-    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_takeout_order_create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_merchant_user_id:state.merchant.user_id,p_items:rows.map(row=>({product_id:row.id,quantity:row.quantity})),p_customer_name:name,p_customer_phone:phone,p_fulfillment:delivery?'delivery':'pickup',p_delivery_address:delivery?address:'',p_delivery_at:delivery&&timeMode==='scheduled'?new Date(deliveryAt).toISOString():null})});
-    if(!res.ok)throw new Error(await res.text());const id=await res.json(),detail=await loadMerchantOrderDetails(id);Object.assign(state,{activeOrderId:id,order:detail.order,items:detail.items,cart:{},takeout:{fulfillment:delivery?'delivery':'pickup',name,phone,address,time_mode:timeMode,delivery_at:deliveryAt}});await loadMerchantCouponClaims(true);state.checkout={method:delivery?'online':'cash',selectedClaims:[],tip:0,customTipAmount:null};renderMerchantOrderCheckout();showToast(delivery?'外卖订单已提交，请完成在线支付':'订单已提交，请选择支付方式');
+    const id=await restaurantOrderApi.createTakeoutOrder({merchantUserId:state.merchant.user_id,items:rows.map(row=>({product_id:row.id,quantity:row.quantity})),customerName:name,customerPhone:phone,fulfillment:delivery?'delivery':'pickup',deliveryAddress:delivery?address:'',deliveryAt:delivery&&timeMode==='scheduled'?new Date(deliveryAt).toISOString():null});
+    const detail=await loadMerchantOrderDetails(id);Object.assign(state,{activeOrderId:id,order:detail.order,items:detail.items,cart:{},takeout:{fulfillment:delivery?'delivery':'pickup',name,phone,address,time_mode:timeMode,delivery_at:deliveryAt}});await loadMerchantCouponClaims(true);state.checkout={method:delivery?'online':'cash',selectedClaims:[],tip:0,customTipAmount:null};renderMerchantOrderCheckout();showToast(delivery?'外卖订单已提交，请完成在线支付':'订单已提交，请选择支付方式');
   }catch(error){console.warn('外卖订单提交失败:',error.message);showToast('外卖订单提交失败，请稍后重试');}
 }
 async function openMerchantOrderManager(merchantUserId){
@@ -6226,9 +6235,7 @@ async function loadMerchantOrderTables(merchantUserId, includeInactive){
 async function deleteMerchantOrderTable(id,name){
   if(!confirm(`确定删除「${name || '这张餐桌'}」吗？`)) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_delete_table`, { method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_table_id:Number(id)}) });
-    if(!res.ok) throw new Error(await res.text());
-    const result = await res.json();
+    const result = await restaurantOrderApi.deleteTable(id);
     merchantOrderState().tables = (merchantOrderState().tables || []).filter(table => Number(table.id) !== Number(id));
     showToast(result === 'archived' ? '餐桌已有历史订单，已停用并移除' : '餐桌已删除');
     await renderMerchantTableManager();
@@ -6260,11 +6267,11 @@ function merchantOrderCardHtml(order,items){
 }
 async function completeMerchantOrderWithBill(orderId,paymentMethod){
   if(!confirm(`确认该订单已使用${paymentMethod==='cash'?'现金':'刷卡'}完成支付？`))return;
-  try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_complete_with_bill`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_order_id:orderId,p_payment_method:paymentMethod,p_tip_amount:0,p_discount_amount:0,p_coupon_claim_ids:[]})});if(!res.ok)throw new Error(await res.text());showToast('订单已完成，账单已发送给顾客');renderMerchantOrderManager();}catch(error){console.warn('完成订单失败:',error.message);showToast('完成订单失败，请稍后重试');}
+  try{await restaurantOrderApi.completeWithBill({orderId,paymentMethod});showToast('订单已完成，账单已发送给顾客');renderMerchantOrderManager();}catch(error){console.warn('完成订单失败:',error.message);showToast('完成订单失败，请稍后重试');}
 }
 async function remindMerchantOrder(){
   const state=merchantOrderState(); if(!state.order)return;
-  try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_remind`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_order_id:state.order.id})});if(!res.ok)throw new Error(await res.text());state.order=await res.json();renderMerchantOrderMenu();showToast('已提醒商家催菜');}catch(error){showToast('当前不能催菜，请稍后重试');}
+  try{state.order=await restaurantOrderApi.remindOrder(state.order.id);renderMerchantOrderMenu();showToast('已提醒商家催菜');}catch(error){showToast('当前不能催菜，请稍后重试');}
 }
 function merchantOrderCheckoutClaims(state){ if(!isNativeMerchantApp())return []; const paymentMethod=state.checkout&&state.checkout.method||'cash'; return (window._merchantCouponClaims.rows||[]).filter(claim=>String(claim.merchant_user_id)===String(state.merchant.user_id)&&claim.status==='claimed').map(claim=>({claim,coupon:merchantCouponForClaim(state.merchant,claim)})).map(row=>Object.assign(row,{eligibility:merchantCouponEligibility(row.coupon||row.claim.coupon_snapshot||{},paymentMethod)})); }
 function merchantCheckoutCouponChoiceHtml(rows,checkout){ if(!isNativeMerchantApp())return '<div class="order-notice" style="margin-top:10px;">网页端扫码点餐不支持优惠券结算，请在乐生活 App 内使用。</div>'; return rows.length?`<div style="display:grid;gap:9px;margin-top:10px;">${rows.map(row=>{const selected=(checkout.selectedClaims||[]).includes(Number(row.claim.id));const snapshot=row.claim.coupon_snapshot||row.coupon||{};return `<button onclick="selectMerchantOrderCheckoutCoupon(${Number(row.claim.id)})" ${row.eligibility.eligible?'':'disabled'} style="text-align:left;border:1.5px solid ${selected?'var(--sage)':'var(--line)'};background:${selected?'var(--sage-light)':'#fff'};border-radius:10px;padding:10px;opacity:${row.eligibility.eligible?1:.55};"><b>${escHtml(snapshot.title||'优惠券')}</b><span style="display:block;font-size:11px;color:${row.eligibility.eligible?'var(--ink-soft)':'var(--berry)'};margin-top:4px;">${escHtml(row.eligibility.eligible?(snapshot.description||'到店出示使用'):row.eligibility.reason)}</span></button>`;}).join('')}</div>`:'<div class="deals-empty-panel" style="margin-top:10px;">还没有可使用的已领取优惠券。</div>'; }
@@ -6308,8 +6315,7 @@ async function renderMerchantKitchenDisplay(silent){
 async function setMerchantOrderItemKitchenDone(itemId,done){
   if(!merchantWorkspaceHasPermission('kitchen_complete')){ showToast('你没有后厨完成制作权限'); return; }
   try{
-    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_set_item_kitchen_done`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_item_id:Number(itemId),p_done:!!done})});
-    if(!res.ok)throw new Error(await res.text());
+    await restaurantOrderApi.setItemKitchenDone(itemId,done);
     showToast(done?'已标记完成制作':'已取消完成标记');
     renderMerchantKitchenDisplay(true);
   }catch(error){ console.warn('后厨状态更新失败:',error.message); showToast('更新失败，请确认后厨权限'); }
@@ -6341,7 +6347,7 @@ async function renderMerchantRunnerDisplay(silent){
 }
 async function setMerchantOrderItemRunnerServed(itemId,served){
   if(!merchantWorkspaceHasPermission('order_serve')){showToast('你没有传菜上桌权限');return;}
-  try{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_set_item_served`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_item_id:Number(itemId),p_is_served:!!served})});if(!res.ok)throw new Error(await res.text());showToast(served?'已标记上桌':'已撤回上桌');renderMerchantRunnerDisplay(true);}catch(error){console.warn('上桌状态更新失败:',error.message);showToast('更新失败，请确认传菜权限');}
+  try{await restaurantOrderApi.setItemServed(itemId,served);showToast(served?'已标记上桌':'已撤回上桌');renderMerchantRunnerDisplay(true);}catch(error){console.warn('上桌状态更新失败:',error.message);showToast('更新失败，请确认传菜权限');}
 }
 
 /* 商家矩阵：岗位与权限。店主和店经理默认拥有完整日常经营权限。 */
@@ -6518,7 +6524,7 @@ function merchantOrderCardHtml(order,items){
 }
 async function setMerchantOrderItemServed(itemId,isServed){
   if(!merchantWorkspaceHasPermission('order_serve')){showToast('你没有传菜上桌权限');return;}
-  try{const linked=isServed&&merchantWorkspaceCanLinkKitchenServe(),res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_set_item_served`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_item_id:Number(itemId),p_is_served:!!isServed})});if(!res.ok)throw new Error(await res.text());showToast(linked?'已上桌，并同步完成制作':isServed?'已标记上桌':'已撤回上桌状态，并同步恢复待制作');if(document.getElementById('merchantRunnerDisplay')?.classList.contains('open'))renderMerchantRunnerDisplay(true);if(document.getElementById('merchantKitchenDisplay')?.classList.contains('open'))renderMerchantKitchenDisplay(true);renderMerchantOrderManager(true);}catch(error){console.warn('更新上桌状态失败:',error.message);showToast('更新失败，请确认传菜权限与后厨状态');}
+  try{const linked=isServed&&merchantWorkspaceCanLinkKitchenServe();await restaurantOrderApi.setItemServed(itemId,isServed);showToast(linked?'已上桌，并同步完成制作':isServed?'已标记上桌':'已撤回上桌状态，并同步恢复待制作');if(document.getElementById('merchantRunnerDisplay')?.classList.contains('open'))renderMerchantRunnerDisplay(true);if(document.getElementById('merchantKitchenDisplay')?.classList.contains('open'))renderMerchantKitchenDisplay(true);renderMerchantOrderManager(true);}catch(error){console.warn('更新上桌状态失败:',error.message);showToast('更新失败，请确认传菜权限与后厨状态');}
 }
 function openMerchantMemberManager(merchantUserId){
   if(String(activeMerchantWorkspaceId())!==String(merchantUserId)||!merchantWorkspaceHasPermission('member_manage')){showToast('你没有这家商店的会员操作权限');return;}
@@ -17421,9 +17427,7 @@ async function completeMerchantOrderWithBill(orderId,paymentMethod,claimIds,skip
   const couponIds=Array.isArray(claimIds)?claimIds:[];
   if(!skipConfirm && !confirm(`确认该订单已使用${paymentMethod==='cash'?'现金':'刷卡'}完成支付？`)) return;
   try {
-    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_order_complete_with_bill`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_order_id:orderId,p_payment_method:paymentMethod,p_tip_amount:0,p_discount_amount:0,p_coupon_claim_ids:couponIds})});
-    if(!res.ok) throw new Error(await res.text());
-    const bill=await res.json();
+    const bill=await restaurantOrderApi.completeWithBill({orderId,paymentMethod,couponClaimIds:couponIds});
     const state=merchantOrderState();
     const order=(state.orders||[]).find(row=>String(row.id)===String(orderId))||state.order;
     if(order&&order.user_id) await createMemberActivityNotification({userId:order.user_id,kind:'order_bill',title:'订单已结算',body:`${merchantOperatorWorkspace()?.business_name||'商家'} 已完成你的订单结算，应付 ${merchantOrderMoney(bill.total_amount)}。`});
@@ -17804,7 +17808,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Team API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Restaurant Order API Module】`);
 </script>
 </body>
 </html>
