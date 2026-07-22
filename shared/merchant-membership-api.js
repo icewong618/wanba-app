@@ -32,7 +32,19 @@
       await requireOk(response, '会员商家资料读取失败');
       return response.json();
     };
-    return { loadForMerchant, loadForUser, upsert, remove, loadMerchants };
+    const loadTransactionsForMerchant = async ({ merchantUserId, select, limit = 1000 } = {}) => {
+      if(!merchantUserId) return [];
+      const response = await request(`${supabaseUrl}/rest/v1/merchant_member_transactions?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&select=${select}&order=created_at.desc&limit=${Math.max(1, Math.min(Number(limit) || 1000, 2000))}`, { method:'GET' });
+      await requireOk(response, '商家会员流水读取失败');
+      return response.json();
+    };
+    const loadTransactionsForMembership = async ({ membershipId, select, limit = 1000 } = {}) => {
+      if(!membershipId) return [];
+      const response = await request(`${supabaseUrl}/rest/v1/merchant_member_transactions?membership_id=eq.${encodeURIComponent(membershipId)}&select=${select}&order=created_at.desc&limit=${Math.max(1, Math.min(Number(limit) || 1000, 2000))}`, { method:'GET' });
+      await requireOk(response, '会员卡流水读取失败');
+      return response.json();
+    };
+    return { loadForMerchant, loadForUser, upsert, remove, loadMerchants, loadTransactionsForMerchant, loadTransactionsForMembership };
   };
   window.LeshenghuoMerchantMembershipApi = { create };
 })();

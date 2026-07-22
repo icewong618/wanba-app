@@ -113,7 +113,7 @@
 <script src="./shared/rental-api.js?v=5.478"></script>
 <script src="./shared/deals-api.js?v=5.480"></script>
 <script src="./shared/message-api.js?v=5.480"></script>
-<script src="./shared/merchant-membership-api.js?v=5.480"></script>
+<script src="./shared/merchant-membership-api.js?v=5.485"></script>
 <script src="./shared/merchant-public-api.js?v=5.481"></script>
 <style>
   :root{
@@ -3336,7 +3336,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.484';
+const APP_VERSION = '5.485';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -8368,9 +8368,7 @@ async function loadMerchantMemberTransactions(merchantUserId, force){
   if(cache.loaded && !force) return cache.rows;
   try {
     const select = 'id,membership_id,merchant_user_id,operator_user_id,user_id,action,delta,before_value,after_value,source,note,transaction_kind,reversal_of_id,revoked_at,revoked_by,created_at';
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions?merchant_user_id=eq.${encodeURIComponent(key)}&select=${select}&order=created_at.desc&limit=1000`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    const rows = await merchantMembershipApi.loadTransactionsForMerchant({merchantUserId:key,select,limit:1000});
     window._merchantMemberTransactionCache[key] = { rows, loaded:true, missing:false };
     const operatorIds = rows.map(row => row.operator_user_id).filter(id => id && !window._profileCache[id]);
     if(operatorIds.length) loadProfilesForIds(operatorIds).then(() => {
@@ -8593,9 +8591,7 @@ async function loadMemberCardTransactions(membershipId, force){
   if(cache.loaded && !force) return cache.rows;
   try {
     const select = 'id,membership_id,merchant_user_id,user_id,action,delta,before_value,after_value,source,note,transaction_kind,reversal_of_id,revoked_at,revoked_by,created_at';
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions?membership_id=eq.${encodeURIComponent(key)}&select=${select}&order=created_at.desc&limit=1000`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    const rows = await merchantMembershipApi.loadTransactionsForMembership({membershipId:key,select,limit:1000});
     window._memberCardTransactionCache[key] = { rows, loaded:true, missing:false };
     return rows;
   } catch(e){
@@ -17776,7 +17772,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Restaurant Data API Screens】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Membership Transaction API】`);
 </script>
 </body>
 </html>
