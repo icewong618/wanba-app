@@ -2,8 +2,21 @@
 (() => {
   const create = ({ supabaseUrl = '', request = (...args) => fetch(...args) } = {}) => {
     const search = async keyword => {
-      const response = await request(`${supabaseUrl}/rest/v1/locations?name=ilike.*${encodeURIComponent(keyword)}*&select=id,name,use_count&order=use_count.desc&limit=8`);
-      return response.ok ? response.json() : [];
+      const match = String(keyword || '').trim();
+      const params = new URLSearchParams({
+        select:'id,name,name_en,name_zh,use_count',
+        or:`(name.ilike.*${match}*,name_en.ilike.*${match}*,name_zh.ilike.*${match}*)`,
+        order:'use_count.desc',
+        limit:'16'
+      });
+      const response = await request(`${supabaseUrl}/rest/v1/locations?${params.toString()}`);
+      const rows = response.ok ? await response.json() : [];
+      const unique = new Map();
+      rows.forEach(row => {
+        const key = String(row.name_en || row.name || '').trim().toLowerCase();
+        if(key && !unique.has(key)) unique.set(key, row);
+      });
+      return [...unique.values()].slice(0, 8);
     };
     const ensure = async ({ name, userId }) => {
       const response = await request(`${supabaseUrl}/rest/v1/locations?name=eq.${encodeURIComponent(name)}&select=id,use_count`);

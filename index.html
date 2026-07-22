@@ -98,7 +98,7 @@
 <script src="./shared/post-detail-api.js?v=5.460"></script>
 <script src="./shared/post-api.js?v=5.461"></script>
 <script src="./shared/compose-draft-store.js?v=5.462"></script>
-<script src="./shared/location-api.js?v=5.463"></script>
+<script src="./shared/location-api.js?v=5.465"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3329,7 +3329,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.463';
+const APP_VERSION = '5.465';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14451,7 +14451,7 @@ function composeDraftSnapshot(){
   return {
     id: composeDraftId || `draft_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     owner: composeDraftOwner(),
-    title: value('fTitle').trim(), content: value('fContent').trim(), location: value('fLocation').trim(), youtube: value('fYoutube').trim(),
+    title: value('fTitle').trim(), content: value('fContent').trim(), location: (document.getElementById('fLocation')?.dataset.locationCanonical || value('fLocation')).trim(), youtube: value('fYoutube').trim(),
     capacity: value('fCapacity'), deadline: value('fDeadline').trim(), activityStartDate:value('fActivityStartDate'), activityEndDate:value('fActivityEndDate'), activityLongTerm, customTags:[...customTags], selectedCat, selectedSubcategory, communityPostMeta:{...communityPostMeta}, eventOn,
     postPublishMode, scheduledAt: value('fScheduledAt'),
     uploadedImages:[...uploadedImages], coverImageIndex, textCardCover: textCardCover ? {...textCardCover} : null,
@@ -14507,7 +14507,7 @@ function resetComposeForm(){
   const tagIn = document.getElementById('fCustomTag'); if(tagIn) tagIn.value = '';
   coverImageIndex = 0; document.getElementById('fImages').value = ''; document.getElementById('imagesGrid').style.display = 'none'; document.getElementById('uploadBox').style.display = 'flex';
   document.getElementById('titleCount').textContent = '0'; document.getElementById('contentCount').textContent = '0';
-  const locInput = document.getElementById('fLocation'); if(locInput) locInput.value = '';
+  const locInput = document.getElementById('fLocation'); if(locInput){ locInput.value = ''; delete locInput.dataset.locationCanonical; }
   const locBox = document.getElementById('locationSuggestions'); if(locBox){ locBox.style.display = 'none'; locBox.innerHTML = ''; }
   const scheduleInput = document.getElementById('fScheduledAt'); if(scheduleInput) scheduleInput.value = '';
   updateSchedulePublishUi();
@@ -14536,7 +14536,7 @@ async function resumeComposeDraft(id){
     const rows = await composeDraftStore('getAll', composeDraftOwner()); const draft = rows.find(item => item.id === id);
     if(!draft) throw new Error('草稿不存在');
     closeComposeDrafts(); resetComposeForm(); composeDraftId = draft.id;
-    document.getElementById('fTitle').value = draft.title || ''; document.getElementById('fContent').value = draft.content || ''; document.getElementById('fYoutube').value = draft.youtube || ''; document.getElementById('fLocation').value = draft.location || '';
+    document.getElementById('fTitle').value = draft.title || ''; document.getElementById('fContent').value = draft.content || ''; document.getElementById('fYoutube').value = draft.youtube || ''; document.getElementById('fLocation').value = draft.location || ''; delete document.getElementById('fLocation').dataset.locationCanonical;
     document.getElementById('fCapacity').value = draft.capacity || ''; document.getElementById('fDeadline').value = draft.deadline || ''; document.getElementById('fActivityStartDate').value = draft.activityStartDate || ''; document.getElementById('fActivityEndDate').value = draft.activityEndDate || '';
     selectedCat = draft.selectedCat || null; selectedSubcategory = isValidPostSubcategory(selectedCat, draft.selectedSubcategory) ? draft.selectedSubcategory : null; communityPostMeta = draft.communityPostMeta && typeof draft.communityPostMeta === 'object' ? {...draft.communityPostMeta} : {}; eventOn = !!draft.eventOn; activityLongTerm = !!draft.activityLongTerm; customTags = Array.isArray(draft.customTags) ? [...draft.customTags] : []; uploadedImages = Array.isArray(draft.uploadedImages) ? [...draft.uploadedImages] : []; coverImageIndex = Number.isFinite(draft.coverImageIndex) ? draft.coverImageIndex : 0; textCardCover = draft.textCardCover || null; postPublishMode = draft.postPublishMode === 'scheduled' ? 'scheduled' : 'now';
     const scheduleInput = document.getElementById('fScheduledAt'); if(scheduleInput) scheduleInput.value = draft.scheduledAt || '';
@@ -14671,6 +14671,8 @@ function validateCommunityPostSafety(title, content, category, subcategory){
 let locationSearchTimer = null;
 function onLocationInput(val){
   clearTimeout(locationSearchTimer);
+  const input = document.getElementById('fLocation');
+  if(input) delete input.dataset.locationCanonical;
   const box = document.getElementById('locationSuggestions');
   if(!box) return;
   if(!val || !val.trim()){ box.style.display = 'none'; box.innerHTML = ''; return; }
@@ -14686,9 +14688,10 @@ async function searchLocations(kw){
 function renderLocationSuggestions(rows, kw){
   const box = document.getElementById('locationSuggestions');
   if(!box) return;
-  const exactMatch = rows.some(r => r.name === kw);
+  window._locationSuggestionRows = Array.isArray(rows) ? rows : [];
+  const exactMatch = rows.some(r => [r.name, r.name_en, r.name_zh].some(name => String(name || '').toLowerCase() === String(kw || '').toLowerCase()));
   let html = rows.map(r => `
-    <div onmousedown="pickLocation('${r.name.replace(/'/g,'')}')" style="padding:9px 12px;font-size:13.5px;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;">${uiIcon('map',13)} ${r.name}</div>
+    <div onmousedown="pickLocationSuggestion(${window._locationSuggestionRows.indexOf(r)})" style="padding:9px 12px;font-size:13.5px;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;">${uiIcon('map',13)} ${escHtml(locationSuggestionLabel(r))}</div>
   `).join('');
   if(!exactMatch && kw){
     html += `<div onmousedown="pickLocation('${kw.replace(/'/g,'')}')" style="padding:9px 12px;font-size:13.5px;color:var(--sage-dark);cursor:pointer;font-weight:600;">＋ 使用新地点"${kw}"</div>`;
@@ -14696,9 +14699,24 @@ function renderLocationSuggestions(rows, kw){
   box.innerHTML = html || `<div style="padding:9px 12px;font-size:13px;color:var(--ink-faint);">没有匹配，直接使用"${kw}"就行</div>`;
   box.style.display = 'block';
 }
+function locationSuggestionLabel(row){
+  const language = window.LeshenghuoI18n?.getLanguage?.() || 'zh-CN';
+  return language === 'en' ? (row?.name_en || row?.name || '') : (row?.name_zh || row?.name_en || row?.name || '');
+}
+function pickLocationSuggestion(index){
+  const row = window._locationSuggestionRows?.[index];
+  if(!row) return;
+  const input = document.getElementById('fLocation');
+  if(input){
+    input.value = locationSuggestionLabel(row);
+    input.dataset.locationCanonical = row.name_en || row.name || input.value;
+  }
+  const box = document.getElementById('locationSuggestions');
+  if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+}
 function pickLocation(name){
   const input = document.getElementById('fLocation');
-  if(input) input.value = name;
+  if(input){ input.value = name; delete input.dataset.locationCanonical; }
   const box = document.getElementById('locationSuggestions');
   if(box){ box.style.display = 'none'; box.innerHTML = ''; }
 }
@@ -15964,7 +15982,7 @@ function editPost(id){
   const tikTokInfo = getPostTikTokInfo(p);
   document.getElementById('fYoutube').value = p.youtube ? ('https://youtu.be/' + p.youtube) : (tikTokInfo ? tikTokInfo.url : '');
   updateYoutubePreview();
-  document.getElementById('fLocation').value = p.location || '';
+  document.getElementById('fLocation').value = p.location || ''; delete document.getElementById('fLocation').dataset.locationCanonical;
   document.getElementById('titleCount').textContent = (p.title || '').length;
   document.getElementById('contentCount').textContent = (p.content || '').length;
   selectedCat = p.category;
@@ -16038,7 +16056,8 @@ async function submitPost(){
   const title = document.getElementById('fTitle').value.trim();
   const content = document.getElementById('fContent').value.trim();
   const videoUrl = document.getElementById('fYoutube').value.trim();
-  const location = (document.getElementById('fLocation').value || '').trim();
+  const locationInput = document.getElementById('fLocation');
+  const location = (locationInput?.dataset.locationCanonical || locationInput?.value || '').trim();
   if(!session || !session.user){
     showToast('请先登录后再发布');
     openAuth('login');
@@ -17856,7 +17875,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Location API】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Localized Location Directory】`);
 </script>
 </body>
 </html>
