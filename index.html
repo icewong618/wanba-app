@@ -97,6 +97,7 @@
 <script src="./shared/comment-threading.js?v=5.459"></script>
 <script src="./shared/post-detail-api.js?v=5.460"></script>
 <script src="./shared/post-api.js?v=5.461"></script>
+<script src="./shared/compose-draft-store.js?v=5.462"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3327,7 +3328,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.461';
+const APP_VERSION = '5.462';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3476,6 +3477,7 @@ const postApi = window.LeshenghuoPostApi?.create({
   supabaseUrl: SUPABASE_URL,
   authRequest: (url, options) => authedFetch(url, options)
 });
+const composeDraftStoreApi = window.LeshenghuoComposeDraftStore?.create();
 
 function accessTokenExpiresSoon(token){
   return authSessionStore?.accessTokenExpiresSoon(token) ?? true;
@@ -14357,12 +14359,9 @@ function viewMerchantAiPublishedPost(){
   if(id) setTimeout(() => openPost(id), 120);
 }
 /* ====== 本机草稿箱：内容仅保存在当前设备，不写入云端 ====== */
-const COMPOSE_DRAFT_DB = 'leshenghuo_compose_drafts_v1';
-const COMPOSE_DRAFT_STORE = 'drafts';
 const COMPOSE_DRAFT_LIMIT = 12;
 let composeDraftId = null;
 let composeDraftSaveTimer = null;
-let composeDraftDbPromise = null;
 let postPublishMode = 'now';
 
 function laDateTimeParts(date = new Date()){
@@ -14432,32 +14431,12 @@ function selectedScheduledPublishAt(){
 }
 
 function composeDraftOwner(){ return session && session.user ? session.user.id : 'guest'; }
-function composeDraftOpenDb(){
-  if(composeDraftDbPromise) return composeDraftDbPromise;
-  composeDraftDbPromise = new Promise((resolve, reject) => {
-    if(!window.indexedDB) return reject(new Error('浏览器不支持设备草稿')); 
-    const request = indexedDB.open(COMPOSE_DRAFT_DB, 1);
-    request.onupgradeneeded = () => {
-      const store = request.result.createObjectStore(COMPOSE_DRAFT_STORE, { keyPath:'id' });
-      store.createIndex('owner', 'owner', { unique:false });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error('草稿数据库不可用'));
-  });
-  return composeDraftDbPromise;
-}
 async function composeDraftStore(action, value){
-  const db = await composeDraftOpenDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(COMPOSE_DRAFT_STORE, action === 'getAll' ? 'readonly' : 'readwrite');
-    const store = transaction.objectStore(COMPOSE_DRAFT_STORE);
-    let request;
-    if(action === 'put') request = store.put(value);
-    if(action === 'delete') request = store.delete(value);
-    if(action === 'getAll') request = store.index('owner').getAll(value);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error('草稿操作失败'));
-  });
+  if(!composeDraftStoreApi) throw new Error('草稿接口未初始化');
+  if(action === 'getAll') return composeDraftStoreApi.getAll(value);
+  if(action === 'put') return composeDraftStoreApi.put(value);
+  if(action === 'delete') return composeDraftStoreApi.remove(value);
+  throw new Error('不支持的草稿操作');
 }
 function composeDraftHasContent(draft){
   return !!(draft && (draft.title || draft.content || draft.location || draft.youtube || draft.activityStartDate || draft.activityEndDate || draft.activityLongTerm || (draft.customTags || []).length || (draft.uploadedImages || []).length || draft.textCardCover));
@@ -17879,7 +17858,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Post Write API】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Shared Compose Draft Store】`);
 </script>
 </body>
 </html>
