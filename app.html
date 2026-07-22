@@ -102,6 +102,7 @@
 <script src="./shared/feedback-api.js?v=5.466"></script>
 <script src="./shared/feedback-attachments-api.js?v=5.467"></script>
 <script src="./shared/content-report-api.js?v=5.468"></script>
+<script src="./shared/admin-feedback-api.js?v=5.471"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3323,7 +3324,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.470';
+const APP_VERSION = '5.471';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3486,6 +3487,10 @@ const feedbackAttachmentsApi = window.LeshenghuoFeedbackAttachmentsApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const contentReportApi = window.LeshenghuoContentReportApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const adminFeedbackApi = window.LeshenghuoAdminFeedbackApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -12115,8 +12120,8 @@ function renderAdminPanel(){
 async function loadAdminFeedback(){
   if(!adminHasAccess(true)) return [];
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback?select=*&order=created_at.desc&limit=120`, { method:'GET' });
-    adminFeedback = res.ok ? await res.json() : [];
+    if(!adminFeedbackApi) throw new Error('管理员反馈接口未初始化');
+    adminFeedback = await adminFeedbackApi.readAll();
     try { adminFeedbackAttachmentMap = await loadFeedbackAttachmentMap(adminFeedback); }
     catch(error){ console.warn('公测反馈截图读取失败:', error.message); adminFeedbackAttachmentMap = new Map(); }
   } catch(e){ console.warn('公测反馈读取失败:', e.message); adminFeedback = []; adminFeedbackAttachmentMap = new Map(); }
@@ -12160,7 +12165,7 @@ async function adminUpdateContentReport(id, status){
   try { if(!contentReportApi) throw new Error('举报接口未初始化'); await contentReportApi.updateStatus({ id, status, handledBy:session.user.id }); await loadAdminContentReports(); renderAdminPanel(); showToast(status === 'reviewing' ? '已标记处理中' : status === 'resolved' ? '已标记处理完成' : '已驳回举报'); } catch(e){ showToast('更新失败，请检查管理员权限'); }
 }
 async function adminUpdateFeedback(id, status){
-  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback?id=eq.${id}`, { method:'PATCH', body:JSON.stringify({ status, resolved_at:status === 'resolved' ? new Date().toISOString() : null, handled_by:session.user.id }) }); if(!res.ok) throw new Error(await res.text()); await loadAdminFeedback(); renderAdminPanel(); showToast(status === 'resolved' ? '已标记为解决' : '已标记处理中'); } catch(e){ showToast('更新失败，请检查管理员权限'); }
+  try { if(!adminFeedbackApi) throw new Error('管理员反馈接口未初始化'); await adminFeedbackApi.updateStatus({ id, status, handledBy:session.user.id }); await loadAdminFeedback(); renderAdminPanel(); showToast(status === 'resolved' ? '已标记为解决' : '已标记处理中'); } catch(e){ showToast('更新失败，请检查管理员权限'); }
 }
 function openAdminFeedbackReply(id){
   if(!adminHasAccess()) return;
@@ -12186,8 +12191,8 @@ async function saveAdminFeedbackReply(){
   if(!reply){ showToast('请填写回复内容'); return; }
   if(reply.length > 1000){ showToast('回复不能超过 1000 个字'); return; }
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback?id=eq.${activeAdminFeedbackReply.id}`, { method:'PATCH', body:JSON.stringify({ admin_reply:reply, replied_at:new Date().toISOString(), status, resolved_at:status === 'resolved' ? new Date().toISOString() : null, handled_by:session.user.id }) });
-    if(!res.ok) throw new Error(await res.text());
+    if(!adminFeedbackApi) throw new Error('管理员反馈接口未初始化');
+    await adminFeedbackApi.reply({ id:activeAdminFeedbackReply.id, replyText:reply, status, handledBy:session.user.id });
     closeAdminFeedbackReply();
     await loadAdminFeedback();
     renderAdminPanel();
@@ -17840,7 +17845,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Startup Module Path Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Admin Feedback API Module】`);
 </script>
 </body>
 </html>
