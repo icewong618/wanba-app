@@ -13,8 +13,9 @@
         root.style.setProperty('--home-fixed-top', `${homeTop}px`);
         const homeFeed = document.querySelector('#page-home .feed');
         if(homeFeed){
-          const embeddedFeedOffset = 105;
-          homeFeed.style.marginTop = embedded ? `${Math.max(24, homeTop - embeddedFeedOffset)}px` : '';
+          // The header is fixed in every runtime. Keep the first feed row below its
+          // measured bottom edge instead of applying the old App-only subtraction.
+          homeFeed.style.marginTop = `${homeTop + fixedGap}px`;
         }
         const weekHeader = document.querySelector('#page-week.active .page-header');
         root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
