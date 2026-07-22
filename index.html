@@ -115,6 +115,7 @@
 <script src="./shared/message-api.js?v=5.480"></script>
 <script src="./shared/merchant-membership-api.js?v=5.485"></script>
 <script src="./shared/merchant-public-api.js?v=5.481"></script>
+<script src="./shared/merchant-analytics-api.js?v=5.487"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3336,7 +3337,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.486';
+const APP_VERSION = '5.487';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3550,6 +3551,10 @@ const merchantCouponApi = window.LeshenghuoMerchantCouponApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const rentalApi = window.LeshenghuoRentalApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const merchantAnalyticsApi = window.LeshenghuoMerchantAnalyticsApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -9962,12 +9967,6 @@ function merchantAnalyticsCountText(value){ return value === null || value === u
 function merchantAnalyticsMetric(label, icon, value, note){
   return `<div class="merchant-analytics-metric"><span>${uiIcon(icon,14)}${label}</span><b>${merchantAnalyticsCountText(value)}</b><small>${escHtml(note)}</small></div>`;
 }
-async function merchantAnalyticsRows(path){
-  const response = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, { method:'GET' });
-  if(!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
-function merchantAnalyticsResult(result){ return result && result.status === 'fulfilled' ? result.value : null; }
 function merchantAnalyticsRowsForDays(rows, days){
   const start = merchantAnalyticsStart(days).getTime();
   return (rows || []).filter(row => new Date(row.created_at || row.claimed_at || row.joined_at || row.redeemed_at || 0).getTime() >= start);
@@ -10020,24 +10019,7 @@ async function loadMerchantAnalytics(){
   const merchantId = session.user.id;
   const since = merchantAnalyticsStart(merchantAnalyticsRangeDays).toISOString();
   try {
-    const ownPosts = await merchantAnalyticsRows(`posts?user_id=eq.${encodeURIComponent(merchantId)}&select=id,title,image,created_at&order=created_at.desc&limit=200`);
-    const postIds = ownPosts.map(post => Number(post.id)).filter(Number.isFinite);
-    const postFilter = postIds.length ? `post_id=in.(${postIds.join(',')})&` : '';
-    const range = `created_at=gte.${encodeURIComponent(since)}`;
-    const requests = {
-      views: postIds.length ? merchantAnalyticsRows(`post_views?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
-      likes: postIds.length ? merchantAnalyticsRows(`likes?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
-      comments: postIds.length ? merchantAnalyticsRows(`comments?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
-      favorites: postIds.length ? merchantAnalyticsRows(`favorites?${postFilter}${range}&select=post_id,created_at`) : Promise.resolve([]),
-      claims: merchantAnalyticsRows(`merchant_coupon_claims?merchant_user_id=eq.${encodeURIComponent(merchantId)}&claimed_at=gte.${encodeURIComponent(since)}&select=id,claimed_at,status`),
-      redeemed: merchantAnalyticsRows(`merchant_coupon_claims?merchant_user_id=eq.${encodeURIComponent(merchantId)}&redeemed_at=gte.${encodeURIComponent(since)}&select=id,redeemed_at,status`),
-      newMembers: merchantAnalyticsRows(`merchant_memberships?merchant_user_id=eq.${encodeURIComponent(merchantId)}&joined_at=gte.${encodeURIComponent(since)}&select=id,joined_at`),
-      activeMembers: merchantAnalyticsRows(`merchant_memberships?merchant_user_id=eq.${encodeURIComponent(merchantId)}&status=eq.active&select=id`),
-      checkins: merchantAnalyticsRows(`merchant_member_transactions?merchant_user_id=eq.${encodeURIComponent(merchantId)}&created_at=gte.${encodeURIComponent(since)}&transaction_kind=eq.stamp_checkin&select=id,created_at`)
-    };
-    const settled = await Promise.allSettled(Object.values(requests));
-    const keys = Object.keys(requests);
-    const data = Object.fromEntries(keys.map((key, index) => [key, merchantAnalyticsResult(settled[index])]));
+    const { ownPosts, data, unavailable } = await merchantAnalyticsApi.loadDashboard({merchantUserId:merchantId,since});
     const views = data.views;
     const likes = data.likes;
     const comments = data.comments;
@@ -10055,7 +10037,6 @@ async function loadMerchantAnalytics(){
     }).filter(item => item.score > 0).sort((a,b) => b.score - a.score).slice(0, 3);
     const trendRows = merchantAnalyticsTrendRows(views || [], merchantAnalyticsRangeDays);
     const trendMax = Math.max(1, ...trendRows.map(row => row.count));
-    const unavailable = keys.filter((key, index) => settled[index].status === 'rejected');
     target.innerHTML = `
       <div class="merchant-analytics-grid">
         ${merchantAnalyticsMetric('内容浏览', 'eye', views?.length, `近 ${merchantAnalyticsRangeDays} 天`)}
@@ -17763,7 +17744,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Engagement Stats API】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Analytics API】`);
 </script>
 </body>
 </html>
