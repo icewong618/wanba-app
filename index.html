@@ -104,6 +104,7 @@
 <script src="./shared/content-report-api.js?v=5.468"></script>
 <script src="./shared/admin-feedback-api.js?v=5.471"></script>
 <script src="./shared/admin-center-api.js?v=5.473"></script>
+<script src="./shared/admin-access-api.js?v=5.474"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3325,7 +3326,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.473';
+const APP_VERSION = '5.474';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3499,6 +3500,10 @@ const adminFeedbackApi = window.LeshenghuoAdminFeedbackApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const adminCenterApi = window.LeshenghuoAdminCenterApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const adminAccessApi = window.LeshenghuoAdminAccessApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -11739,10 +11744,8 @@ async function checkDealAdmin(){
     return false;
   }
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/deal_admins?user_id=eq.${session.user.id}&select=user_id&limit=1`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
-    isDealAdmin = Array.isArray(rows) && rows.length > 0;
+    if(!adminAccessApi) throw new Error('管理员权限接口未初始化');
+    isDealAdmin = await adminAccessApi.isAdmin(session.user.id);
   } catch(e){
     isDealAdmin = false;
     console.warn('优惠管理员检查失败:', e.message);
@@ -12242,7 +12245,7 @@ function openAdminModeration(userId, preset='warning'){
 async function submitAdminModeration(){
   if(!adminHasAccess() || !adminActiveUser) return; const action=document.getElementById('moderationAction')?.value||'warning'; const reason=document.getElementById('moderationReason')?.value||''; const note=document.getElementById('moderationNote')?.value.trim()||''; const daysRaw=document.getElementById('moderationDays')?.value||''; const days=daysRaw?Number(daysRaw):null;
   if(days!==null && (!Number.isInteger(days)||days<1||days>3650)) return showToast('处理天数请填写 1 到 3650');
-  try { const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/admin_moderate_user`,{method:'POST',body:JSON.stringify({p_user_id:adminActiveUser.user_id,p_action_type:action,p_reason_code:reason,p_note:note,p_duration_days:days})}); if(!res.ok) throw new Error(await res.text()); closeAdminModeration(); await loadAdminCenter(true); showToast('处理已发送给用户'); } catch(e){ showToast('处理失败：'+friendlyDealReviewError(e.message)); }
+  try { if(!adminAccessApi) throw new Error('管理员权限接口未初始化'); await adminAccessApi.moderateUser({userId:adminActiveUser.user_id,action,reason,note,days}); closeAdminModeration(); await loadAdminCenter(true); showToast('处理已发送给用户'); } catch(e){ showToast('处理失败：'+friendlyDealReviewError(e.message)); }
 }
 function renderAdminPosts(body){
   const options = [...new Set(adminPosts.map(p => p.subcategory).filter(Boolean))];
@@ -12612,18 +12615,8 @@ async function adminBanUser(userId, name){
   if(reason === null) return;
   try {
     const payload = { status:'banned', reason: reason || '', created_by: session.user.id, updated_at: new Date().toISOString() };
-    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses?user_id=eq.${userId}`, {
-      method:'PATCH',
-      body: JSON.stringify(payload)
-    });
-    let rows = res.ok ? await res.json() : [];
-    if(!rows.length){
-      res = await authedFetch(`${SUPABASE_URL}/rest/v1/admin_user_statuses`, {
-        method:'POST',
-        body: JSON.stringify(Object.assign({ user_id: userId }, payload))
-      });
-    }
-    if(!res.ok) throw new Error(await res.text());
+    if(!adminAccessApi) throw new Error('管理员权限接口未初始化');
+    await adminAccessApi.setLegacyBan({ userId, reason:payload.reason, createdBy:payload.created_by });
     await loadAdminCenter(true);
     showToast('已记录封禁');
   } catch(e){ showToast('封禁失败：' + friendlyDealReviewError(e.message)); }
@@ -17841,7 +17834,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Admin Center API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Admin Access API Module】`);
 </script>
 </body>
 </html>
