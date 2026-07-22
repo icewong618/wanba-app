@@ -3337,7 +3337,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.490';
+const APP_VERSION = '5.491';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -17520,15 +17520,15 @@ async function openMerchantCouponRedeemByCode(code){
   sheet.classList.add('open');body.innerHTML='<div class="deals-empty-panel">正在核对优惠券与订单…</div>';
   try{
     const merchantId=activeMerchantWorkspaceId();
-    const [claimRes,merchantRes]=await Promise.all([
+    if(!merchantPublicApi)throw new Error('商家资料接口未初始化');
+    const [claimRes,merchant]=await Promise.all([
       authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims?id=eq.${id}&merchant_user_id=eq.${encodeURIComponent(merchantId)}&select=*&limit=1`,{method:'GET'}),
-      authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(merchantId)}&select=user_id,coupons&limit=1`,{method:'GET'})
+      merchantPublicApi.getByUserId({userId:merchantId,select:'user_id,coupons',verified:false})
     ]);
     if(!claimRes.ok)throw new Error(await claimRes.text());
     const claim=(await claimRes.json())[0];
     if(!claim){body.innerHTML='<div class="deals-empty-panel">没有找到本店的这张优惠券。</div>';return;}
-    const merchant=merchantRes.ok?(await merchantRes.json())[0]||{}:{};
-    const coupon=merchantCouponForClaim(merchant,claim);
+    const coupon=merchantCouponForClaim(merchant||{},claim);
     const snapshot=claim.coupon_snapshot||{};
     if(claim.status==='redeemed'){body.innerHTML='<div class="deals-empty-panel">这张优惠券已经核销，不能重复使用。</div>';return;}
     const context=window._merchantCouponOrderContext;
@@ -17727,7 +17727,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Identity API Batch】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Coupon Read API】`);
 </script>
 </body>
 </html>
