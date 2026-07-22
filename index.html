@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.458';
+  const version = '5.459';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -94,6 +94,7 @@
 <script src="./shared/profile-api.js?v=5.456"></script>
 <script src="./shared/engagement-api.js?v=5.457"></script>
 <script src="./shared/follow-api.js?v=5.458"></script>
+<script src="./shared/comment-threading.js?v=5.459"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3324,7 +3325,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.458';
+const APP_VERSION = '5.459';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -13441,35 +13442,7 @@ function countComments(p){
 }
 /* 2.93.1：按 root 主评论分组，回复（含"回复的回复"）统一展开在主评论下方——小红书式楼中楼 */
 function buildCommentThreads(comments){
-  const byId = {};
-  comments.forEach(c => { byId[c.id] = c; });
-  function findRootId(c){
-    let cur = c, guard = 0;
-    while(cur.parent_id && byId[cur.parent_id] && guard++ < 50){
-      cur = byId[cur.parent_id];
-    }
-    return cur.id;
-  }
-  const threads = [];
-  const indexOfRoot = {};
-  comments.forEach(c => {
-    if(!c.parent_id){
-      indexOfRoot[c.id] = threads.length;
-      threads.push({ root: c, replies: [] });
-    }
-  });
-  comments.forEach(c => {
-    if(c.parent_id){
-      const rid = findRootId(c);
-      if(indexOfRoot[rid] === undefined){
-        // 极端情况：主评论已不在本地列表（理论上不会发生，兜底展示）
-        indexOfRoot[rid] = threads.length;
-        threads.push({ root: byId[rid] || c, replies: [] });
-      }
-      if(c.id !== rid) threads[indexOfRoot[rid]].replies.push(c);
-    }
-  });
-  return threads;
+  return window.LeshenghuoCommentThreading?.buildThreads(comments) || [];
 }
 /* 统一刷新评论列表+计数（新增/删除/回复共用） */
 function renderCommentsList(p){
@@ -13562,18 +13535,7 @@ async function submitReply(parentId){
 }
 /* 收集某条评论的所有下级回复id（本地级联删除，数据库侧已有 ON DELETE CASCADE 兜底） */
 function collectDescendantIds(comments, id){
-  const result = new Set([id]);
-  let changed = true;
-  while(changed){
-    changed = false;
-    comments.forEach(c => {
-      if(c.parent_id != null && result.has(c.parent_id) && !result.has(c.id)){
-        result.add(c.id);
-        changed = true;
-      }
-    });
-  }
-  return result;
+  return window.LeshenghuoCommentThreading?.descendantIds(comments, id) || new Set([id]);
 }
 async function deleteComment(id){
   if(!confirm('删除这条评论？其下的回复也会一并删除')) return;
