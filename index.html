@@ -3285,17 +3285,8 @@ function setProfileCache(profile){
 function cachedProfile(userId, fallbackName){
   return identityCache?.cachedProfile(userId, fallbackName) || { user_id:userId, name:fallbackName || '乐生活用户', avatar:null, bio:'', tags:[], gender:'', birth:'', cover:'' };
 }
-const identityLoader = window.LeshenghuoIdentityLoader?.create({
-  supabaseUrl: SUPABASE_URL,
-  authedFetch: (...args) => authedFetch(...args),
-  setProfile: setProfileCache,
-  setMerchantIdentity: setMerchantIdentityCache,
-  hasAvatar: userId => userId in window._avatarCache,
-  hasMerchantLogo: userId => userId in window._merchantLogoCache,
-  markAvatarMissing: userId => { window._avatarCache[userId] = null; },
-  markMerchantLogoMissing: userId => setMerchantLogoCache(userId, null),
-  warn: (...args) => console.warn(...args)
-});
+// 依赖 Supabase 配置，配置声明后再创建，避免启动时访问暂未初始化的常量。
+let identityLoader = null;
 async function loadProfilesForIds(userIds){
   return identityLoader?.loadProfiles(userIds) || [];
 }
@@ -3332,7 +3323,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.469';
+const APP_VERSION = '5.470';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -16823,6 +16814,17 @@ function loadPosts(){
 // ====== Supabase 配置 ======
 const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
+identityLoader = window.LeshenghuoIdentityLoader?.create({
+  supabaseUrl: SUPABASE_URL,
+  authedFetch: (...args) => authedFetch(...args),
+  setProfile: setProfileCache,
+  setMerchantIdentity: setMerchantIdentityCache,
+  hasAvatar: userId => userId in window._avatarCache,
+  hasMerchantLogo: userId => userId in window._merchantLogoCache,
+  markAvatarMissing: userId => { window._avatarCache[userId] = null; },
+  markMerchantLogoMissing: userId => setMerchantLogoCache(userId, null),
+  warn: (...args) => console.warn(...args)
+});
 const R2_MEDIA_API_URL = 'https://upload.escoopcity.com';
 const R2_MEDIA_PUBLIC_ORIGIN = 'https://media.escoopcity.com';
 const MEDIA_CACHE_NAME = 'leshenghuo-media-v2';
@@ -17838,7 +17840,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Expanded Bilingual Location Directory】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Startup Module Path Fix】`);
 </script>
 </body>
 </html>
