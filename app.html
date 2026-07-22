@@ -108,6 +108,7 @@
 <script src="./shared/merchant-application-api.js?v=5.475"></script>
 <script src="./shared/merchant-team-api.js?v=5.476"></script>
 <script src="./shared/restaurant-order-api.js?v=5.477"></script>
+<script src="./shared/merchant-coupon-api.js?v=5.482"></script>
 <script src="./shared/rental-api.js?v=5.478"></script>
 <script src="./shared/deals-api.js?v=5.480"></script>
 <script src="./shared/message-api.js?v=5.480"></script>
@@ -3334,7 +3335,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.481';
+const APP_VERSION = '5.482';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3536,6 +3537,10 @@ const merchantTeamApi = window.LeshenghuoMerchantTeamApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const restaurantOrderApi = window.LeshenghuoRestaurantOrderApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const merchantCouponApi = window.LeshenghuoMerchantCouponApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -5709,9 +5714,8 @@ async function loadMerchantCouponClaims(force){
   if(!(session && session.user)) return [];
   if(window._merchantCouponClaims.loaded && !force) return window._merchantCouponClaims.rows;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=claimed_at.desc&limit=500`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    if(!merchantCouponApi) throw new Error('优惠券接口未初始化');
+    const rows = await merchantCouponApi.listClaims({ userId:session.user.id });
     window._merchantCouponClaims = { rows, loaded:true };
     return rows;
   } catch(e){ console.warn('优惠券读取失败:', e.message); window._merchantCouponClaims = { rows:[], loaded:true }; return []; }
@@ -6175,8 +6179,8 @@ async function openMerchantCouponWalletNative(focusClaimId){
 async function deleteMerchantCouponClaim(claimId){
   if(!confirm('确定删除这张未核销的优惠券吗？删除后不能恢复。')) return;
   try{
-    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/delete_merchant_coupon_claim`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_claim_id:Number(claimId)})});
-    if(!res.ok) throw new Error(await res.text());
+    if(!merchantCouponApi) throw new Error('优惠券接口未初始化');
+    await merchantCouponApi.remove(claimId);
     await loadMerchantCouponClaims(true);
     showToast('优惠券已删除');
     openMerchantCouponWalletNative();
@@ -17491,8 +17495,8 @@ async function claimMerchantCoupon(userId,index){
   const eligibility=merchantCouponEligibility(coupon);
   if(!eligibility.eligible){showToast(eligibility.reason);return;}
   try{
-    const res=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/claim_merchant_coupon`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_merchant_user_id:userId,p_coupon_id:merchantCouponId(coupon,index)})});
-    if(!res.ok)throw new Error(await res.text());
+    if(!merchantCouponApi) throw new Error('优惠券接口未初始化');
+    await merchantCouponApi.claim({ merchantUserId:userId, couponId:merchantCouponId(coupon,index) });
     await loadMerchantCouponClaims(true);
     showToast('已领取，到店出示二维码即可');
     rerenderMerchantSection(merchant);
@@ -17770,7 +17774,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant & Profile API Batch】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Coupon API Batch】`);
 </script>
 </body>
 </html>
