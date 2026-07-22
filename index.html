@@ -105,6 +105,7 @@
 <script src="./shared/admin-feedback-api.js?v=5.471"></script>
 <script src="./shared/admin-center-api.js?v=5.473"></script>
 <script src="./shared/admin-access-api.js?v=5.474"></script>
+<script src="./shared/merchant-application-api.js?v=5.475"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3326,7 +3327,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.474';
+const APP_VERSION = '5.475';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3504,6 +3505,10 @@ const adminCenterApi = window.LeshenghuoAdminCenterApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const adminAccessApi = window.LeshenghuoAdminAccessApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const merchantApplicationApi = window.LeshenghuoMerchantApplicationApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -9618,9 +9623,8 @@ async function loadMerchantApplicationStatus(refreshProfile){
   }
   try {
     const select = 'id,user_id,status,business_name,category,subcategory,address,phone,contact_name,contact_email,license_note,review_note,created_at,updated_at,reviewed_at';
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_applications?user_id=eq.${session.user.id}&select=${select}&order=created_at.desc&limit=1`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    if(!merchantApplicationApi) throw new Error('商家认证接口未初始化');
+    const rows = await merchantApplicationApi.listMine({userId:session.user.id, select});
     currentMerchantApplication = rows && rows[0] ? rows[0] : null;
   } catch(e){
     console.warn('商家认证申请读取失败:', e.message);
@@ -9725,12 +9729,8 @@ async function submitMerchantApplication(){
     updated_at: new Date().toISOString()
   };
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_applications`, {
-      method:'POST',
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    if(!merchantApplicationApi) throw new Error('商家认证接口未初始化');
+    const rows = await merchantApplicationApi.submit(payload);
     currentMerchantApplication = rows && rows[0] ? rows[0] : Object.assign({}, payload);
     closeMerchantApplySheet();
     renderMerchantApplyBlock();
@@ -9773,9 +9773,8 @@ async function openMerchantApplicationReviewQueue(){
   renderDealPanelShell('商家审核', '读取待审核商家认证申请。', '<div class="deals-empty-panel">正在读取审核池...</div>');
   try {
     const select = 'id,user_id,user_email,status,business_name,category,subcategory,address,phone,contact_name,contact_email,license_note,review_note,created_at,updated_at';
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_applications?select=${select}&status=eq.pending&order=created_at.asc&limit=50`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    merchantApplicationRows = await res.json();
+    if(!merchantApplicationApi) throw new Error('商家认证接口未初始化');
+    merchantApplicationRows = await merchantApplicationApi.listPending(select);
     merchantApplicationBusy = {};
     renderDealPanelShell(
       '商家审核',
@@ -9812,30 +9811,8 @@ async function approveMerchantApplication(id){
   renderDealPanelShell('商家审核', `待审核 ${merchantApplicationRows.length} 个商家。`, `<div class="deals-result-list">${merchantApplicationRows.map(merchantApplicationCardHtml).join('')}</div>`);
   try {
     const merchantPayload = merchantApplicationToMerchantPayload(a);
-    let merchantRes = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${a.user_id}`, {
-      method:'PATCH',
-      body: JSON.stringify(merchantPayload)
-    });
-    let merchantRows = merchantRes.ok ? await merchantRes.json() : [];
-    if(!merchantRows.length){
-      merchantRes = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants`, {
-        method:'POST',
-        body: JSON.stringify(Object.assign({ user_id: a.user_id }, merchantPayload))
-      });
-      merchantRows = merchantRes.ok ? await merchantRes.json() : [];
-    }
-    if(!merchantRes.ok) throw new Error(await merchantRes.text());
-    const updateRes = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_applications?id=eq.${encodeURIComponent(id)}`, {
-      method:'PATCH',
-      body: JSON.stringify({
-        status:'approved',
-        review_note:null,
-        reviewed_by: session.user.id,
-        reviewed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-    });
-    if(!updateRes.ok) throw new Error(await updateRes.text());
+    if(!merchantApplicationApi) throw new Error('商家认证接口未初始化');
+    await merchantApplicationApi.approve({application:a, merchantPayload, reviewedBy:session.user.id});
     showToast('已通过商家认证');
     openMerchantApplicationReviewQueue();
   } catch(e){
@@ -9854,17 +9831,8 @@ async function rejectMerchantApplication(id){
   merchantApplicationBusy[id] = true;
   renderDealPanelShell('商家审核', `待审核 ${merchantApplicationRows.length} 个商家。`, `<div class="deals-result-list">${merchantApplicationRows.map(merchantApplicationCardHtml).join('')}</div>`);
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_applications?id=eq.${encodeURIComponent(id)}`, {
-      method:'PATCH',
-      body: JSON.stringify({
-        status:'rejected',
-        review_note: note.trim() || '资料需要补充或无法核对店铺真实性',
-        reviewed_by: session.user.id,
-        reviewed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-    });
-    if(!res.ok) throw new Error(await res.text());
+    if(!merchantApplicationApi) throw new Error('商家认证接口未初始化');
+    await merchantApplicationApi.reject({id, note:note.trim() || '资料需要补充或无法核对店铺真实性', reviewedBy:session.user.id});
     showToast('已驳回申请');
     openMerchantApplicationReviewQueue();
   } catch(e){
@@ -17834,7 +17802,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Admin Access API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Application API Module】`);
 </script>
 </body>
 </html>
