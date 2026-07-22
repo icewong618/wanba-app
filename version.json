@@ -1,5 +1,5 @@
 {
-  "version": "5.471",
+  "version": "5.472",
   "updated_at": "2026-07-21",
-  "message": "Admin Feedback API Module"
+  "message": "Supabase Startup Ordering Fix"
 }

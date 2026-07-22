@@ -3324,10 +3324,13 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.471';
+const APP_VERSION = '5.472';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
+// Keep runtime configuration ahead of every shared API module initialization.
+const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
 console.info(`乐生活 当前版本：v${APP_VERSION}`);
 
 const appUpdateManager = window.LeshenghuoAppUpdateManager?.create({
@@ -16817,8 +16820,6 @@ function loadPosts(){
 
 
 // ====== Supabase 配置 ======
-const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
 identityLoader = window.LeshenghuoIdentityLoader?.create({
   supabaseUrl: SUPABASE_URL,
   authedFetch: (...args) => authedFetch(...args),
@@ -17845,7 +17846,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Admin Feedback API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Supabase Startup Ordering Fix】`);
 </script>
 </body>
 </html>
