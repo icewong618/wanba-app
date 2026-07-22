@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.455';
+  const version = '5.456';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -91,6 +91,7 @@
 <script src="./shared/engagement-loader.js?v=5.453"></script>
 <script src="./shared/message-data.js?v=5.454"></script>
 <script src="./shared/profile-storage.js?v=5.455"></script>
+<script src="./shared/profile-api.js?v=5.456"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3321,7 +3322,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.455';
+const APP_VERSION = '5.456';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3447,6 +3448,11 @@ const messageDataLoader = window.LeshenghuoMessageData?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const profileStorage = window.LeshenghuoProfileStorage?.create({ getSession: () => session });
+const profileApi = window.LeshenghuoProfileApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  getCurrentUserId: () => session?.user?.id || null,
+  request: (url, options) => authedFetch(url, options)
+});
 
 function accessTokenExpiresSoon(token){
   return authSessionStore?.accessTokenExpiresSoon(token) ?? true;
@@ -4263,25 +4269,12 @@ async function syncProfileToDb(){
       updated_at: updatedAt
     };
     const fallbackPayload = { name: currentUser.name, avatar: currentUser.avatar || null, updated_at: updatedAt };
-    const writeProfile = async payload => {
-      let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(payload)
-      });
-      let rows = res.ok ? await res.json() : [];
-      if(res.ok && !rows.length){
-        res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles`, {
-          method: 'POST',
-          body: JSON.stringify(Object.assign({ user_id: session.user.id }, payload))
-        });
-      }
-      return res;
-    };
-    let res = await writeProfile(fullPayload);
+    let res = await profileApi?.write(fullPayload);
+    if(!res) throw new Error('资料接口未初始化');
     if(!res.ok){
       const text = await res.text();
       console.warn('完整资料同步失败，回退头像昵称同步:', text);
-      res = await writeProfile(fallbackPayload);
+      res = await profileApi.write(fallbackPayload);
     }
     if(res.ok){
       setProfileCache(Object.assign({ user_id:session.user.id }, fullPayload));
@@ -4298,14 +4291,8 @@ async function syncProfileToDb(){
 async function fetchProfileFromDb(){
   if(!(session && session.user)) return;
   try {
-    let res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar,bio,tags,gender,birth,cover,ip_location,updated_at`);
-    if(!res.ok){
-      res = await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=name,avatar`);
-    }
-    if(!res.ok) return;
-    const rows = await res.json();
-    if(rows && rows[0]){
-      const row = rows[0];
+    const row = await profileApi?.fetchCurrent();
+    if(row){
       const local = normalizeProfile(currentUser);
       currentUser = normalizeProfile(Object.assign({}, local, {
         name: row.name || local.name,
