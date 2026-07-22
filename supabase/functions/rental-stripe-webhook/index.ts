@@ -14,8 +14,13 @@ Deno.serve(async (req) => {
   const stripe = new Stripe(stripeSecret, { httpClient: Stripe.createFetchHttpClient() });
   const signature = req.headers.get("stripe-signature") || "";
   let event: Stripe.Event;
-  try { event = stripe.webhooks.constructEvent(await req.text(), signature, webhookSecret); }
-  catch { return json({ error: "Invalid Stripe signature" }, 400); }
+  try {
+    // Supabase Edge Functions run on Deno/Web Crypto, so use Stripe's async verifier.
+    event = await stripe.webhooks.constructEventAsync(await req.text(), signature, webhookSecret);
+  } catch (error) {
+    console.error("Stripe webhook signature verification failed", error);
+    return json({ error: "Invalid Stripe signature" }, 400);
+  }
 
   const admin = createClient(url, serviceKey);
   const intent = event.data.object as Stripe.PaymentIntent;
