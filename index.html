@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.459';
+  const version = '5.460';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -95,6 +95,7 @@
 <script src="./shared/engagement-api.js?v=5.457"></script>
 <script src="./shared/follow-api.js?v=5.458"></script>
 <script src="./shared/comment-threading.js?v=5.459"></script>
+<script src="./shared/post-detail-api.js?v=5.460"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3325,7 +3326,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.459';
+const APP_VERSION = '5.460';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3463,6 +3464,12 @@ const engagementApi = window.LeshenghuoEngagementApi?.create({
 const followApi = window.LeshenghuoFollowApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
+});
+const postDetailApi = window.LeshenghuoPostDetailApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  publicHeaders: () => ({ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}` }),
+  publicRequest: (url, options, timeout) => fetchPostFeed(url, options, timeout),
+  authRequest: (url, options) => authedFetch(url, options)
 });
 
 function accessTokenExpiresSoon(token){
@@ -11028,15 +11035,7 @@ async function loadSingleSharedPost(postId){
   if(existing) return existing;
   try {
     // 分享链接可能比首页列表更早打开；单独读取这一篇，避免详情页先变成空白。
-    const select = ['id','title','content','excerpt','category','subcategory','author','image','image_thumbnail','images','image_thumbnails','youtube','likes','event','tags','user_id','visibility','pinned','created_at','location'].join(',');
-    const url = `${SUPABASE_URL}/rest/v1/posts?id=eq.${encodeURIComponent(postId)}&select=${select}&limit=1`;
-    const res = await fetchPostFeed(url, {
-      method:'GET',
-      headers:{ 'Content-Type':'application/json', 'Accept':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}` }
-    }, 7000);
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const rows = await res.json();
-    const raw = rows && rows[0];
+    const raw = await postDetailApi?.fetchSharedPost(postId);
     if(!raw) return null;
     const post = compactFeedPost(raw);
     post.images = Array.isArray(raw.images) ? raw.images : null;
@@ -11076,13 +11075,7 @@ async function hydratePostDetail(postId){
   if(!post || hydratedPostIds.has(String(postId))) return;
   hydratedPostIds.add(String(postId));
   try {
-    const select = 'content,images,community_meta,location';
-    const res = await fetchPostFeed(`${SUPABASE_URL}/rest/v1/posts?id=eq.${encodeURIComponent(postId)}&select=${select}&limit=1`, {
-      method:'GET', headers:{ 'Content-Type':'application/json', 'Accept':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}` }
-    }, 6000);
-    if(!res.ok) throw new Error(`详情读取失败 ${res.status}`);
-    const rows = await res.json();
-    const full = rows && rows[0];
+    const full = await postDetailApi?.fetchDetailFields(postId);
     if(!full) return;
     post.content = full.content || post.content || '';
     post.images = Array.isArray(full.images) ? full.images : post.images;
@@ -11096,10 +11089,8 @@ async function hydratePostDetail(postId){
 }
 async function loadCommentsFromDb(postId){
   try {
-    const select = 'id,post_id,user_id,name,text,created_at,parent_id,reply_to_user_id,reply_to_name';
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${encodeURIComponent(postId)}&select=${select}&order=created_at.asc`, { method:'GET' });
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const rows = await res.json();
+    const rows = await postDetailApi?.fetchComments(postId);
+    if(!rows) throw new Error('详情接口未初始化');
     const p = getPost();
     // URL、卡片和数据库的 id 类型可能分别是字符串/数字，统一转字符串比较，避免成功读到评论却不渲染。
     if(!p || String(p.id) !== String(postId)) return;
