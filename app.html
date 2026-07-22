@@ -100,6 +100,7 @@
 <script src="./shared/compose-draft-store.js?v=5.462"></script>
 <script src="./shared/location-api.js?v=5.465"></script>
 <script src="./shared/feedback-api.js?v=5.466"></script>
+<script src="./shared/feedback-attachments-api.js?v=5.467"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3330,7 +3331,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.466';
+const APP_VERSION = '5.467';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3485,6 +3486,10 @@ const locationApi = window.LeshenghuoLocationApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const feedbackApi = window.LeshenghuoFeedbackApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const feedbackAttachmentsApi = window.LeshenghuoFeedbackAttachmentsApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -16359,32 +16364,8 @@ function removeFeedbackAttachment(index){
   renderFeedbackAttachmentQueue();
 }
 function compressFeedbackAttachment(file){
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('图片读取失败'));
-    reader.onload = event => {
-      const image = new Image();
-      image.onerror = () => reject(new Error('图片格式暂不支持，请换成 JPG、PNG 或 WebP'));
-      image.onload = () => {
-        const maxSide = 1600;
-        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(image.width * scale));
-        canvas.height = Math.max(1, Math.round(image.height * scale));
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(blob => {
-          if(!blob) return reject(new Error('图片压缩失败'));
-          if(blob.size > FEEDBACK_ATTACHMENT_MAX_BYTES) return reject(new Error('压缩后图片仍超过 4MB，请换一张截图'));
-          resolve(new File([blob], `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`, { type:'image/jpeg' }));
-        }, 'image/jpeg', 0.82);
-      };
-      image.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
+  if(!feedbackAttachmentsApi) return Promise.reject(new Error('反馈截图接口未初始化'));
+  return feedbackAttachmentsApi.compressImage(file, { maxBytes:FEEDBACK_ATTACHMENT_MAX_BYTES });
 }
 async function handleFeedbackAttachments(input){
   const remaining = FEEDBACK_ATTACHMENT_MAX_COUNT - feedbackAttachmentQueue.length;
@@ -16406,51 +16387,18 @@ async function handleFeedbackAttachments(input){
   if(failures.length) showToast(failures[0].reason?.message || '部分截图无法使用');
 }
 function storageObjectPathUrl(path){
-  return String(path || '').split('/').map(encodeURIComponent).join('/');
+  return feedbackAttachmentsApi?.objectPath(path) || String(path || '').split('/').map(encodeURIComponent).join('/');
 }
 async function uploadFeedbackAttachment(feedback, item, slot){
-  const token = globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function' ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const path = `${session.user.id}/${feedback.id}/${token}.jpg`;
-  const objectUrl = `${SUPABASE_URL}/storage/v1/object/${FEEDBACK_ATTACHMENT_BUCKET}/${storageObjectPathUrl(path)}`;
-  const upload = await authedFetch(objectUrl, {
-    method:'POST',
-    headers:{ 'Content-Type':item.file.type, 'x-upsert':'false' },
-    body:item.file
-  });
-  if(!upload.ok) throw new Error(`截图上传失败（${upload.status}）`);
-  const metadata = {
-    feedback_id: feedback.id,
-    user_id: session.user.id,
-    slot,
-    storage_path: path,
-    file_name: item.file.name,
-    content_type: item.file.type,
-    byte_size: item.file.size
-  };
-  const saved = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback_attachments`, { method:'POST', body:JSON.stringify(metadata) });
-  if(!saved.ok){
-    await authedFetch(objectUrl, { method:'DELETE' });
-    throw new Error(`截图记录失败（${saved.status}）`);
-  }
-  return (await saved.json())[0];
+  if(!feedbackAttachmentsApi || !(session && session.user)) throw new Error('反馈截图接口未初始化');
+  return feedbackAttachmentsApi.upload({ userId:session.user.id, feedbackId:feedback.id, file:item.file, slot, bucket:FEEDBACK_ATTACHMENT_BUCKET });
 }
 function attachmentMapFromRows(rows){
-  const map = new Map();
-  (rows || []).forEach(row => {
-    const key = String(row.feedback_id);
-    if(!map.has(key)) map.set(key, []);
-    map.get(key).push(row);
-  });
-  map.forEach(list => list.sort((a,b) => Number(a.slot) - Number(b.slot)));
-  return map;
+  return feedbackAttachmentsApi?.groupByFeedback(rows) || new Map();
 }
 async function loadFeedbackAttachmentMap(feedbackRows){
-  const ids = [...new Set((feedbackRows || []).map(row => Number(row.id)).filter(Number.isFinite))];
-  if(!ids.length) return new Map();
-  const url = `${SUPABASE_URL}/rest/v1/user_feedback_attachments?feedback_id=in.(${ids.join(',')})&select=id,feedback_id,slot,storage_path,file_name,content_type,byte_size,created_at&order=feedback_id.asc,slot.asc`;
-  const res = await authedFetch(url, { method:'GET' });
-  if(!res.ok) throw new Error(await res.text());
-  return attachmentMapFromRows(await res.json());
+  if(!feedbackAttachmentsApi) throw new Error('反馈截图接口未初始化');
+  return feedbackAttachmentsApi.listForFeedbackRows(feedbackRows);
 }
 function feedbackAttachmentButtonHtml(feedbackId, map){
   const count = (map.get(String(feedbackId)) || []).length;
@@ -16468,9 +16416,8 @@ async function openFeedbackAttachments(feedbackId){
   for(const row of rows){
     const target = document.getElementById(`feedbackAttachmentImage${row.id}`);
     try {
-      const res = await authedFetch(`${SUPABASE_URL}/storage/v1/object/authenticated/${FEEDBACK_ATTACHMENT_BUCKET}/${storageObjectPathUrl(row.storage_path)}`, { method:'GET', headers:{ Accept:row.content_type || 'image/*' } });
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      const objectUrl = URL.createObjectURL(await res.blob());
+      if(!feedbackAttachmentsApi) throw new Error('反馈截图接口未初始化');
+      const objectUrl = await feedbackAttachmentsApi.loadObjectUrl({ bucket:FEEDBACK_ATTACHMENT_BUCKET, storagePath:row.storage_path, contentType:row.content_type });
       feedbackAttachmentObjectUrls.push(objectUrl);
       if(target) target.innerHTML = `<img src="${objectUrl}" alt="${escAttr(row.file_name || '反馈截图')}">`;
     } catch(error){
@@ -17876,7 +17823,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Feedback API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Feedback Attachments Module】`);
 </script>
 </body>
 </html>
