@@ -108,6 +108,7 @@
 <script src="./shared/merchant-application-api.js?v=5.475"></script>
 <script src="./shared/merchant-team-api.js?v=5.476"></script>
 <script src="./shared/restaurant-order-api.js?v=5.477"></script>
+<script src="./shared/rental-api.js?v=5.478"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3329,7 +3330,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.477';
+const APP_VERSION = '5.478';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3519,6 +3520,10 @@ const merchantTeamApi = window.LeshenghuoMerchantTeamApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const restaurantOrderApi = window.LeshenghuoRestaurantOrderApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const rentalApi = window.LeshenghuoRentalApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -4855,12 +4860,7 @@ async function loadMerchantRentalStoreCatalog(m, force){
   if(!key || previous?.loading || (!force && previous && !previous.error)) return;
   window._merchantRentalStoreCatalog[key] = { loading:true, vehicles:[] };
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_public_catalog`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ p_slug:merchantSiteSlug(m) })
-    });
-    if(!res.ok) throw new Error(await res.text());
-    const data = await res.json();
+    const data = await rentalApi.publicCatalog(merchantSiteSlug(m));
     window._merchantRentalStoreCatalog[key] = { loading:false, vehicles:Array.isArray(data?.vehicles) ? data.vehicles : [] };
   } catch(error){
     console.warn('租车车辆库读取失败:', error.message);
@@ -7150,9 +7150,7 @@ async function renderMerchantRentalManager(){
   if(!body || !merchantUserId) return;
   body.innerHTML = '<div class="deals-empty-panel">正在读取车辆与预约...</div>';
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_manager_list`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_merchant_user_id:merchantUserId}) });
-    if(!res.ok) throw new Error(await res.text());
-    const data = await res.json();
+    const data = await rentalApi.managerList(merchantUserId);
     const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
     const bookings = Array.isArray(data?.bookings) ? data.bookings : [];
     window._merchantRentalData = { vehicles, bookings };
@@ -7210,8 +7208,7 @@ async function saveMerchantRentalSharedService(type, id){
   const name = document.getElementById('rentalSharedServiceName')?.value.trim() || '';
   if(!name){ showToast('请填写服务名称'); return; }
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_shared_service`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_service:{id:id || undefined,merchant_user_id:merchantUserId,service_type:type,name,description:document.getElementById('rentalSharedServiceDescription')?.value.trim() || '',price:document.getElementById('rentalSharedServicePrice')?.value.trim() || '0',unit:document.getElementById('rentalSharedServiceUnit')?.value || 'once',is_active:true}}) });
-    if(!res.ok) throw new Error(await res.text());
+    await rentalApi.saveSharedService({id:id || undefined,merchant_user_id:merchantUserId,service_type:type,name,description:document.getElementById('rentalSharedServiceDescription')?.value.trim() || '',price:document.getElementById('rentalSharedServicePrice')?.value.trim() || '0',unit:document.getElementById('rentalSharedServiceUnit')?.value || 'once',is_active:true});
     showToast('公用服务已保存'); await renderMerchantRentalManager(); openMerchantRentalServiceManager(type);
   } catch(error){ console.warn('保存租车公用服务失败:',error.message); showToast('保存失败，请检查价格后重试'); }
 }
@@ -7219,8 +7216,7 @@ async function toggleMerchantRentalSharedService(id, enabled){
   const service = (window._merchantRentalData?.services || []).find(item => String(item.id) === String(id));
   if(!service) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_shared_service`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_service:Object.assign({},service,{merchant_user_id:document.getElementById('merchantRentalManager')?.dataset.merchantUserId || activeMerchantWorkspaceId(),is_active:enabled})}) });
-    if(!res.ok) throw new Error(await res.text());
+    await rentalApi.saveSharedService(Object.assign({},service,{merchant_user_id:document.getElementById('merchantRentalManager')?.dataset.merchantUserId || activeMerchantWorkspaceId(),is_active:enabled}));
     await renderMerchantRentalManager(); openMerchantRentalServiceManager(service.service_type);
   } catch(error){ showToast('更新服务状态失败'); }
 }
@@ -7256,14 +7252,10 @@ async function saveMerchantRentalVehicle(vehicleId){
     const uploadedPhotos = [];
     for(const source of (window._merchantRentalEditingPhotos || [])) uploadedPhotos.push(await uploadMediaDataUrl(source, 'products'));
     const payload = { id:vehicleId || undefined, name, make:get('rentalVehicleMake'), model:get('rentalVehicleModel'), year, seats:get('rentalVehicleSeats'), transmission:get('rentalVehicleTransmission'), fuel_type:get('rentalVehicleFuel'), pricing_mode:get('rentalVehiclePricing'), daily_rate:get('rentalVehicleDayRate'), hourly_rate:get('rentalVehicleHourRate'), minimum_hours:get('rentalVehicleMinHours'), deposit_amount:get('rentalVehicleDeposit'), pickup_address:get('rentalVehiclePickup'), status:get('rentalVehicleStatus'), description:get('rentalVehicleDescription'), photos:uploadedPhotos };
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_vehicle`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_merchant_user_id:merchantUserId,p_vehicle:payload}) });
-    if(!res.ok) throw new Error(await res.text());
-    const savedVehicle = await res.json();
+    const savedVehicle = await rentalApi.saveVehicle(merchantUserId,payload);
     const addonIds = Array.from(document.querySelectorAll('#merchantRentalVehicleExtras input[type="checkbox"]:checked')).map(input => input.value).filter(Boolean);
-    const addonRes = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_vehicle_services`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ p_vehicle_id:savedVehicle?.id || vehicleId, p_addon_service_ids:addonIds, p_insurance_service_id:document.getElementById('rentalVehicleInsurance')?.value || null }) });
-    if(!addonRes.ok) throw new Error(await addonRes.text());
-    const luggageRes = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_vehicle_addons`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ p_vehicle_id:savedVehicle?.id || vehicleId, p_addons:[], p_luggage_count:Math.max(0, Math.min(20, Number(document.getElementById('rentalVehicleLuggage')?.value || 2))) }) });
-    if(!luggageRes.ok) throw new Error(await luggageRes.text());
+    await rentalApi.saveVehicleServices({vehicleId:savedVehicle?.id || vehicleId,addonServiceIds:addonIds,insuranceServiceId:document.getElementById('rentalVehicleInsurance')?.value || null});
+    await rentalApi.saveVehicleAddons({vehicleId:savedVehicle?.id || vehicleId,luggageCount:Math.max(0, Math.min(20, Number(document.getElementById('rentalVehicleLuggage')?.value || 2)))});
     showToast('车辆已保存'); await renderMerchantRentalManager();
   } catch(error){
     const detail = String(error.message || '');
@@ -7279,11 +7271,11 @@ async function merchantRentalSetVehicleStatus(vehicleId,status){
   if(!vehicle) return;
   vehicle.status = status;
   const merchantUserId = document.getElementById('merchantRentalManager')?.dataset.merchantUserId || activeMerchantWorkspaceId();
-  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_save_vehicle`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_merchant_user_id:merchantUserId,p_vehicle:vehicle}) }); if(!res.ok) throw new Error(await res.text()); showToast(status === 'inactive' ? '车辆已下架' : '车辆已重新上架'); renderMerchantRentalManager(); } catch(error){ showToast('车辆状态更新失败'); }
+  try { await rentalApi.saveVehicle(merchantUserId,vehicle); showToast(status === 'inactive' ? '车辆已下架' : '车辆已重新上架'); renderMerchantRentalManager(); } catch(error){ showToast('车辆状态更新失败'); }
 }
 async function merchantRentalSetBookingStatus(bookingId,status){
   const note = status === 'rejected' || status === 'cancelled' ? (window.prompt('填写说明（选填）','') || '') : '';
-  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_set_booking_status`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_booking_id:bookingId,p_status:status,p_note:note,p_payment_status:null,p_deposit_status:null}) }); if(!res.ok) throw new Error(await res.text()); showToast(`预约已${merchantRentalStatusText(status)}`); renderMerchantRentalManager(); } catch(error){ console.warn('更新租车预约失败:', error.message); showToast('更新失败，请确认该车辆没有时间冲突'); }
+  try { await rentalApi.setBookingStatus({bookingId,status,note}); showToast(`预约已${merchantRentalStatusText(status)}`); renderMerchantRentalManager(); } catch(error){ console.warn('更新租车预约失败:', error.message); showToast('更新失败，请确认该车辆没有时间冲突'); }
 }
 function rentalBookingById(bookingId){ return (window._merchantRentalData?.bookings || []).find(row => String(row.id) === String(bookingId)); }
 function openMerchantRentalFinancialEditor(bookingId){
@@ -7293,7 +7285,7 @@ function openMerchantRentalFinancialEditor(bookingId){
 }
 async function saveMerchantRentalFinancials(bookingId){
   const get = id => document.getElementById(id)?.value?.trim() || '0';
-  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_update_financials`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_booking_id:bookingId,p_member_discount_amount:get('rentalMemberDiscount'),p_coupon_discount_amount:get('rentalCouponDiscount'),p_damage_amount:get('rentalDamageAmount'),p_violation_amount:get('rentalViolationAmount'),p_payment_status:get('rentalPaymentStatus'),p_deposit_status:get('rentalDepositStatus'),p_payment_method:document.getElementById('rentalPaymentMethod')?.value || null,p_financial_note:document.getElementById('rentalFinancialNote')?.value || null}) }); if(!res.ok) throw new Error(await res.text()); showToast('租车费用已更新'); renderMerchantRentalManager(); } catch(error){ console.warn('更新租车费用失败:',error.message); showToast('费用更新失败，请检查填写的金额'); }
+  try { await rentalApi.updateFinancials({p_booking_id:bookingId,p_member_discount_amount:get('rentalMemberDiscount'),p_coupon_discount_amount:get('rentalCouponDiscount'),p_damage_amount:get('rentalDamageAmount'),p_violation_amount:get('rentalViolationAmount'),p_payment_status:get('rentalPaymentStatus'),p_deposit_status:get('rentalDepositStatus'),p_payment_method:document.getElementById('rentalPaymentMethod')?.value || null,p_financial_note:document.getElementById('rentalFinancialNote')?.value || null}); showToast('租车费用已更新'); renderMerchantRentalManager(); } catch(error){ console.warn('更新租车费用失败:',error.message); showToast('费用更新失败，请检查填写的金额'); }
 }
 function openMerchantRentalExtensionEditor(bookingId){
   const booking = rentalBookingById(bookingId), body = document.getElementById('merchantRentalManagerBody');
@@ -7304,7 +7296,7 @@ function openMerchantRentalExtensionEditor(bookingId){
 async function saveMerchantRentalExtension(bookingId){
   const raw = document.getElementById('rentalExtendEnd')?.value;
   if(!raw){ showToast('请选择新的还车时间'); return; }
-  try { const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_extend_booking`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({p_booking_id:bookingId,p_ends_at:new Date(raw).toISOString(),p_note:document.getElementById('rentalExtendNote')?.value || null}) }); if(!res.ok) throw new Error(await res.text()); showToast('租期与租金已更新'); renderMerchantRentalManager(); } catch(error){ console.warn('调整租期失败:',error.message); showToast(String(error.message||'').includes('conflict') ? '新租期与其他预约冲突，请换一个时间' : '调整失败，请检查还车时间'); }
+  try { await rentalApi.extendBooking({bookingId,endsAt:new Date(raw).toISOString(),note:document.getElementById('rentalExtendNote')?.value || null}); showToast('租期与租金已更新'); renderMerchantRentalManager(); } catch(error){ console.warn('调整租期失败:',error.message); showToast(String(error.message||'').includes('conflict') ? '新租期与其他预约冲突，请换一个时间' : '调整失败，请检查还车时间'); }
 }
 function openMerchantFeatureCenter(){
   if(!(session && session.user && currentMerchant && String(currentMerchant.user_id) === String(session.user.id))){ showToast('只有店长可以管理商家功能'); return; }
@@ -17701,15 +17693,12 @@ async function openMerchantOrderHistory(){
   try{
     const [billResult,rentalResult]=await Promise.allSettled([
       authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_bills?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=created_at.desc&limit=200`,{method:'GET'}),
-      authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_rental_customer_bookings`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+      rentalApi.customerBookings()
     ]);
     if(billResult.status!=='fulfilled'||!billResult.value.ok)throw new Error(billResult.status==='fulfilled'?await billResult.value.text():billResult.reason?.message);
     const bills=await billResult.value.json();
     let rentalBookings=[];
-    if(rentalResult.status==='fulfilled'&&rentalResult.value.ok){
-      const rentalData=await rentalResult.value.json();
-      rentalBookings=Array.isArray(rentalData)?rentalData:[];
-    }
+    if(rentalResult.status==='fulfilled') rentalBookings=Array.isArray(rentalResult.value)?rentalResult.value:[];
     const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id)).filter(Boolean))];
     if(merchantIds.length){const merchantRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${merchantIds.map(encodeURIComponent).join(',')})&select=user_id,business_name,logo`,{method:'GET'});if(merchantRes.ok)(await merchantRes.json()).forEach(row=>setMerchantIdentityCache(row.user_id,row));}
     rentalBookings.forEach(row=>{if(row.merchant?.user_id)setMerchantIdentityCache(row.merchant.user_id,row.merchant);});
@@ -17808,7 +17797,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Restaurant Order API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Rental API Module】`);
 </script>
 </body>
 </html>
