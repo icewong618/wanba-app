@@ -3337,7 +3337,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.489';
+const APP_VERSION = '5.490';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -6169,8 +6169,8 @@ async function openMerchantCouponWalletNative(focusClaimId){
     const rows = await loadMerchantCouponClaims(true);
     const merchantIds = [...new Set(rows.map(row => row.merchant_user_id).filter(Boolean))];
     if(merchantIds.length){
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${merchantIds.map(encodeURIComponent).join(',')})&select=user_id,business_name,logo,coupons`, { method:'GET' });
-      if(res.ok) (await res.json()).forEach(row => setMerchantIdentityCache(row.user_id, row));
+      if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+      (await merchantPublicApi.listByUserIds({ userIds:merchantIds, select:'user_id,business_name,logo,coupons' })).forEach(row => setMerchantIdentityCache(row.user_id, row));
     }
     const visibleRows = focusClaimId ? rows.filter(claim => Number(claim.id) === Number(focusClaimId)) : rows;
     body.innerHTML = visibleRows.length ? visibleRows.map(claim => {
@@ -6437,7 +6437,10 @@ async function loadMerchantMatrixState(){
     merchantMatrixWorkspaces=(state.workspaces||[]).map(row=>Object.assign({},row,{merchant:row.merchant||{}}));
     merchantMatrixInvites=state.invites||[];
     const ids=merchantMatrixInvites.map(row=>row.merchant_user_id).filter(Boolean);
-    if(ids.length){const res=await authedFetch(SUPABASE_URL+'/rest/v1/merchants?user_id=in.('+ids.map(encodeURIComponent).join(',')+')&select=user_id,business_name,logo');if(res.ok)(await res.json()).forEach(row=>setMerchantIdentityCache(row.user_id,row));}
+    if(ids.length){
+      if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+      (await merchantPublicApi.listByUserIds({userIds:ids,select:'user_id,business_name,logo'})).forEach(row=>setMerchantIdentityCache(row.user_id,row));
+    }
   }catch(error){console.warn('商家矩阵账号读取失败:',error.message);merchantMatrixWorkspaces=[];merchantMatrixInvites=[];}
 }
 function merchantMatrixWorkspaceCardHtml(){
@@ -7053,14 +7056,8 @@ async function saveMerchantEnabledFeatures(merchant, values){
   const clean = [...new Set((values || []).filter(Boolean))];
   const merchantUserId = merchant && merchant.user_id;
   if(!merchantUserId || !(session && session.user && String(session.user.id) === String(merchantUserId))) throw new Error('not_owner');
-  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(merchantUserId)}`, {
-    method:'PATCH',
-    headers:{'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify({ enabled_features:clean, updated_at:new Date().toISOString() })
-  });
-  if(!res.ok) throw new Error(await res.text());
-  let rows = [];
-  try { rows = await res.json(); } catch(error) { rows = []; }
+  if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+  const rows = await merchantPublicApi.patch({ userId:merchantUserId, returnRepresentation:true, payload:{ enabled_features:clean, updated_at:new Date().toISOString() } });
   // Some native WebViews complete PATCH successfully without a response body.
   // Preserve the confirmed selection rather than treating that success as a missing merchant.
   const savedMerchant = rows[0] || Object.assign({}, merchant, { enabled_features:clean, updated_at:new Date().toISOString() });
@@ -17631,7 +17628,10 @@ async function openMerchantOrderHistory(){
     let rentalBookings=[];
     if(rentalResult.status==='fulfilled') rentalBookings=Array.isArray(rentalResult.value)?rentalResult.value:[];
     const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id)).filter(Boolean))];
-    if(merchantIds.length){const merchantRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${merchantIds.map(encodeURIComponent).join(',')})&select=user_id,business_name,logo`,{method:'GET'});if(merchantRes.ok)(await merchantRes.json()).forEach(row=>setMerchantIdentityCache(row.user_id,row));}
+    if(merchantIds.length){
+      if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+      (await merchantPublicApi.listByUserIds({userIds:merchantIds,select:'user_id,business_name,logo'})).forEach(row=>setMerchantIdentityCache(row.user_id,row));
+    }
     rentalBookings.forEach(row=>{if(row.merchant?.user_id)setMerchantIdentityCache(row.merchant.user_id,row.merchant);});
     window._merchantOrderHistoryBills=bills;window._merchantOrderHistoryRentals=rentalBookings;
     window._purchaseHistoryRecords=[...bills.map(data=>({kind:'restaurant',data,created_at:data.created_at})),...rentalBookings.map(data=>({kind:'rental',data,created_at:data.created_at}))].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
@@ -17727,7 +17727,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Profile API Batch】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Identity API Batch】`);
 </script>
 </body>
 </html>
