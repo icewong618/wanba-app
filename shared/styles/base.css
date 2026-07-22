@@ -1362,10 +1362,6 @@
     .merchant-real-list,
     .user-content-grid{ grid-template-columns:repeat(5, minmax(0, 1fr)); }
   }
-  html.embedded-app-entry #page-home .feed,
-  html.app-webview-entry #page-home .feed{
-    margin-top:calc(var(--home-fixed-top, 138px) + 3px) !important;
-  }
   html.embedded-app-entry .deals-meta-row,
   html.app-webview-entry .deals-meta-row{
     margin-top:calc(var(--deals-fixed-top, 205px) - 75px) !important;

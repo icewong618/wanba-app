@@ -34,5 +34,26 @@
     event.preventDefault();
     route(routeFromPath(link.href));
   });
+  const bindEdgeBackGesture = () => {
+    if(window.__leshenghuoModuleEdgeBackBound) return;
+    window.__leshenghuoModuleEdgeBackBound = true;
+    let start = null;
+    document.addEventListener('touchstart', event => {
+      if(!isEmbedded() || event.touches?.length !== 1) return;
+      const touch = event.touches[0];
+      if(touch.clientX > 28) return;
+      start = { x:touch.clientX, y:touch.clientY };
+    }, { passive:true });
+    document.addEventListener('touchend', event => {
+      if(!start) return;
+      const touch = event.changedTouches?.[0];
+      const dx = (touch?.clientX || 0) - start.x;
+      const dy = Math.abs((touch?.clientY || 0) - start.y);
+      start = null;
+      if(dx >= 74 && dy <= 48) back();
+    }, { passive:true });
+    document.addEventListener('touchcancel', () => { start = null; }, { passive:true });
+  };
+  bindEdgeBackGesture();
   window.LeshenghuoModuleBridge = { isEmbedded, route, routeFromPath, back };
 })();

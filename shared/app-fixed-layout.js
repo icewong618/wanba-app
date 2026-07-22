@@ -12,10 +12,15 @@
         const homeTop = topHeader ? Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap : 138;
         root.style.setProperty('--home-fixed-top', `${homeTop}px`);
         const homeFeed = document.querySelector('#page-home .feed');
-        if(homeFeed){
-          // The header is fixed in every runtime. Keep the first feed row below its
-          // measured bottom edge instead of applying the old App-only subtraction.
-          homeFeed.style.marginTop = `${homeTop + fixedGap}px`;
+        if(homeFeed && topHeader){
+          // Measure against the rendered fixed bar. This avoids an accumulating
+          // desktop/App offset and keeps the first notes close without being covered.
+          homeFeed.style.setProperty('margin-top', '0px', 'important');
+          const headerBottom = topHeader.getBoundingClientRect().bottom;
+          const feedTop = homeFeed.getBoundingClientRect().top;
+          const safeGap = embedded ? 18 : 22;
+          const feedOffset = Math.max(0, Math.ceil(headerBottom + safeGap - feedTop));
+          homeFeed.style.setProperty('margin-top', `${feedOffset}px`, 'important');
         }
         const weekHeader = document.querySelector('#page-week.active .page-header');
         root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');

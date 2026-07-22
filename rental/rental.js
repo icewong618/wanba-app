@@ -8,7 +8,12 @@
   const money = value => `$${Number(value || 0).toFixed(2)}`;
   const user = () => JSON.parse(localStorage.getItem('wanba_session') || 'null')?.user || null;
   const api = async (path, options={}) => { const session=JSON.parse(localStorage.getItem('wanba_session') || 'null'); const headers=Object.assign({apikey:SUPABASE_KEY,'Content-Type':'application/json'},options.headers||{}); headers.Authorization=`Bearer ${session?.access_token||SUPABASE_KEY}`; return fetch(`${SUPABASE_URL}${path}`,Object.assign({},options,{headers})); };
-  const exitRental = () => { if(window.parent!==window) window.parent.postMessage({type:'leshenghuo-close-rental'},'*'); else if(history.length>1) history.back(); else location.assign('/'); };
+  const exitRental = () => {
+    if(window.LeshenghuoModuleBridge?.back?.('/')) return;
+    if(window.parent!==window) window.parent.postMessage({type:'leshenghuo-close-rental'}, window.location.origin);
+    else if(history.length>1) history.back();
+    else location.assign('/');
+  };
   const close = () => ['payment','contact','vehicle','booking-detail','bookings'].includes(state.screen) ? back() : exitRental();
   const top = title => `<header class="top"><button onclick="Rental.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span class="top-actions"><button class="language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button class="close" onclick="Rental.close()" aria-label="关闭">×</button></span></header>`;
   const toLocalInput = value => { const date=value?new Date(value):new Date(Date.now()+3600000); date.setMinutes(date.getMinutes()-date.getTimezoneOffset()); return date.toISOString().slice(0,16); };

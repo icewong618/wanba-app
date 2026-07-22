@@ -290,7 +290,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.521';
+const APP_VERSION = '5.522';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -2412,7 +2412,9 @@ function openMerchantEmbeddedOrder(url){
 }
 window.addEventListener('message',event=>{
   if(event.origin !== window.location.origin) return;
-  if(['leshenghuo-close-takeout','leshenghuo-close-rental','leshenghuo-close-auto'].includes(event?.data?.type)) closeEmbeddedExperience();
+  if(['leshenghuo-close-takeout','leshenghuo-close-rental','leshenghuo-close-auto','leshenghuo-module-close'].includes(event?.data?.type)){
+    closeMerchantEmbeddedOrder();
+  }
 });
 async function openMerchantTakeoutPage(merchantUserId){
   try {

@@ -21,6 +21,7 @@
   };
   const top = title => `<header class="top"><button onclick="RentalManage.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span class="top-actions"><button class="language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button onclick="RentalManage.close()" aria-label="关闭">×</button></span></header>`;
   const exitManager = () => {
+    if(window.LeshenghuoModuleBridge?.back?.('/')) return;
     if(window.parent !== window) { window.parent.postMessage({ type:'leshenghuo-close-rental' }, '*'); return; }
     const slug = query.get('merchant');
     location.assign(`/merchant/manage/?merchant=${encodeURIComponent(slug || '')}&admin_v=5.362`);
