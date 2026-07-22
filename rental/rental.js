@@ -176,7 +176,7 @@
   }
   // 5.357: reservation is paid before it becomes available for merchant confirmation.
   function renderPayment(){
-    app.innerHTML=`${top(state.editingBookingId ? '确认修改' : '支付预约')}<section class="payment-banner"><b>Stripe 测试付款</b><span>${esc(state.selected.name)} · ${displayDate(state.startsAt)} 至 ${displayDate(state.endsAt)}</span></section>${summary()}<section class="rental-section"><h2>测试支付</h2><p class="payment-note">此页面仅用于 Stripe 测试模式，不会发生真实扣款。请使用测试卡完成一次预约付款。</p><div id="stripePaymentElement" class="stripe-element">正在准备安全支付表单...</div><p id="stripePaymentError" class="stripe-error" hidden></p><p class="stripe-test-note">测试卡：4242 4242 4242 4242，任意未来日期、任意 CVC、任意邮编。</p></section><button class="primary sticky-action" id="stripeConfirmButton" onclick="Rental.submit()">测试支付 ${money(state.quote?.total_amount)}</button>`;
+    app.innerHTML=`${top(state.editingBookingId ? '确认修改' : '支付预约')}<section class="payment-banner"><b>Stripe 测试付款</b><span>${esc(state.selected.name)} · ${displayDate(state.startsAt)} 至 ${displayDate(state.endsAt)}</span></section>${summary()}<section class="rental-section"><h2>安全支付</h2><p class="payment-note">支持设备会优先显示 Apple Pay 或 Google Pay；不支持时可继续使用银行卡或 Link。当前为 Stripe 测试模式，不会发生真实扣款。</p><div id="stripePaymentElement" class="stripe-element">正在准备安全支付表单...</div><p id="stripePaymentError" class="stripe-error" hidden></p><p class="stripe-test-note">银行卡测试卡：4242 4242 4242 4242，任意未来日期、任意 CVC、任意邮编。Apple Pay / Google Pay 仅在已登记域名和支持的钱包设备上显示。</p></section><button class="primary sticky-action" id="stripeConfirmButton" onclick="Rental.submit()">确认支付 ${money(state.quote?.total_amount)}</button>`;
   }
   function review(){
     if(!user()){ alert('请先登录后支付并管理租车预约。'); return; }
@@ -204,10 +204,16 @@
       if(!payload.client_secret||!payload.publishable_key||!window.Stripe) throw new Error('Stripe 测试支付尚未完成配置。');
       state.stripe=window.Stripe(payload.publishable_key);
       state.stripeElements=state.stripe.elements({clientSecret:payload.client_secret});
-      state.stripeElements.create('payment').mount('#stripePaymentElement');
-      if(button){ button.disabled=false; button.textContent=`测试支付 ${money(state.quote?.total_amount)}`; button.onclick=confirmStripePayment; }
+      state.stripeElements.create('payment',{
+        layout:{type:'accordion',visibleAccordionItemsCount:4},
+        // Keep dynamic payment methods enabled server-side. Wallets are ordered
+        // first here, but Stripe only renders one when the device and domain qualify.
+        paymentMethodOrder:['apple_pay','google_pay','link','card'],
+        wallets:{applePay:'auto',googlePay:'auto'}
+      }).mount('#stripePaymentElement');
+      if(button){ button.disabled=false; button.textContent=`确认支付 ${money(state.quote?.total_amount)}`; button.onclick=confirmStripePayment; }
     } catch(error) {
-      if(button){ button.disabled=false; button.textContent=`测试支付 ${money(state.quote?.total_amount)}`; }
+      if(button){ button.disabled=false; button.textContent=`确认支付 ${money(state.quote?.total_amount)}`; }
       stripeError(error.message||'暂时无法创建测试付款。');
     }
   }
@@ -215,7 +221,7 @@
     if(!state.stripe||!state.stripeElements){ await submit(); return; }
     const button=document.getElementById('stripeConfirmButton'); if(button){button.disabled=true;button.textContent='正在确认付款...';}
     const result=await state.stripe.confirmPayment({elements:state.stripeElements,redirect:'if_required'});
-    if(result.error){ stripeError(result.error.message||'付款未完成。'); if(button){button.disabled=false;button.textContent=`测试支付 ${money(state.quote?.total_amount)}`;} return; }
+    if(result.error){ stripeError(result.error.message||'付款未完成。'); if(button){button.disabled=false;button.textContent=`确认支付 ${money(state.quote?.total_amount)}`;} return; }
     state.editingBookingId=''; await loadBookings(); const booking=state.bookings.find(item=>item.payment_provider_reference===result.paymentIntent?.id)||result.paymentIntent||{}; renderSuccess(booking);
   }
   async function cancelBooking(id){

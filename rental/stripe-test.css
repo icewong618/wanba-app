@@ -6,6 +6,10 @@
   background: #fff;
 }
 
+.stripe-element :is(iframe, div) {
+  max-width: 100%;
+}
+
 .stripe-test-note {
   margin: 12px 0 0;
   padding: 10px 12px;
