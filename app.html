@@ -113,7 +113,7 @@
 <script src="./shared/rental-api.js?v=5.478"></script>
 <script src="./shared/deals-api.js?v=5.480"></script>
 <script src="./shared/message-api.js?v=5.480"></script>
-<script src="./shared/merchant-membership-api.js?v=5.485"></script>
+<script src="./shared/merchant-membership-api.js?v=5.488"></script>
 <script src="./shared/merchant-public-api.js?v=5.481"></script>
 <script src="./shared/merchant-analytics-api.js?v=5.487"></script>
 <style>
@@ -3337,7 +3337,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.487';
+const APP_VERSION = '5.488';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7795,12 +7795,7 @@ async function updateMerchantMembershipRow(id, patch, audit){
   }
   try {
     const body = Object.assign({}, patch, { updated_at: new Date().toISOString() });
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_memberships?id=eq.${encodeURIComponent(id)}&merchant_user_id=eq.${encodeURIComponent(merchantUserId)}`, {
-      method:'PATCH',
-      headers:{ 'Content-Type':'application/json', 'Prefer':'return=representation' },
-      body: JSON.stringify(body)
-    });
-    if(!res.ok) throw new Error(await res.text());
+    await merchantMembershipApi.update({membershipId:id,merchantUserId,patch:body});
     let transaction = null;
     if(audit) transaction = await logMerchantMemberTransaction(audit);
     if(audit && Number(audit.pointsDelta || 0) !== 0){
@@ -8319,14 +8314,7 @@ async function logMerchantMemberTransaction(audit){
       source: isRewardRedeem ? 'manual' : (audit.source || 'manual'),
       note: audit.note || (isRewardRedeem ? '奖励兑换' : (audit.source === 'code_checkin' ? '会员卡号核销' : '商家手动调整'))
     };
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_member_transactions`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Prefer':'return=representation' },
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok){ console.warn('会员核销流水未记录:', await res.text()); return null; }
-    const rows = await res.json();
-    return rows && rows[0] || null;
+    return await merchantMembershipApi.createTransaction(payload);
   } catch(e){
     console.warn('会员核销流水记录失败:', e.message);
     return null;
@@ -8346,9 +8334,7 @@ async function createMemberActivityNotification(input){
       title:input.title || '会员权益更新',
       body:input.body || ''
     };
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/member_activity_notifications`, { method:'POST', headers:{ 'Content-Type':'application/json', 'Prefer':'return=representation' }, body:JSON.stringify(payload) });
-    if(!res.ok) throw new Error(await res.text());
-    return (await res.json())[0] || null;
+    return await merchantMembershipApi.createActivityNotification(payload);
   } catch(e){ console.warn('会员权益通知写入失败:', e.message); return null; }
 }
 window._merchantMemberTransactionCache = window._merchantMemberTransactionCache || {};
@@ -17744,7 +17730,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Analytics API】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Membership Write API】`);
 </script>
 </body>
 </html>

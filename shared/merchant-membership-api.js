@@ -26,6 +26,30 @@
       const response = await request(`${supabaseUrl}/rest/v1/merchant_memberships?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&user_id=eq.${encodeURIComponent(userId)}`, { method:'DELETE' });
       await requireOk(response, '取消商家会员失败');
     };
+    const update = async ({ membershipId, merchantUserId, patch } = {}) => {
+      const response = await request(`${supabaseUrl}/rest/v1/merchant_memberships?id=eq.${encodeURIComponent(membershipId)}&merchant_user_id=eq.${encodeURIComponent(merchantUserId)}`, {
+        method:'PATCH', headers:{ 'Content-Type':'application/json', Prefer:'return=representation' }, body:JSON.stringify(patch || {})
+      });
+      await requireOk(response, '更新会员资料失败');
+      const rows = await response.json();
+      return Array.isArray(rows) ? rows[0] || null : null;
+    };
+    const createTransaction = async payload => {
+      const response = await request(`${supabaseUrl}/rest/v1/merchant_member_transactions`, {
+        method:'POST', headers:{ 'Content-Type':'application/json', Prefer:'return=representation' }, body:JSON.stringify(payload || {})
+      });
+      await requireOk(response, '会员核销流水记录失败');
+      const rows = await response.json();
+      return Array.isArray(rows) ? rows[0] || null : null;
+    };
+    const createActivityNotification = async payload => {
+      const response = await request(`${supabaseUrl}/rest/v1/member_activity_notifications`, {
+        method:'POST', headers:{ 'Content-Type':'application/json', Prefer:'return=representation' }, body:JSON.stringify(payload || {})
+      });
+      await requireOk(response, '会员权益通知写入失败');
+      const rows = await response.json();
+      return Array.isArray(rows) ? rows[0] || null : null;
+    };
     const loadMerchants = async ({ ids, select } = {}) => {
       if(!ids?.length) return [];
       const response = await request(`${supabaseUrl}/rest/v1/merchants?user_id=in.(${ids.map(encodeURIComponent).join(',')})&verified=eq.true&select=${select}`, { method:'GET' });
@@ -44,7 +68,7 @@
       await requireOk(response, '会员卡流水读取失败');
       return response.json();
     };
-    return { loadForMerchant, loadForUser, upsert, remove, loadMerchants, loadTransactionsForMerchant, loadTransactionsForMembership };
+    return { loadForMerchant, loadForUser, upsert, remove, update, createTransaction, createActivityNotification, loadMerchants, loadTransactionsForMerchant, loadTransactionsForMembership };
   };
   window.LeshenghuoMerchantMembershipApi = { create };
 })();
