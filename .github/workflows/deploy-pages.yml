@@ -29,10 +29,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Prepare deploy site
-        run: |
-          mkdir -p _site
-          cp index.html app.html 404.html version.json CNAME .nojekyll _site/
-          cp -R assets order _site/
+        run: npm run build:pages
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

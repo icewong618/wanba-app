@@ -1,10 +1,11 @@
 {
-  "name": "leshenghuo-media-migration",
+  "name": "leshenghuo-web",
   "private": true,
-  "version": "5.220.0",
+  "version": "5.500.0",
   "scripts": {
     "migrate:media": "node scripts/migrate-base64-media.js",
-    "check:release": "node scripts/release-sanity-check.mjs"
+    "check:release": "node scripts/release-sanity-check.mjs && node scripts/build-pages-site.mjs",
+    "build:pages": "node scripts/build-pages-site.mjs"
   },
   "dependencies": {
     "sharp": "^0.34.3"

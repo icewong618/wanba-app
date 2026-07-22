@@ -4,3 +4,4 @@ node_modules/
 .env.media-migration
 backup/media-migration-*.json
 versions/
+_site/
