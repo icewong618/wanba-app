@@ -1,0 +1,23 @@
+.stripe-element {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.stripe-test-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #2a261d;
+  color: #eadfbf;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stripe-error {
+  margin: 10px 0 0;
+  color: #ff8585;
+  font-size: 12px;
+}

@@ -53,22 +53,34 @@ Deno.serve(async (req) => {
       .eq("merchant_user_id", booking.merchant_user_id)
       .eq("provider", "stripe")
       .maybeSingle();
-    if (!account?.stripe_connected_account_id || account.onboarding_status !== "active" || !account.charges_enabled) {
-      return json({ error: "This merchant has not finished Stripe payments setup" }, 422);
-    }
-
     const amount = Math.round(Number(booking.total_amount || 0) * 100);
     if (!Number.isSafeInteger(amount) || amount < 50) return json({ error: "Invalid payment amount" }, 400);
 
     const stripe = new Stripe(stripeSecret, { httpClient: Stripe.createFetchHttpClient() });
-    const fee = Math.floor(amount * Number(account.platform_fee_bps || 0) / 10000);
+    // Test mode starts with platform charges. Connected merchant accounts are
+    // only used after Stripe Connect onboarding is explicitly enabled.
+    const connectedAccount = account?.stripe_connected_account_id
+      && account.onboarding_status === "active"
+      && account.charges_enabled
+      ? account.stripe_connected_account_id
+      : null;
+    const fee = connectedAccount ? Math.floor(amount * Number(account?.platform_fee_bps || 0) / 10000) : 0;
     const intent = await stripe.paymentIntents.create({
       amount,
       currency: "usd",
       automatic_payment_methods: { enabled: true },
       application_fee_amount: fee || undefined,
-      metadata: { booking_id: booking.id, booking_code: booking.booking_code, merchant_user_id: booking.merchant_user_id },
-    }, { stripeAccount: account.stripe_connected_account_id });
+      metadata: {
+        booking_id: booking.id,
+        booking_code: booking.booking_code,
+        merchant_user_id: booking.merchant_user_id,
+        payment_environment: "test",
+        payment_mode: connectedAccount ? "connected_account" : "platform_test",
+      },
+    }, {
+      ...(connectedAccount ? { stripeAccount: connectedAccount } : {}),
+      idempotencyKey: `rental-booking-${booking.id}`,
+    });
 
     await admin.from("merchant_rental_payment_attempts").insert({
       booking_id: booking.id,
@@ -79,7 +91,7 @@ Deno.serve(async (req) => {
       status: intent.status === "succeeded" ? "succeeded" : "requires_action",
       amount: Number(booking.total_amount),
       currency: "usd",
-      metadata: { stripe_account_id: account.stripe_connected_account_id },
+      metadata: { stripe_account_id: connectedAccount, payment_environment: "test" },
     });
     await admin.from("merchant_rental_bookings").update({
       payment_provider: "stripe",
