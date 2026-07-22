@@ -23,8 +23,17 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
+  const publishableKey = Deno.env.get("STRIPE_PUBLISHABLE_KEY") || "";
   if (!url || !anonKey || !serviceKey) return json({ error: "Payment service is not configured" }, 503);
   if (!stripeSecret) return json({ error: "Stripe payment is not enabled yet" }, 503);
+
+  // Never allow a test secret key to be paired with a live publishable key,
+  // or the reverse. This makes a pre-launch configuration mistake fail closed.
+  const paymentEnvironment = stripeSecret.startsWith("sk_live_") ? "live" : "test";
+  const expectedPublishablePrefix = paymentEnvironment === "live" ? "pk_live_" : "pk_test_";
+  if (!publishableKey.startsWith(expectedPublishablePrefix)) {
+    return json({ error: "Stripe key mode mismatch. Please verify the test/live key pair." }, 503);
+  }
 
   const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authorization } } });
   const token = authorization.slice("Bearer ".length);
@@ -74,8 +83,8 @@ Deno.serve(async (req) => {
         booking_id: booking.id,
         booking_code: booking.booking_code,
         merchant_user_id: booking.merchant_user_id,
-        payment_environment: "test",
-        payment_mode: connectedAccount ? "connected_account" : "platform_test",
+        payment_environment: paymentEnvironment,
+        payment_mode: connectedAccount ? "connected_account" : `platform_${paymentEnvironment}`,
       },
     }, {
       ...(connectedAccount ? { stripeAccount: connectedAccount } : {}),
@@ -91,18 +100,23 @@ Deno.serve(async (req) => {
       status: intent.status === "succeeded" ? "succeeded" : "requires_action",
       amount: Number(booking.total_amount),
       currency: "usd",
-      metadata: { stripe_account_id: connectedAccount, payment_environment: "test" },
+      metadata: { stripe_account_id: connectedAccount, payment_environment: paymentEnvironment },
     });
     await admin.from("merchant_rental_bookings").update({
       payment_provider: "stripe",
       payment_provider_reference: intent.id,
       payment_status: intent.status === "succeeded" ? "paid" : "processing",
-      payment_method: "stripe",
+      payment_method: paymentEnvironment === "test" ? "stripe_test" : "stripe",
       payment_paid_at: intent.status === "succeeded" ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     }).eq("id", booking.id);
 
-    return json({ client_secret: intent.client_secret, payment_intent_id: intent.id, publishable_key: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || "" });
+    return json({
+      client_secret: intent.client_secret,
+      payment_intent_id: intent.id,
+      publishable_key: publishableKey,
+      payment_environment: paymentEnvironment,
+    });
   } catch (error) {
     console.error("rental-stripe-payment", error);
     return json({ error: "Unable to create payment" }, 500);

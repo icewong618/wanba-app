@@ -3,7 +3,7 @@
   const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
   const app = document.getElementById('rentalApp');
   const query = new URLSearchParams(location.search);
-  const state = { merchant:null, vehicles:[], bookings:[], selected:null, booking:null, quote:null, screen:'list', startsAt:'', endsAt:'', name:'', phone:'', email:'', note:'', selectedAddons:[], paymentMethod:'card', editingBookingId:'', error:'', filters:{seats:'',fuel:'',type:''}, stripe:null, stripeElements:null };
+  const state = { merchant:null, vehicles:[], bookings:[], selected:null, booking:null, quote:null, screen:'list', startsAt:'', endsAt:'', name:'', phone:'', email:'', note:'', selectedAddons:[], paymentMethod:'card', editingBookingId:'', error:'', filters:{seats:'',fuel:'',type:''}, stripe:null, stripeElements:null, paymentEnvironment:'unknown' };
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const money = value => `$${Number(value || 0).toFixed(2)}`;
   const user = () => JSON.parse(localStorage.getItem('wanba_session') || 'null')?.user || null;
@@ -43,6 +43,11 @@
     car:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 14l2-5h14l2 5v5H3z"></path><path d="M6 19v2M18 19v2M3 14h18M7 14h.01M17 14h.01"></path></svg>'
   }[type] || '');
   const summary = () => state.quote ? (() => { const rows=Array.isArray(state.quote.addons)?state.quote.addons:[]; return `<section class="price-card"><div><span>车辆租金</span><b>${money(state.quote.base_amount)}</b></div>${rows.map(item=>`<div><span>${esc(item.name || (item.required ? '税费或服务费' : '可选服务'))}</span><b>${money(item.amount)}</b></div>`).join('')}<div><span>押金（取车时处理）</span><b>${money(state.quote.deposit_amount)}</b></div><div class="total"><span>预估总额</span><b>${money(state.quote.total_amount)}</b></div></section>`; })() : '';
+  const isTestPayment = () => state.paymentEnvironment !== 'live';
+  const paymentEnvironmentText = () => isTestPayment() ? 'Stripe 测试付款' : 'Stripe 安全付款';
+  const paymentEnvironmentDescription = () => isTestPayment()
+    ? '当前为 Stripe 测试模式，不会发生真实扣款，也不会产生真实收入。'
+    : '当前为 Stripe 正式付款。支付成功后将产生真实扣款。';
   function renderList(){
     const start=state.startsAt?toLocalInput(state.startsAt):toLocalInput(); const end=state.endsAt?toLocalInput(state.endsAt):toLocalInput(new Date(Date.now()+25*3600000));
     app.innerHTML=`${top('租车预约')}<section class="rental-hero"><div class="rental-hero-row"><div><h1>${esc(state.merchant?.business_name||'乐生活租车')}</h1><p>${esc(state.merchant?.address||'请选择取还时间后查看可预约车辆')}</p></div>${user()?'<button onclick="Rental.bookings()">我的预约</button>':''}</div></section><section class="time-filter"><label>取车时间<input id="rentalStart" type="datetime-local" value="${esc(start)}" min="${toLocalInput()}"></label><label>还车时间<input id="rentalEnd" type="datetime-local" value="${esc(end)}" min="${toLocalInput(new Date(Date.now()+3600000))}"></label><button onclick="Rental.refreshList()">查询车辆</button></section><div class="vehicle-list">${state.vehicles.length?state.vehicles.map(vehicle=>`<article class="vehicle">${photo(vehicle)}<div class="vehicle-main"><div class="vehicle-head"><div><h2>${esc(vehicle.name)}</h2><p>${esc([vehicle.year,vehicle.make,vehicle.model].filter(Boolean).join(' '))}</p></div><b>${rate(vehicle)}</b></div><div class="chips"><span>${esc(vehicle.vehicle_type||'车辆')}</span><span>${vehicle.seats||5} 座</span><span>${esc(vehicle.transmission||'自动挡')}</span><span>${esc(fuel(vehicle.fuel_type))}</span></div><button onclick="Rental.select('${esc(vehicle.id)}')">查看车辆</button></div></article>`).join(''):'<div class="empty">这家商家还没有发布可预约车辆。</div>'}</div>`;
@@ -85,7 +90,8 @@
   function renderBookingDetail(){
     const booking=state.booking; if(!booking) return renderBookings();
     const vehicle=booking.vehicle||{}; const extras=Array.isArray(booking.rental_addons)?booking.rental_addons:[]; const editable=canChangeBooking(booking);
-    app.innerHTML=`${top('预约详情')}<section class="review-head"><div>${photo(vehicle)}</div><p><b>${esc(vehicle.name||'租车预约')}</b><span>${esc(booking.merchant?.business_name||'')}</span></p><span class="booking-status ${esc(booking.status||'pending')}">${esc(bookingStatus(booking.status))}</span></section><section class="rental-section"><h2>${esc(booking.booking_code||'')}</h2><p class="detail-line">▣ ${displayDate(booking.starts_at)}<small>至 ${displayDate(booking.ends_at)}</small></p><p class="detail-line">⌖ ${esc(vehicle.pickup_address||booking.merchant?.address||'由商家确认取还车地点')}</p></section><section class="rental-section"><h2>金额明细</h2><div class="price-card"><div><span>车辆租金</span><b>${money(booking.base_amount)}</b></div>${extras.map(item=>`<div><span>${esc(item.name||'附加服务')}</span><b>${money(item.amount??item.price)}</b></div>`).join('')}<div><span>押金</span><b>${money(booking.deposit_amount)}</b></div><div class="total"><span>预估总额</span><b>${money(booking.total_amount)}</b></div></div><p class="payment-note">支付状态：${esc(({pending:'待付款',paid:'已付款，等待商家确认',refunded:'已退款'})[booking.payment_status]||booking.payment_status||'待付款')}</p></section>${booking.refund_reason?`<section class="rental-section"><h2>取消与退款说明</h2><p class="detail-line">${esc(booking.refund_reason)}<small>退款金额：${money(booking.refund_amount)}</small></p></section>`:''}<section class="help-list"><button onclick="Rental.help()">☎ 寻求帮助 <span>›</span></button><button onclick="Rental.faq()">ⓘ 常见问题 <span>›</span></button></section>${editable?`<div class="action-grid"><button class="danger" onclick="Rental.cancelBooking('${esc(booking.id)}')">取消预约</button><button class="secondary" onclick="Rental.editBooking('${esc(booking.id)}')">修改预约</button></div><p class="payment-note">取车前 48 小时以上取消，已付款预约可自动退款。</p>`:''}`;
+    const paymentLabel = booking.payment_method === 'stripe_test' ? 'Stripe 测试付款已完成，不会产生真实扣款或真实收入' : ({pending:'待付款',paid:'已付款，等待商家确认',refunded:'已退款'})[booking.payment_status]||booking.payment_status||'待付款';
+    app.innerHTML=`${top('预约详情')}<section class="review-head"><div>${photo(vehicle)}</div><p><b>${esc(vehicle.name||'租车预约')}</b><span>${esc(booking.merchant?.business_name||'')}</span></p><span class="booking-status ${esc(booking.status||'pending')}">${esc(bookingStatus(booking.status))}</span></section><section class="rental-section"><h2>${esc(booking.booking_code||'')}</h2><p class="detail-line">▣ ${displayDate(booking.starts_at)}<small>至 ${displayDate(booking.ends_at)}</small></p><p class="detail-line">⌖ ${esc(vehicle.pickup_address||booking.merchant?.address||'由商家确认取还车地点')}</p></section><section class="rental-section"><h2>金额明细</h2><div class="price-card"><div><span>车辆租金</span><b>${money(booking.base_amount)}</b></div>${extras.map(item=>`<div><span>${esc(item.name||'附加服务')}</span><b>${money(item.amount??item.price)}</b></div>`).join('')}<div><span>押金</span><b>${money(booking.deposit_amount)}</b></div><div class="total"><span>预估总额</span><b>${money(booking.total_amount)}</b></div></div><p class="payment-note">支付状态：${esc(paymentLabel)}</p></section>${booking.refund_reason?`<section class="rental-section"><h2>取消与退款说明</h2><p class="detail-line">${esc(booking.refund_reason)}<small>退款金额：${money(booking.refund_amount)}</small></p></section>`:''}<section class="help-list"><button onclick="Rental.help()">☎ 寻求帮助 <span>›</span></button><button onclick="Rental.faq()">ⓘ 常见问题 <span>›</span></button></section>${editable?`<div class="action-grid"><button class="danger" onclick="Rental.cancelBooking('${esc(booking.id)}')">取消预约</button><button class="secondary" onclick="Rental.editBooking('${esc(booking.id)}')">修改预约</button></div><p class="payment-note">取车前 48 小时以上取消，已付款预约可自动退款。</p>`:''}`;
   }
   // 5.357: required taxes and service fees are informational, not customer toggles.
   function renderVehicle(){
@@ -103,7 +109,7 @@
     const methods=[['apple_pay','Apple Pay','使用 Apple Pay 支付预估总额'],['google_pay','Google Pay','使用 Google Pay 支付预估总额'],['card','信用卡','使用信用卡支付预估总额'],['gift','商家礼品卡','使用商家礼品卡支付预估总额']];
     app.innerHTML=`${top(state.editingBookingId ? '确认修改' : '支付预约')}<section class="payment-banner"><b>确认支付内容</b><span>${esc(state.selected.name)} · ${displayDate(state.startsAt)} 至 ${displayDate(state.endsAt)}</span></section>${summary()}<section class="rental-section"><h2>支付方式</h2>${methods.map(([id,title,detail])=>`<button class="pay-method ${state.paymentMethod===id?'selected':''}" onclick="Rental.pickPayment('${id}')"><span><b>${title}</b><small>${detail}</small></span><i>${state.paymentMethod===id?'✓':''}</i></button>`).join('')}<p class="payment-note">当前为预约确认流程。正式扣款、押金预授权和退款将在商家开通支付服务后启用；提交后商家会确认你的预约。</p></section><button class="primary sticky-action" onclick="Rental.submit()">${state.editingBookingId ? '确认修改并重新计价' : '确认并提交'} ${money(state.quote?.total_amount)}</button>`;
   }
-  function renderSuccess(booking){ app.innerHTML=`${top('预约已提交')}<div class="success"><i>✓</i><h1>预约已提交</h1><b>${esc(booking.booking_code||'')}</b><p>商家将确认你的预约和付款安排。</p><section class="price-card"><div><span>车辆租金</span><b>${money(booking.base_amount)}</b></div>${Number(booking.addon_amount||0)?`<div><span>附加服务</span><b>${money(booking.addon_amount)}</b></div>`:''}<div class="total"><span>预估总额</span><b>${money(booking.total_amount)}</b></div></section><button class="primary" onclick="Rental.list()">返回车辆列表</button></div>`; }
+  function renderSuccess(booking){ const test=isTestPayment()||booking?.payment_method==='stripe_test'; app.innerHTML=`${top(test?'测试付款完成':'预约已提交')}<div class="success"><i>✓</i><h1>${test?'测试付款完成':'预约已提交'}</h1><b>${esc(booking.booking_code||'')}</b><p>${test?'这是 Stripe 测试环境的模拟付款，未发生真实扣款，也不会产生真实收入。':'商家将确认你的预约和付款安排。'}</p><section class="price-card"><div><span>车辆租金</span><b>${money(booking.base_amount)}</b></div>${Number(booking.addon_amount||0)?`<div><span>附加服务</span><b>${money(booking.addon_amount)}</b></div>`:''}<div class="total"><span>预估总额</span><b>${money(booking.total_amount)}</b></div></section><button class="primary" onclick="Rental.list()">返回车辆列表</button></div>`; }
   async function quote(){ formTimes(); state.error=''; try { const response=await api('/rest/v1/rpc/merchant_rental_quote',{method:'POST',body:JSON.stringify({p_vehicle_id:state.selected.id,p_starts_at:state.startsAt,p_ends_at:state.endsAt,p_addon_ids:state.selectedAddons})}); const data=await response.json(); if(!response.ok)throw new Error(String(data?.message||data?.hint||'该时间暂不可预约')); state.quote=data; renderVehicle(); } catch(error){ state.quote=null; state.error=error.message.includes('vehicle')?'该车辆在这段时间不可预约，请换一个时间。':error.message.includes('invalid')?'请确认取车和还车时间。':'暂时无法计算，请稍后重试。'; renderVehicle(); } }
   function toggleAddon(id, checked){ state.selectedAddons=checked?[...new Set(state.selectedAddons.concat(String(id)))]:state.selectedAddons.filter(value=>value!==String(id)); quote(); }
   function contact(){ state.screen='contact'; renderContact(); }
@@ -176,7 +182,18 @@
   }
   // 5.357: reservation is paid before it becomes available for merchant confirmation.
   function renderPayment(){
-    app.innerHTML=`${top(state.editingBookingId ? '确认修改' : '支付预约')}<section class="payment-banner"><b>Stripe 测试付款</b><span>${esc(state.selected.name)} · ${displayDate(state.startsAt)} 至 ${displayDate(state.endsAt)}</span></section>${summary()}<section class="rental-section"><h2>安全支付</h2><p class="payment-note">支持设备会优先显示 Apple Pay 或 Google Pay；不支持时可继续使用银行卡或 Link。当前为 Stripe 测试模式，不会发生真实扣款。</p><div id="stripePaymentElement" class="stripe-element">正在准备安全支付表单...</div><p id="stripePaymentError" class="stripe-error" hidden></p><p class="stripe-test-note">银行卡测试卡：4242 4242 4242 4242，任意未来日期、任意 CVC、任意邮编。Apple Pay / Google Pay 仅在已登记域名和支持的钱包设备上显示。</p></section><button class="primary sticky-action" id="stripeConfirmButton" onclick="Rental.submit()">确认支付 ${money(state.quote?.total_amount)}</button>`;
+    const testNotice = `<label id="stripeTestAcknowledgementWrap" class="stripe-test-ack"><input id="stripeTestAcknowledgement" type="checkbox"> <span>我已了解：这是测试付款，不会发生真实扣款或产生真实收入。</span></label>`;
+    app.innerHTML=`${top(state.editingBookingId ? '确认修改' : '支付预约')}<section id="stripePaymentBanner" class="payment-banner ${isTestPayment() ? 'payment-test-banner' : 'payment-live-banner'}"><b id="stripePaymentEnvironment">${paymentEnvironmentText()}</b><span>${esc(state.selected.name)} · ${displayDate(state.startsAt)} 至 ${displayDate(state.endsAt)}</span></section>${summary()}<section class="rental-section"><h2>安全支付</h2><p id="stripePaymentDescription" class="payment-note">正在验证 Stripe 付款环境。${paymentEnvironmentDescription()}</p><div id="stripePaymentElement" class="stripe-element">正在准备安全支付表单...</div><p id="stripePaymentError" class="stripe-error" hidden></p><div id="stripePaymentTestGuard">${isTestPayment() ? `<p class="stripe-test-note">测试银行卡：4242 4242 4242 4242，任意未来日期、任意 CVC、任意邮编。Apple Pay / Google Pay 只会在符合条件的设备、钱包和已登记域名上显示。</p>${testNotice}` : ''}</div></section><button class="primary sticky-action" id="stripeConfirmButton" onclick="Rental.submit()">创建付款表单 ${money(state.quote?.total_amount)}</button>`;
+  }
+  function syncPaymentEnvironmentUI(){
+    const banner=document.getElementById('stripePaymentBanner');
+    const title=document.getElementById('stripePaymentEnvironment');
+    const description=document.getElementById('stripePaymentDescription');
+    const guard=document.getElementById('stripePaymentTestGuard');
+    if(banner){ banner.classList.toggle('payment-test-banner',isTestPayment()); banner.classList.toggle('payment-live-banner',!isTestPayment()); }
+    if(title) title.textContent=paymentEnvironmentText();
+    if(description) description.textContent=`支持设备会优先显示 Apple Pay 或 Google Pay；不支持时可继续使用银行卡或 Link。${paymentEnvironmentDescription()}`;
+    if(guard) guard.innerHTML=isTestPayment()?`<p class="stripe-test-note">测试银行卡：4242 4242 4242 4242，任意未来日期、任意 CVC、任意邮编。Apple Pay / Google Pay 只会在符合条件的设备、钱包和已登记域名上显示。</p><label class="stripe-test-ack"><input id="stripeTestAcknowledgement" type="checkbox"> <span>我已了解：这是测试付款，不会发生真实扣款或产生真实收入。</span></label>`:'';
   }
   function review(){
     if(!user()){ alert('请先登录后支付并管理租车预约。'); return; }
@@ -195,13 +212,15 @@
   }
   async function submit(){
     const button=document.getElementById('stripeConfirmButton');
-    if(button){ button.disabled=true; button.textContent='正在创建测试付款...'; }
+    if(button){ button.disabled=true; button.textContent='正在创建付款表单...'; }
     try {
       const booking=await createBooking();
       const result=await api('/functions/v1/rental-stripe-payment',{method:'POST',body:JSON.stringify({booking_id:booking.id})});
       const payload=await result.json().catch(()=>({}));
-      if(!result.ok) throw new Error(payload.error||'Stripe 测试付款暂不可用。');
-      if(!payload.client_secret||!payload.publishable_key||!window.Stripe) throw new Error('Stripe 测试支付尚未完成配置。');
+      if(!result.ok) throw new Error(payload.error||'Stripe 付款暂不可用。');
+      if(!payload.client_secret||!payload.publishable_key||!window.Stripe) throw new Error('Stripe 支付尚未完成配置。');
+      state.paymentEnvironment=payload.payment_environment==='live'?'live':'test';
+      syncPaymentEnvironmentUI();
       state.stripe=window.Stripe(payload.publishable_key);
       state.stripeElements=state.stripe.elements({clientSecret:payload.client_secret});
       state.stripeElements.create('payment',{
@@ -211,14 +230,18 @@
         paymentMethodOrder:['apple_pay','google_pay','link','card'],
         wallets:{applePay:'auto',googlePay:'auto'}
       }).mount('#stripePaymentElement');
-      if(button){ button.disabled=false; button.textContent=`确认支付 ${money(state.quote?.total_amount)}`; button.onclick=confirmStripePayment; }
+      if(button){ button.disabled=false; button.textContent=`${isTestPayment() ? '确认测试付款' : '确认支付'} ${money(state.quote?.total_amount)}`; button.onclick=confirmStripePayment; }
     } catch(error) {
       if(button){ button.disabled=false; button.textContent=`确认支付 ${money(state.quote?.total_amount)}`; }
-      stripeError(error.message||'暂时无法创建测试付款。');
+      stripeError(error.message||'暂时无法创建付款。');
     }
   }
   async function confirmStripePayment(){
     if(!state.stripe||!state.stripeElements){ await submit(); return; }
+    if(isTestPayment()&&!document.getElementById('stripeTestAcknowledgement')?.checked){
+      stripeError('请先确认你了解这是测试付款，测试金额不会产生真实扣款。');
+      return;
+    }
     const button=document.getElementById('stripeConfirmButton'); if(button){button.disabled=true;button.textContent='正在确认付款...';}
     const result=await state.stripe.confirmPayment({elements:state.stripeElements,redirect:'if_required'});
     if(result.error){ stripeError(result.error.message||'付款未完成。'); if(button){button.disabled=false;button.textContent=`确认支付 ${money(state.quote?.total_amount)}`;} return; }

@@ -20,6 +20,30 @@
   line-height: 1.5;
 }
 
+.stripe-test-ack {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 1px solid #806c35;
+  border-radius: 10px;
+  background: #201d15;
+  color: #f0e2bb;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stripe-test-ack input {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: #d8aa45;
+}
+
+.payment-test-banner { background: #76561d; }
+.payment-live-banner { background: #285139; }
+
 .stripe-error {
   margin: 10px 0 0;
   color: #ff8585;
