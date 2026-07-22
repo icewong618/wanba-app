@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.456';
+  const version = '5.457';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -92,6 +92,7 @@
 <script src="./shared/message-data.js?v=5.454"></script>
 <script src="./shared/profile-storage.js?v=5.455"></script>
 <script src="./shared/profile-api.js?v=5.456"></script>
+<script src="./shared/engagement-api.js?v=5.457"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3322,7 +3323,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.456';
+const APP_VERSION = '5.457';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3451,6 +3452,10 @@ const profileStorage = window.LeshenghuoProfileStorage?.create({ getSession: () 
 const profileApi = window.LeshenghuoProfileApi?.create({
   supabaseUrl: SUPABASE_URL,
   getCurrentUserId: () => session?.user?.id || null,
+  request: (url, options) => authedFetch(url, options)
+});
+const engagementApi = window.LeshenghuoEngagementApi?.create({
+  supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
 
@@ -13432,13 +13437,10 @@ async function toggleCollect(){
   try {
     if(p.collected){
       const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/favorites`, {
-        method:'POST',
-        body: JSON.stringify({ post_id: p.id, user_id: session.user.id, name: nick })
-      });
+      const res = await engagementApi?.setReaction({ table:'favorites', postId:p.id, userId:session.user.id, name:nick, active:true });
       if(!res.ok && res.status !== 409) throw new Error(res.status);
     } else {
-      await authedFetch(`${SUPABASE_URL}/rest/v1/favorites?post_id=eq.${p.id}&user_id=eq.${session.user.id}`, { method:'DELETE' });
+      await engagementApi?.setReaction({ table:'favorites', postId:p.id, userId:session.user.id, active:false });
     }
   } catch(e){ console.warn('收藏同步失败:', e); }
 }
@@ -13545,12 +13547,9 @@ async function submitReply(parentId){
   if(!parent){ showToast('找不到要回复的评论'); return; }
   const nick = myNick();
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments`, {
-      method: 'POST',
-      body: JSON.stringify({
-        post_id: p.id, user_id: session.user.id, name: nick, text,
-        parent_id: parentId, reply_to_user_id: parent.user_id || null, reply_to_name: parent.name
-      })
+    const res = await engagementApi?.createComment({
+      post_id: p.id, user_id: session.user.id, name: nick, text,
+      parent_id: parentId, reply_to_user_id: parent.user_id || null, reply_to_name: parent.name
     });
     if(!res.ok){
       const t = await res.text();
@@ -13587,7 +13586,7 @@ function collectDescendantIds(comments, id){
 async function deleteComment(id){
   if(!confirm('删除这条评论？其下的回复也会一并删除')) return;
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments?id=eq.${id}`, { method:'DELETE' });
+    const res = await engagementApi?.deleteComment(id);
     if(!res.ok) throw new Error('删除失败 ' + res.status);
     const p = getPost();
     const toRemove = collectDescendantIds(p.comments, id);
@@ -13608,10 +13607,7 @@ async function addComment(){
   const p = getPost();
   const nick = myNick();
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/comments`, {
-      method: 'POST',
-      body: JSON.stringify({ post_id: p.id, user_id: session.user.id, name: nick, text })
-    });
+    const res = await engagementApi?.createComment({ post_id: p.id, user_id: session.user.id, name: nick, text });
     if(!res.ok){
       const t = await res.text();
       throw new Error(`${res.status}: ${t.slice(0,80)}`);
@@ -13649,13 +13645,10 @@ async function toggleLike(){
   try {
     if(willLike){
       const nick = (session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0];
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/likes`, {
-        method:'POST',
-        body: JSON.stringify({ post_id: p.id, user_id: session.user.id, name: nick })
-      });
+      const res = await engagementApi?.setReaction({ table:'likes', postId:p.id, userId:session.user.id, name:nick, active:true });
       if(!res.ok && res.status !== 409) throw new Error(res.status);
     } else {
-      await authedFetch(`${SUPABASE_URL}/rest/v1/likes?post_id=eq.${p.id}&user_id=eq.${session.user.id}`, { method:'DELETE' });
+      await engagementApi?.setReaction({ table:'likes', postId:p.id, userId:session.user.id, active:false });
     }
   } catch(e){
     console.warn('点赞同步失败:', e);
