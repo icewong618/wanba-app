@@ -114,7 +114,7 @@
 <script src="./shared/deals-api.js?v=5.480"></script>
 <script src="./shared/message-api.js?v=5.480"></script>
 <script src="./shared/merchant-membership-api.js?v=5.488"></script>
-<script src="./shared/merchant-public-api.js?v=5.481"></script>
+<script src="./shared/merchant-public-api.js?v=5.489"></script>
 <script src="./shared/merchant-analytics-api.js?v=5.487"></script>
 <style>
   :root{
@@ -3337,7 +3337,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.488';
+const APP_VERSION = '5.489';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -4625,10 +4625,8 @@ async function revokeMerchantMatrixMember(id){
 async function fetchMerchantProfile(){
   if(!(session && session.user)){ currentMerchant = null; return; }
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${session.user.id}&select=*`);
-    if(!res.ok){ currentMerchant = null; return; }
-    const rows = await res.json();
-    currentMerchant = (rows && rows[0]) || null;
+    if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+    currentMerchant = await merchantPublicApi.getByUserId({ userId:session.user.id, select:'*', verified:false });
     if(currentMerchant) setMerchantIdentityCache(currentMerchant.user_id || session.user.id, currentMerchant);
     await loadMerchantApplicationStatus(false);
     await loadMerchantMatrixState();
@@ -5650,9 +5648,9 @@ async function saveMerchantOrderCheckoutSettings(){
   const mode = document.querySelector('input[name="merchantCouponMode"]:checked')?.value === 'multiple' ? 'multiple' : 'single';
   const tips = String(document.getElementById('merchantOrderTipOptions')?.value || '').split(',').map(value => Number(value.trim())).filter(value => Number.isFinite(value) && value >= 0 && value <= 100).slice(0,5);
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=eq.${encodeURIComponent(merchant.user_id)}`, { method:'PATCH', headers:{'Content-Type':'application/json','Prefer':'return=representation'}, body:JSON.stringify({ order_checkout_settings:{coupon_mode:mode,tip_options:tips.length ? tips : [15,18,20]}, updated_at:new Date().toISOString() }) });
-    if(!res.ok) throw new Error(await res.text());
-    const row = (await res.json())[0];
+    if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+    const rows = await merchantPublicApi.patch({ userId:merchant.user_id, returnRepresentation:true, payload:{ order_checkout_settings:{coupon_mode:mode,tip_options:tips.length ? tips : [15,18,20]}, updated_at:new Date().toISOString() } });
+    const row = rows[0];
     if(row){ Object.assign(merchant,row); if(currentMerchant && String(currentMerchant.user_id) === String(row.user_id)) Object.assign(currentMerchant,row); }
     closeMerchantOrderCheckoutSettings();
     showToast('结算设置已保存');
@@ -6798,10 +6796,9 @@ async function checkMerchantSlugAvailability(silent){
   }
   if(!silent) setMerchantSlugStatus('正在检查链接是否可用…', 'muted');
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?slug=eq.${encodeURIComponent(slug)}&user_id=neq.${encodeURIComponent(session && session.user ? session.user.id : '')}&select=user_id&limit=1`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
-    const available = !rows.length;
+    if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+    const taken = await merchantPublicApi.isSlugTaken({ slug, excludeUserId:session && session.user ? session.user.id : '' });
+    const available = !taken;
     merchantSlugCheckState = { slug, available };
     if(!silent) setMerchantSlugStatus(available ? '这个链接可以使用。' : '这个链接已经被其他商家使用。', available ? 'good' : 'warn');
     return merchantSlugCheckState;
@@ -13043,8 +13040,8 @@ async function runSearch(kw, cat, subcategory, type){
 
   if(type === '全部' || type === '地点'){
     try {
-      const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?verified=eq.true&or=(business_name.ilike.*${encodeURIComponent(kw)}*,address.ilike.*${encodeURIComponent(kw)}*,slug.ilike.*${encodeURIComponent(kw)}*)&select=user_id,slug,business_name,category,address,logo,subcategory&limit=20`);
-      let list = res.ok ? await res.json() : [];
+      if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
+      let list = await merchantPublicApi.searchVerified({ keyword:kw, limit:20 });
       if(cat !== '全部') list = list.filter(m => normalizeCategory(m.category) === cat);
       list.forEach(m => setMerchantIdentityCache(m.user_id, Object.assign({}, m, { verified: true })));
       result.places = list;
@@ -17730,7 +17727,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Membership Write API】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Profile API Batch】`);
 </script>
 </body>
 </html>

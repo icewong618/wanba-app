@@ -1,0 +1,12 @@
+{
+  "name": "leshenghuo-media-migration",
+  "private": true,
+  "version": "5.220.0",
+  "scripts": {
+    "migrate:media": "node scripts/migrate-base64-media.js",
+    "check:release": "node scripts/release-sanity-check.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.34.3"
+  }
+}
