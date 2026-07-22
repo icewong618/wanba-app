@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.454';
+  const version = '5.455';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -90,6 +90,7 @@
 <script src="./shared/identity-loader.js?v=5.452"></script>
 <script src="./shared/engagement-loader.js?v=5.453"></script>
 <script src="./shared/message-data.js?v=5.454"></script>
+<script src="./shared/profile-storage.js?v=5.455"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3320,7 +3321,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.454';
+const APP_VERSION = '5.455';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3445,6 +3446,7 @@ const messageDataLoader = window.LeshenghuoMessageData?.create({
   getCurrentUserId: () => session?.user?.id || null,
   request: (url, options) => authedFetch(url, options)
 });
+const profileStorage = window.LeshenghuoProfileStorage?.create({ getSession: () => session });
 
 function accessTokenExpiresSoon(token){
   return authSessionStore?.accessTokenExpiresSoon(token) ?? true;
@@ -3838,78 +3840,33 @@ async function handleEmailConfirmRedirect(){
 
 // 根据出生年月自动计算年龄
 function calcAge(birth){
-  if(!birth) return null;
-  const [y, m] = birth.split('-').map(Number);
-  if(!y) return null;
-  const now = new Date();
-  let age = now.getFullYear() - y;
-  if(now.getMonth() + 1 < (m || 1)) age--;
-  return (age >= 0 && age < 150) ? age : null;
+  return profileStorage?.calcAge(birth) ?? null;
 }
 
 // 从 localStorage 加载用户信息
 /* 每个账号一份独立资料，键：userProfile_{uid}；游客：userProfile_guest */
 function profileKey(){
-  return (session && session.user) ? `userProfile_${session.user.id}` : 'userProfile_guest';
+  return profileStorage?.key() || 'userProfile_guest';
 }
 function normalizeProfile(raw){
-  const base = defaultProfile();
-  const p = raw && typeof raw === 'object' ? raw : {};
-  const merged = Object.assign({}, base, p);
-  merged.id = (session && session.user) ? uidToNumericId(session.user.id) : (merged.id || '');
-  merged.tags = Array.isArray(merged.tags) ? merged.tags.filter(Boolean).slice(0, 3) : [];
-  merged.bio = merged.bio || base.bio;
-  merged.gender = merged.gender || base.gender;
-  merged.birth = merged.birth || '';
-  merged.age = calcAge(merged.birth) ?? merged.age ?? null;
-  merged.cover = merged.cover || '';
-  return merged;
+  return profileStorage?.normalize(raw) || raw || {};
 }
 function defaultProfile(){
-  const nick = (session && session.user)
-    ? ((session.user.user_metadata && session.user.user_metadata.name) || session.user.email.split('@')[0])
-    : '未登录用户';
-  return {
-    name: nick,
-    bio: (session && session.user) ? '还没有介绍呢' : '登录后可编辑个人资料',
-    gender: (session && session.user) ? '🚹' : '',
-    birth: '', age: null, location: '',
-    tags: [], id: (session && session.user) ? uidToNumericId(session.user.id) : '', cover: ''
-  };
+  return profileStorage?.defaultProfile() || { name:'未登录用户', bio:'登录后可编辑个人资料', gender:'', birth:'', age:null, location:'', tags:[], id:'', cover:'' };
 }
 function loadUserProfile(){
-  if(!(session && session.user)){
-    currentUser = defaultProfile();
-    updateProfileDisplay();
-    return;
-  }
-  localStorage.removeItem('userProfile');
-  const saved = localStorage.getItem(profileKey());
-  if(saved){
-    try { currentUser = normalizeProfile(JSON.parse(saved)); } catch(e){ currentUser = defaultProfile(); }
-  } else {
-    currentUser = defaultProfile();
-  }
-  if(session && session.user){
-    if(!currentUser.name) currentUser.name = defaultProfile().name;
-    currentUser.id = uidToNumericId(session.user.id);
-  }
+  currentUser = profileStorage?.load() || defaultProfile();
   updateProfileDisplay();
 }
 
 // 保存用户信息到当前账号的档案
 function saveUserProfileToStorage(){
   if(!(session && session.user)) return;
-  currentUser = normalizeProfile(currentUser);
-  localStorage.setItem(profileKey(), JSON.stringify(currentUser));
+  currentUser = profileStorage?.save(currentUser) || normalizeProfile(currentUser);
 }
 /* 由账号UUID确定性生成8位纯数字专属ID（同一账号任何设备都相同） */
 function uidToNumericId(uuid){
-  let h = 0;
-  for(let i = 0; i < uuid.length; i++){
-    h = (h * 131 + uuid.charCodeAt(i)) >>> 0;
-  }
-  return String(10000000 + (h % 90000000));
+  return profileStorage?.uidToNumericId(uuid) || '';
 }
 
 /* ====== 头像上传：点击→选文件→拖动缩放裁剪→存库 ====== */
