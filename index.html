@@ -99,6 +99,7 @@
 <script src="./shared/post-api.js?v=5.461"></script>
 <script src="./shared/compose-draft-store.js?v=5.462"></script>
 <script src="./shared/location-api.js?v=5.465"></script>
+<script src="./shared/feedback-api.js?v=5.466"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3329,7 +3330,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.465';
+const APP_VERSION = '5.466';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3480,6 +3481,10 @@ const postApi = window.LeshenghuoPostApi?.create({
 });
 const composeDraftStoreApi = window.LeshenghuoComposeDraftStore?.create();
 const locationApi = window.LeshenghuoLocationApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const feedbackApi = window.LeshenghuoFeedbackApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -16313,11 +16318,9 @@ function updateMyFeedbackReplyBadge(count){
 async function checkFeedbackReplyNotices(){
   if(!(session && session.user)){ updateMyFeedbackReplyBadge(0); return; }
   try {
-    const url = `${SUPABASE_URL}/rest/v1/user_feedback?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=replied_at.desc&limit=80`;
-    const res = await authedFetch(url, { method:'GET' });
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const seen = getSeenFeedbackReplyKeys();
-    const replies = (await res.json()).filter(row => row.admin_reply && row.replied_at);
+    if(!feedbackApi) throw new Error('反馈接口未初始化');
+    const replies = (await feedbackApi.listMine(session.user.id)).filter(row => row.admin_reply && row.replied_at);
     updateMyFeedbackReplyBadge(replies.filter(row => !seen.has(feedbackReplyKey(row))).length);
   } catch(error){
     console.warn('反馈回复提醒读取失败:', error.message);
@@ -16550,10 +16553,8 @@ async function openMyFeedback(){
   overlay.classList.add('open');
   list.innerHTML = '<div class="admin-empty">正在读取你的反馈...</div>';
   try {
-    const url = `${SUPABASE_URL}/rest/v1/user_feedback?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=created_at.desc&limit=80`;
-    const res = await authedFetch(url, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    if(!feedbackApi) throw new Error('反馈接口未初始化');
+    const rows = await feedbackApi.listMine(session.user.id);
     try { myFeedbackAttachmentMap = await loadFeedbackAttachmentMap(rows); }
     catch(error){ console.warn('我的反馈截图读取失败:', error.message); myFeedbackAttachmentMap = new Map(); }
     list.innerHTML = rows.length ? rows.map(row => `<article class="my-feedback-card"><div class="my-feedback-title"><span>${escHtml(row.title || '未命名反馈')}</span><span class="admin-badge ${feedbackStatusClass(row.status)}">${feedbackStatusLabel(row.status)}</span></div><div class="my-feedback-meta">${feedbackTypeLabel(row.type)} · v${escHtml(row.app_version || '')} · ${adminTimeText(row.created_at)}</div><div class="my-feedback-meta">${feedbackStatusDescription(row.status)}</div><div class="my-feedback-text">${escHtml(row.body || '')}</div>${row.admin_reply ? `<div class="my-feedback-reply"><b>管理员回复</b>${escHtml(row.admin_reply)}${row.replied_at ? `<div class="my-feedback-meta">${adminTimeText(row.replied_at)}</div>` : ''}</div>` : ''}${row.resolved_at ? `<div class="my-feedback-meta">处理时间：${adminTimeText(row.resolved_at)}</div>` : ''}${feedbackAttachmentButtonHtml(row.id, myFeedbackAttachmentMap)}</article>`).join('') : '<div class="admin-empty">你还没有提交过公测反馈。使用下方按钮告诉我们你的体验。</div>';
@@ -16593,9 +16594,9 @@ async function submitFeedback(){
   const type = document.getElementById('feedbackType').value;
   if(!title || !body){ showToast('请填写问题说明和具体情况'); return; }
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/user_feedback`, { method:'POST', body:JSON.stringify({ user_id:session.user.id, user_name:myNick(), type, title, body, app_version:APP_VERSION, page_path:window.location.pathname + window.location.search, device_info:navigator.userAgent }) });
-    if(!res.ok) throw new Error(await res.text());
-    const feedback = (await res.json())[0];
+    if(!feedbackApi) throw new Error('反馈接口未初始化');
+    const feedback = await feedbackApi.createFeedback({ user_id:session.user.id, user_name:myNick(), type, title, body, app_version:APP_VERSION, page_path:window.location.pathname + window.location.search, device_info:navigator.userAgent });
+    if(!feedback) throw new Error('反馈创建后未返回记录');
     const attachments = [...feedbackAttachmentQueue];
     let failedCount = 0;
     for(let index = 0; index < attachments.length; index += 1){
@@ -17875,7 +17876,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Localized Location Directory】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Feedback API Module】`);
 </script>
 </body>
 </html>
