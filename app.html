@@ -109,6 +109,9 @@
 <script src="./shared/merchant-team-api.js?v=5.476"></script>
 <script src="./shared/restaurant-order-api.js?v=5.477"></script>
 <script src="./shared/rental-api.js?v=5.478"></script>
+<script src="./shared/deals-api.js?v=5.480"></script>
+<script src="./shared/message-api.js?v=5.480"></script>
+<script src="./shared/merchant-membership-api.js?v=5.480"></script>
 <style>
   :root{
     --bg:#F6F4EC;
@@ -3330,7 +3333,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.479';
+const APP_VERSION = '5.480';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3456,6 +3459,14 @@ const engagementLoader = window.LeshenghuoEngagementLoader?.create({
 const messageDataLoader = window.LeshenghuoMessageData?.create({
   supabaseUrl: SUPABASE_URL,
   getCurrentUserId: () => session?.user?.id || null,
+  request: (url, options) => authedFetch(url, options)
+});
+const messageApi = window.LeshenghuoMessageApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const merchantMembershipApi = window.LeshenghuoMerchantMembershipApi?.create({
+  supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
 const profileStorage = window.LeshenghuoProfileStorage?.create({ getSession: () => session });
@@ -6905,9 +6916,8 @@ async function shareToFriend(id, name){
   const text = sharedCardMessage(shareContext);
   closeShareSheet();
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/messages`, { method:'POST', body:JSON.stringify({ from_id:session.user.id, from_name:myNick(), to_id:id, text }) });
-    if(!res.ok) throw new Error(res.status);
-    const saved = (await res.json())[0];
+    if(!messageApi) throw new Error('私信接口未初始化');
+    const saved = await messageApi.send({ fromId:session.user.id, fromName:myNick(), toId:id, text });
     if(saved) dmRows.push(saved);
     showToast(`已发送给 ${name}`);
   } catch(e){ showToast('发送失败：' + e.message); }
@@ -7530,11 +7540,9 @@ async function loadMerchantMemberships(merchantUserId, force){
   const cache = cachedMerchantMemberships(merchantUserId);
   if(cache.loaded && !force) return cache.rows;
   try {
+    if(!merchantMembershipApi) throw new Error('商家会员接口未初始化');
     const select = 'id,merchant_user_id,user_id,user_name,user_avatar,status,points,stamp_count,joined_at,updated_at';
-    const url = `${SUPABASE_URL}/rest/v1/merchant_memberships?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&status=eq.active&select=${select}&order=joined_at.desc&limit=80`;
-    const res = await authedFetch(url, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    const rows = await merchantMembershipApi.loadForMerchant({ merchantUserId, select, limit:80 });
     setMerchantMembershipCache(merchantUserId, { rows, missing:false, loaded:true });
     const uncached = rows.map(row => row.user_id).filter(id => id && !window._profileCache[id]);
     if(uncached.length) loadProfilesForIds(uncached).then(() => {
@@ -7574,12 +7582,8 @@ async function joinMerchantMembership(merchantUserId){
       status: 'active',
       updated_at: new Date().toISOString()
     };
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_memberships?on_conflict=merchant_user_id,user_id`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Prefer':'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error(await res.text());
+    if(!merchantMembershipApi) throw new Error('商家会员接口未初始化');
+    await merchantMembershipApi.upsert(payload);
     await loadMerchantMemberships(merchantUserId, true);
     await loadUserMembershipCards(true);
     refreshMerchantPublicByUserId(merchantUserId);
@@ -7596,9 +7600,8 @@ async function leaveMerchantMembership(merchantUserId){
     return;
   }
   try {
-    const url = `${SUPABASE_URL}/rest/v1/merchant_memberships?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&user_id=eq.${encodeURIComponent(session.user.id)}`;
-    const res = await authedFetch(url, { method:'DELETE' });
-    if(!res.ok) throw new Error(await res.text());
+    if(!merchantMembershipApi) throw new Error('商家会员接口未初始化');
+    await merchantMembershipApi.remove({ merchantUserId, userId:session.user.id });
     await loadMerchantMemberships(merchantUserId, true);
     await loadUserMembershipCards(true);
     refreshMerchantPublicByUserId(merchantUserId);
@@ -8668,18 +8671,14 @@ async function loadUserMembershipCards(force){
   const body = document.getElementById('userMembershipCards');
   if(body) body.innerHTML = '<div class="deals-empty-panel">正在读取会员卡...</div>';
   try {
+    if(!merchantMembershipApi) throw new Error('商家会员接口未初始化');
     const select = 'id,merchant_user_id,user_id,user_name,user_avatar,status,points,stamp_count,joined_at,updated_at';
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_memberships?user_id=eq.${encodeURIComponent(session.user.id)}&status=eq.active&select=${select}&order=updated_at.desc&limit=120`, { method:'GET' });
-    if(!res.ok) throw new Error(await res.text());
-    const rows = await res.json();
+    const rows = await merchantMembershipApi.loadForUser({ userId:session.user.id, select, limit:120 });
     const ids = [...new Set(rows.map(r => r.merchant_user_id).filter(Boolean))];
     let merchants = {};
     if(ids.length){
-      const merchantRes = await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${ids.map(encodeURIComponent).join(',')})&verified=eq.true&select=user_id,business_name,logo,address,category,phone,slug,cover_image,loyalty_target,loyalty_reward,points_per_visit,membership_tiers,birthday_reward,latitude,longitude`, { method:'GET' });
-      if(merchantRes.ok){
-        const merchantRows = await merchantRes.json();
-        merchantRows.forEach(m => { merchants[m.user_id] = m; setMerchantIdentityCache(m.user_id, m); });
-      }
+      const merchantRows = await merchantMembershipApi.loadMerchants({ ids, select:'user_id,business_name,logo,address,category,phone,slug,cover_image,loyalty_target,loyalty_reward,points_per_visit,membership_tiers,birthday_reward,latitude,longitude' });
+      merchantRows.forEach(m => { merchants[m.user_id] = m; setMerchantIdentityCache(m.user_id, m); });
     }
     window._userMembershipCards.rows = rows;
     window._userMembershipCards.merchants = merchants;
@@ -15621,12 +15620,8 @@ async function sendDm(toId, toName){
   if(!text) return;
   const nick = myNick();
   try {
-    const res = await authedFetch(`${SUPABASE_URL}/rest/v1/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ from_id: session.user.id, from_name: nick, to_id: toId, text })
-    });
-    if(!res.ok) throw new Error(res.status);
-    const saved = (await res.json())[0];
+    if(!messageApi) throw new Error('私信接口未初始化');
+    const saved = await messageApi.send({ fromId:session.user.id, fromName:nick, toId, text });
     dmRows.push(saved);
     if(document.getElementById('threadList')) openThread(toId, toName);
     else { closeXhsImport(); showToast('✓ 私信已发送'); }
@@ -17797,7 +17792,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Auto Sales API Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Commerce Data API Batch】`);
 </script>
 </body>
 </html>
