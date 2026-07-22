@@ -290,7 +290,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.525';
+const APP_VERSION = '5.526';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -1333,6 +1333,7 @@ async function syncProfileToDb(){
       gender: currentUser.gender || null,
       birth: currentUser.birth || null,
       cover: currentUser.cover || null,
+      market_code: normalizeMarketCode(currentUser.market_code),
       ip_location: window._ipLocation || currentUser.location || null,
       updated_at: updatedAt
     };
@@ -1370,6 +1371,7 @@ async function fetchProfileFromDb(){
         gender: row.gender || local.gender,
         birth: row.birth || local.birth,
         cover: row.cover || local.cover,
+        market_code: normalizeMarketCode(row.market_code || local.market_code),
         location: row.ip_location || local.location,
         avatarUpdatedAt: row.updated_at || local.avatarUpdatedAt
       }));
@@ -3569,8 +3571,24 @@ const MERCHANT_SLUG_MAX_LENGTH = 48;
 const MERCHANT_RESERVED_SLUGS = new Set([
   'm','app','api','admin','index','index-html','app-html','404','404-html','version-json',
   'versions','assets','favicon','favicon-ico','robots-txt','sitemap-xml','supabase','auth',
-  'login','search','home','week','deals','message','profile','merchant','merchants'
+  'login','search','home','week','deals','message','messages','profile','merchant','merchants',
+  'restaurant','rental','autos','shop'
 ]);
+const MARKET_OPTIONS = [
+  ['la','洛杉矶 LA','洛杉磯 LA','Los Angeles (LA)'],['sgv','圣盖博谷 SGV','聖蓋博谷 SGV','San Gabriel Valley (SGV)'],['oc','橙县 OC','橙縣 OC','Orange County (OC)'],['ie','内陆帝国 IE','內陸帝國 IE','Inland Empire (IE)'],['sd','圣地亚哥 SD','聖地亞哥 SD','San Diego (SD)'],
+  ['sf','旧金山湾区 SF','舊金山灣區 SF','San Francisco Bay Area (SF)'],['nyc','纽约 NYC','紐約 NYC','New York City (NYC)'],['sea','西雅图 SEA','西雅圖 SEA','Seattle (SEA)'],['other','其他地区','其他地區','Other region']
+];
+function normalizeMarketCode(value){
+  const code = String(value || '').trim().toLowerCase();
+  return MARKET_OPTIONS.some(row => row[0] === code) ? code : 'la';
+}
+function marketSelectOptions(value){
+  const selected = normalizeMarketCode(value);
+  const language = window.LeshenghuoI18n?.getLanguage?.() || localStorage.getItem('leshenghuo_language') || 'zh-CN';
+  const labelIndex = language === 'en' ? 3 : (language === 'zh-TW' ? 2 : 1);
+  return MARKET_OPTIONS.map(row => `<option value="${row[0]}" ${row[0] === selected ? 'selected' : ''}>${row[labelIndex]}</option>`).join('');
+}
+function merchantMarketCode(m){ return normalizeMarketCode(m && m.market_code); }
 let merchantSlugCheckTimer = null;
 let merchantSlugCheckState = { slug:'', available:false };
 function normalizeMerchantSlug(value){
@@ -3631,7 +3649,7 @@ async function checkMerchantSlugAvailability(silent){
   if(!silent) setMerchantSlugStatus('正在检查链接是否可用…', 'muted');
   try {
     if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
-    const taken = await merchantPublicApi.isSlugTaken({ slug, excludeUserId:session && session.user ? session.user.id : '' });
+    const taken = await merchantPublicApi.isSlugTaken({ slug, marketCode:normalizeMarketCode(document.getElementById('mBizMarket')?.value || currentMerchant?.market_code), excludeUserId:session && session.user ? session.user.id : '' });
     const available = !taken;
     merchantSlugCheckState = { slug, available };
     if(!silent) setMerchantSlugStatus(available ? '这个链接可以使用。' : '这个链接已经被其他商家使用。', available ? 'good' : 'warn');
@@ -3641,6 +3659,17 @@ async function checkMerchantSlugAvailability(silent){
     if(!silent) setMerchantSlugStatus('暂时无法检查链接，请稍后再试。', 'warn');
     return merchantSlugCheckState;
   }
+}
+async function merchantBusinessNameAvailable(name, marketCode){
+  const normalized = String(name || '').trim();
+  const currentName = String(currentMerchant?.business_name || '').trim();
+  if(!normalized || normalized === currentName) return true;
+  if(!merchantPublicApi) return false;
+  return !(await merchantPublicApi.isBusinessNameTaken({
+    businessName: normalized,
+    marketCode: normalizeMarketCode(marketCode),
+    excludeUserId: session?.user?.id || ''
+  }));
 }
 function scheduleMerchantSlugCheck(){
   clearTimeout(merchantSlugCheckTimer);
@@ -3652,10 +3681,11 @@ function merchantSiteSlug(m){
 }
 function merchantSiteUrl(m){
   const slug = merchantSiteSlug(m);
+  const market = merchantMarketCode(m);
   try {
-    return `${window.location.origin}/${encodeURIComponent(slug)}`;
+    return `${window.location.origin}/${encodeURIComponent(market)}/merchant/${encodeURIComponent(slug)}`;
   } catch(e){
-    return `/${encodeURIComponent(slug)}`;
+    return `/${encodeURIComponent(market)}/merchant/${encodeURIComponent(slug)}`;
   }
 }
 function merchantSocialLinks(m){
@@ -5678,32 +5708,28 @@ function showMemberCardPresenter(id){
 function closeMemberCardPresenter(){
   document.getElementById('memberCardPresenter')?.classList.remove('open');
 }
+function openPersonalShopManager(){
+  if(!(session && session.user)){
+    showToast('请先登录后管理个人小店');
+    openAuth('login');
+    return;
+  }
+  window.location.assign('/shop/manage/');
+}
 async function openMerchantPublicPage(userId){
   if(!userId){ showToast('没有找到商家主页'); return; }
-  appRememberRoute();
-  closeSearchPage();
-  const overlay = document.getElementById('merchantPublicOverlay');
-  const body = document.getElementById('merchantPublicBody');
-  if(!overlay || !body) return;
-  overlay.dataset.userId = userId;
-  overlay.classList.add('open');
-  body.innerHTML = '<div class="deals-empty-panel">正在打开商家主页...</div>';
   try {
     if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
     const m = await merchantPublicApi.getByUserId({ userId, select:'*', verified:true });
     if(!m){
-      body.innerHTML = '<div class="deals-empty-panel">没有找到这个商家主页，可能还未通过认证。</div>';
+      showToast('没有找到这个商家主页，可能还未通过认证。');
       return;
     }
     setMerchantIdentityCache(m.user_id, m);
-    body.innerHTML = merchantContentHtml(m, { isOwnerPage: false });
-    await Promise.all([loadMerchantDeals(m), loadMerchantMemberships(m.user_id, true)]);
-    if(document.getElementById('merchantPublicOverlay')?.classList.contains('open')){
-      body.innerHTML = merchantContentHtml(m, { isOwnerPage: false });
-    }
+    window.location.assign(merchantSiteUrl(m));
   } catch(e){
     console.warn('打开商家主页失败:', e.message);
-    body.innerHTML = '<div class="deals-empty-panel">商家主页暂时打不开，请稍后再试。</div>';
+    showToast('商家主页暂时打不开，请稍后再试。');
   }
 }
 function routeMerchantSlugFromLocation(){
@@ -6084,10 +6110,15 @@ function openMerchantEditSheet(){
     <div style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">微网站地址</label>
       <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:12px;color:var(--ink-faint);white-space:nowrap;">escoopcity.com/</span>
+        <span style="font-size:12px;color:var(--ink-faint);white-space:nowrap;">escoopcity.com/地区/merchant/</span>
         <input type="text" id="mBizSlug" value="${escAttr(slug)}" placeholder="tea-station" oninput="scheduleMerchantSlugCheck()" onblur="checkMerchantSlugAvailability(false)" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;">
       </div>
       <div id="mBizSlugStatus" style="font-size:11px;color:var(--ink-faint);margin-top:5px;">只能使用英文、数字和短横线；链接每 365 天只能修改一次。</div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);">所在地 <span style="color:var(--berry);">*</span></label>
+      <select id="mBizMarket" onchange="scheduleMerchantSlugCheck()" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;">${marketSelectOptions(m.market_code)}</select>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:5px;">决定微网站地区链接，例如 LA 会显示为 /la/merchant/店铺名。</div>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:12px;">
       <div style="flex:1;">
@@ -6310,12 +6341,25 @@ async function saveMerchantProfile(){
     .split(/\n|,/).map(s => s.trim()).filter(Boolean).slice(0, 5);
   const intro = document.getElementById('mBizIntro').value.trim();
   if(intro.length > 50){ setMerchantProfileSaveStatus('商家介绍最多 50 个字。', 'error'); showToast('商家介绍最多 50 个字'); return; }
+  const businessName = document.getElementById('mBizName').value.trim();
+  const marketCode = normalizeMarketCode(document.getElementById('mBizMarket')?.value);
+  if(!businessName){ setMerchantProfileSaveStatus('请填写商家名称。', 'error'); showToast('请填写商家名称'); return; }
+  try {
+    const nameAvailable = await merchantBusinessNameAvailable(businessName, marketCode);
+    if(!nameAvailable){
+      const message = '该地区已有同名商家，请在名称中加入门店或区域后缀后再保存。';
+      setMerchantProfileSaveStatus(message, 'error'); showToast(message); return;
+    }
+  } catch(error){
+    setMerchantProfileSaveStatus('暂时无法核对商家名称，请稍后重试。', 'error'); showToast('暂时无法核对商家名称，请稍后重试'); return;
+  }
   const tierSilver = Math.max(1, parseInt(document.getElementById('mBizTierSilver').value, 10) || 100);
   const tierGold = Math.max(tierSilver + 1, parseInt(document.getElementById('mBizTierGold').value, 10) || 300);
   const tierBlack = Math.max(tierGold + 1, parseInt(document.getElementById('mBizTierBlack').value, 10) || 600);
   const payload = {
     slug,
-    business_name: document.getElementById('mBizName').value.trim(),
+    market_code: marketCode,
+    business_name: businessName,
     category: document.getElementById('mBizCat').value,
     subcategory: document.getElementById('mBizSubcat').value.trim(),
     address: document.getElementById('mBizAddr').value.trim(),
@@ -6921,6 +6965,8 @@ function enterEditMode(){
   document.getElementById('editUserGender').value = currentUser.gender;
   document.getElementById('editUserBirth').value = currentUser.birth || '';
   document.getElementById('editUserTags').value = currentUser.tags.join(', ');
+  const marketInput = document.getElementById('editUserMarket');
+  if(marketInput) marketInput.innerHTML = marketSelectOptions(currentUser.market_code);
   
   // 标签输入实时提示
   const tagInput = document.getElementById('editUserTags');
@@ -6958,6 +7004,7 @@ function saveUserProfile(){
   const gender = document.getElementById('editUserGender').value;
   const birth = document.getElementById('editUserBirth').value; // 如 '1999-06'
   const age = calcAge(birth);
+  const marketCode = normalizeMarketCode(document.getElementById('editUserMarket')?.value);
   // 支持中英文逗号分隔
   const tags = document.getElementById('editUserTags').value
     .split(/[,，]/).map(t => t.trim()).filter(t => t);
@@ -6986,6 +7033,7 @@ function saveUserProfile(){
   currentUser.birth = birth;
   currentUser.age = age;
   currentUser.tags = tags;
+  currentUser.market_code = marketCode;
   
   // 保存到存储
   saveUserProfileToStorage();
@@ -14528,4 +14576,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Production Engineering Closure】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Regional Micro Sites】`);

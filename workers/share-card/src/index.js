@@ -1,8 +1,10 @@
 const RESERVED_ROOT_PATHS = new Set([
   '', 'app', 'app.html', 'index', 'index.html', '404', '404.html', 'admin',
   'api', 'assets', 'auth', 'deals', 'favicon.ico', 'home', 'message', 'profile',
-  'robots.txt', 'search', 'sitemap.xml', 'supabase', 'version.json', 'versions', 'week'
+  'robots.txt', 'search', 'sitemap.xml', 'supabase', 'version.json', 'versions', 'week',
+  'merchant', 'shop', 'restaurant', 'rental', 'autos', 'messages', 'order'
 ]);
+const MARKET_CODES = new Set(['la', 'sgv', 'oc', 'ie', 'sd', 'sf', 'nyc', 'sea', 'other']);
 
 function escapeHtml(value) {
   return String(value || '').replace(/[&<>'"]/g, char => ({
@@ -22,6 +24,15 @@ function merchantSlugFromPath(pathname) {
     .replace(/^-+|-+$/g, '');
   if (!slug || RESERVED_ROOT_PATHS.has(slug) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return '';
   return slug;
+}
+
+function regionalRouteFromPath(pathname, type) {
+  const parts = pathname.split('/').filter(Boolean).map(part => decodeURIComponent(part));
+  if (parts.length !== 3 || !MARKET_CODES.has(parts[0]) || parts[1] !== type) return null;
+  const slug = String(parts[2] || '').trim().toLowerCase().normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? { market: parts[0], slug } : null;
 }
 
 function shareImageSlugFromPath(pathname) {
@@ -186,9 +197,10 @@ function shareMeta({ title, description, image, imageAlt, canonical }) {
   `;
 }
 
-async function readMerchant(slug, env) {
+async function readMerchant(slug, env, market = '') {
   const endpoint = new URL('/rest/v1/merchants', env.SUPABASE_URL);
   endpoint.searchParams.set('slug', `eq.${slug}`);
+  if (market) endpoint.searchParams.set('market_code', `eq.${market}`);
   endpoint.searchParams.set('verified', 'eq.true');
   endpoint.searchParams.set('select', 'slug,business_name,intro,seo_description,cover_image,logo,category,address,updated_at');
   endpoint.searchParams.set('limit', '1');
@@ -231,18 +243,18 @@ async function readPublicProfile(userId, env) {
   return rows && rows[0] ? rows[0] : null;
 }
 
-function githubRawRequest(request, url, env, merchantPage) {
+function githubRawRequest(request, url, env, entryPath = '') {
   const upstream = new URL(env.CONTENT_ORIGIN);
   const repositoryPath = upstream.pathname.replace(/\/$/, '');
   // jsDelivr serves a repository directory listing for paths such as /order/.
   // Resolve directory URLs to their actual entry document before proxying.
-  const requestedPath = merchantPage
-    ? '/index.html'
+  const requestedPath = entryPath
+    ? entryPath
     : (url.pathname === '/' || url.pathname.endsWith('/') ? `${url.pathname}index.html` : url.pathname);
   upstream.pathname = `${repositoryPath}${requestedPath}`;
   // Keep browser cache-busting parameters out of the source URL, but use a
   // Worker revision token so newly committed static files do not inherit an old 404.
-  upstream.search = 'worker_revision=5.167';
+  upstream.search = 'worker_revision=5.526';
   return new Request(upstream.toString(), request);
 }
 
@@ -322,10 +334,12 @@ export default {
         return new Response('Image unavailable', { status: 503 });
       }
     }
-    const slug = merchantSlugFromPath(url.pathname);
+    const merchantRoute = regionalRouteFromPath(url.pathname, 'merchant');
+    const shopRoute = regionalRouteFromPath(url.pathname, 'shop');
+    const slug = merchantRoute ? merchantRoute.slug : merchantSlugFromPath(url.pathname);
     const postId = sharedPostId(url);
     const userId = sharedUserId(url);
-    const canCacheStatic = request.method === 'GET' && !slug && postId == null && !userId;
+    const canCacheStatic = request.method === 'GET' && !slug && !shopRoute && postId == null && !userId;
     const cacheKey = canCacheStatic ? staticCacheRequest(url, env) : null;
     const cache = caches.default;
 
@@ -334,15 +348,29 @@ export default {
       if (cached) return cached;
     }
     let merchant = null;
+    let shop = null;
     let post = null;
     let user = null;
 
     if (slug) {
       try {
-        merchant = await readMerchant(slug, env);
+        merchant = await readMerchant(slug, env, merchantRoute?.market || '');
       } catch (_) {
         // If Supabase is briefly unavailable, serve the normal page rather than breaking visits.
       }
+    }
+    if (shopRoute) {
+      try {
+        const endpoint = new URL('/rest/v1/personal_shops', env.SUPABASE_URL);
+        endpoint.searchParams.set('market_code', `eq.${shopRoute.market}`);
+        endpoint.searchParams.set('slug', `eq.${shopRoute.slug}`);
+        endpoint.searchParams.set('status', 'eq.active');
+        endpoint.searchParams.set('select', 'slug,market_code,display_name,intro,avatar,cover_image,updated_at');
+        endpoint.searchParams.set('limit', '1');
+        const response = await fetch(endpoint, { headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${env.SUPABASE_PUBLISHABLE_KEY}` } });
+        const rows = response.ok ? await response.json() : [];
+        shop = rows && rows[0] ? rows[0] : null;
+      } catch (_) {}
     }
     if (postId != null) {
       try { post = await readPublicPost(postId, env); } catch (_) {}
@@ -363,15 +391,22 @@ export default {
       description: shortenShareText(merchant.seo_description || merchant.intro || [merchant.category, merchant.address].filter(Boolean).join(' · ') || defaultMeta.description, 220),
       image: `${env.SITE_ORIGIN}/__share-image/${encodeURIComponent(merchant.slug)}`,
       imageAlt: merchant.business_name || '乐生活商家',
-      canonical: `${env.SITE_ORIGIN}/${encodeURIComponent(merchant.slug)}`
+      canonical: merchantRoute ? `${env.SITE_ORIGIN}/${encodeURIComponent(merchantRoute.market)}/merchant/${encodeURIComponent(merchant.slug)}` : `${env.SITE_ORIGIN}/${encodeURIComponent(merchant.slug)}`
     } : defaultMeta;
+    const shopMeta = shop ? {
+      title: `${shortenShareText(shop.display_name || '个人小店', 90)} - 乐生活 Scoop City`,
+      description: shortenShareText(shop.intro || '来看看这家个人小店正在出售的好物。', 220),
+      image: absoluteImage(shop.avatar || shop.cover_image, env),
+      imageAlt: shop.display_name || '个人小店',
+      canonical: `${env.SITE_ORIGIN}/${encodeURIComponent(shop.market_code || shopRoute?.market || 'la')}/shop/${encodeURIComponent(shop.slug)}`
+    } : merchantMeta;
     const postMeta = post ? {
       title: `${shortenShareText(post.title || '乐生活笔记', 90)} - 乐生活 Scoop City`,
       description: shortenShareText(post.content || post.excerpt || `来自 ${post.author || '乐生活用户'} 的精彩分享。`, 220),
       image: `${env.SITE_ORIGIN}/__share-image/post/${post.id}`,
       imageAlt: post.title || '乐生活笔记',
       canonical: `${env.SITE_ORIGIN}/?post=${post.id}`
-    } : merchantMeta;
+    } : shopMeta;
     const userMeta = user ? {
       title: `${shortenShareText(user.name || '乐生活用户', 90)} - 乐生活 Scoop City`,
       description: shortenShareText(user.bio || '这个用户正在乐生活分享身边的精彩生活。', 220),
@@ -380,9 +415,10 @@ export default {
       canonical: `${env.SITE_ORIGIN}/?user=${encodeURIComponent(user.user_id)}`
     } : postMeta;
 
-    const htmlPage = Boolean(merchant || post || user) || url.pathname === '/' || url.pathname.endsWith('/') || /\.html$/i.test(url.pathname);
+    const htmlPage = Boolean(merchant || shop || post || user) || url.pathname === '/' || url.pathname.endsWith('/') || /\.html$/i.test(url.pathname);
     try {
-      const originResponse = await fetch(githubRawRequest(request, url, env, Boolean(merchant || post || user)));
+      const entryPath = merchantRoute ? '/merchant/index.html' : shopRoute ? '/shop/index.html' : (merchant || post || user ? '/index.html' : '');
+      const originResponse = await fetch(githubRawRequest(request, url, env, entryPath));
       if (!originResponse.ok && cacheKey) {
         const stale = await cache.match(cacheKey);
         if (stale) return stale;

@@ -22,9 +22,9 @@
     const fetchCurrent = async () => {
       const userId = currentUserId();
       if(!userId) return null;
-      return getByUserId({ userId, select:'name,avatar,bio,tags,gender,birth,cover,ip_location,updated_at' });
+      return getByUserId({ userId, select:'name,avatar,bio,tags,gender,birth,cover,ip_location,market_code,updated_at' });
     };
-    const getByUserId = async ({ userId, select = 'user_id,name,avatar,bio,tags,gender,birth,cover,ip_location,updated_at' } = {}) => {
+    const getByUserId = async ({ userId, select = 'user_id,name,avatar,bio,tags,gender,birth,cover,ip_location,market_code,updated_at' } = {}) => {
       if(!userId) return null;
       let response = await request(profilePath(`?user_id=eq.${encodeURIComponent(userId)}&select=${select}&limit=1`), { method:'GET' });
       if(!response.ok){

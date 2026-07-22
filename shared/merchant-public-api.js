@@ -12,9 +12,10 @@
       const rows = await response.json();
       return Array.isArray(rows) ? rows[0] || null : null;
     };
-    const getBySlug = async ({ slug, select = '*', verified = true } = {}) => {
+    const getBySlug = async ({ slug, marketCode = '', select = '*', verified = true } = {}) => {
       const verifiedFilter = verified ? '&verified=eq.true' : '';
-      const response = await request(`${supabaseUrl}/rest/v1/merchants?slug=eq.${encodeURIComponent(slug)}${verifiedFilter}&select=${select}&limit=1`, { method:'GET' });
+      const marketFilter = marketCode ? `&market_code=eq.${encodeURIComponent(marketCode)}` : '';
+      const response = await request(`${supabaseUrl}/rest/v1/merchants?slug=eq.${encodeURIComponent(slug)}${marketFilter}${verifiedFilter}&select=${select}&limit=1`, { method:'GET' });
       await requireOk(response, '商家微网站读取失败');
       const rows = await response.json();
       return Array.isArray(rows) ? rows[0] || null : null;
@@ -28,12 +29,23 @@
       const rows = await response.json();
       return Array.isArray(rows) ? rows : [];
     };
-    const isSlugTaken = async ({ slug, excludeUserId = '' } = {}) => {
+    const isSlugTaken = async ({ slug, marketCode = '', excludeUserId = '' } = {}) => {
       const normalizedSlug = String(slug || '').trim();
       if(!normalizedSlug) return false;
       const excludeFilter = excludeUserId ? `&user_id=neq.${encodeURIComponent(excludeUserId)}` : '';
-      const response = await request(`${supabaseUrl}/rest/v1/merchants?slug=eq.${encodeURIComponent(normalizedSlug)}${excludeFilter}&select=user_id&limit=1`, { method:'GET' });
+      const marketFilter = marketCode ? `&market_code=eq.${encodeURIComponent(marketCode)}` : '';
+      const response = await request(`${supabaseUrl}/rest/v1/merchants?slug=eq.${encodeURIComponent(normalizedSlug)}${marketFilter}${excludeFilter}&select=user_id&limit=1`, { method:'GET' });
       await requireOk(response, '商家链接检查失败');
+      const rows = await response.json();
+      return Array.isArray(rows) && rows.length > 0;
+    };
+    const isBusinessNameTaken = async ({ businessName, marketCode = '', excludeUserId = '' } = {}) => {
+      const normalizedName = String(businessName || '').trim();
+      if(!normalizedName) return false;
+      const marketFilter = marketCode ? `&market_code=eq.${encodeURIComponent(marketCode)}` : '';
+      const excludeFilter = excludeUserId ? `&user_id=neq.${encodeURIComponent(excludeUserId)}` : '';
+      const response = await request(`${supabaseUrl}/rest/v1/merchants?business_name=ilike.${encodeURIComponent(normalizedName)}${marketFilter}${excludeFilter}&select=user_id&limit=1`, { method:'GET' });
+      await requireOk(response, '商家名称检查失败');
       const rows = await response.json();
       return Array.isArray(rows) && rows.length > 0;
     };
@@ -82,7 +94,7 @@
       await requireOk(response, '商家优惠读取失败');
       return response.json();
     };
-    return { getByUserId, getBySlug, listByUserIds, isSlugTaken, searchVerified, patch, upsert, loadStats, loadDeals };
+    return { getByUserId, getBySlug, listByUserIds, isSlugTaken, isBusinessNameTaken, searchVerified, patch, upsert, loadStats, loadDeals };
   };
   window.LeshenghuoMerchantPublicApi = { create };
 })();

@@ -26,7 +26,7 @@
         name: nick,
         bio: user ? '还没有介绍呢' : '登录后可编辑个人资料',
         gender: user ? '🚹' : '',
-        birth: '', age: null, location: '', tags: [],
+        birth: '', age: null, location: '', market_code: 'la', tags: [],
         id: user ? uidToNumericId(user.id) : '', cover: ''
       };
     };
@@ -42,6 +42,7 @@
       merged.birth = merged.birth || '';
       merged.age = calcAge(merged.birth) ?? merged.age ?? null;
       merged.cover = merged.cover || '';
+      merged.market_code = String(merged.market_code || 'la').toLowerCase();
       return merged;
     };
     const key = () => {
