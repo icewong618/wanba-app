@@ -13,6 +13,7 @@ const requiredModules = [
   'shared/merchant-public-api.js',
   'shared/merchant-coupon-api.js',
   'shared/restaurant-order-api.js',
+  'shared/restaurant-data-api.js',
   'shared/rental-api.js',
   'shared/auto-sales-api.js'
 ];

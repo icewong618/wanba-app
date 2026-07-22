@@ -108,6 +108,7 @@
 <script src="./shared/merchant-application-api.js?v=5.475"></script>
 <script src="./shared/merchant-team-api.js?v=5.476"></script>
 <script src="./shared/restaurant-order-api.js?v=5.477"></script>
+<script src="./shared/restaurant-data-api.js?v=5.483"></script>
 <script src="./shared/merchant-coupon-api.js?v=5.482"></script>
 <script src="./shared/rental-api.js?v=5.478"></script>
 <script src="./shared/deals-api.js?v=5.480"></script>
@@ -3335,7 +3336,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.482';
+const APP_VERSION = '5.483';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3537,6 +3538,10 @@ const merchantTeamApi = window.LeshenghuoMerchantTeamApi?.create({
   request: (url, options) => authedFetch(url, options)
 });
 const restaurantOrderApi = window.LeshenghuoRestaurantOrderApi?.create({
+  supabaseUrl: SUPABASE_URL,
+  request: (url, options) => authedFetch(url, options)
+});
+const restaurantDataApi = window.LeshenghuoRestaurantDataApi?.create({
   supabaseUrl: SUPABASE_URL,
   request: (url, options) => authedFetch(url, options)
 });
@@ -6250,9 +6255,8 @@ async function openMerchantCouponWallet(focusClaimId){
 }
 function merchantOrderStatusText(status){ return ({pending:'待处理',confirmed:'处理中',preparing:'处理中',reminded:'催菜中',served:'已上桌',completed:'已完成',cancelled:'已取消'})[status] || '处理中'; }
 async function loadMerchantOrderTables(merchantUserId, includeInactive){
-  const activeFilter = includeInactive ? '' : '&is_active=eq.true';
-  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_tables?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&deleted_at=is.null${activeFilter}&select=*&order=table_name.asc`, {method:'GET'});
-  if(!res.ok) throw new Error(await res.text()); return await res.json();
+  if(!restaurantDataApi) throw new Error('restaurant_data_api_unavailable');
+  return restaurantDataApi.listTables({merchantUserId, includeInactive:!!includeInactive});
 }
 async function deleteMerchantOrderTable(id,name){
   if(!confirm(`确定删除「${name || '这张餐桌'}」吗？`)) return;
@@ -6269,9 +6273,9 @@ async function renderMerchantOrderManager(silent){
   const body=document.getElementById('merchantOrderManagerBody'),merchantUserId=document.getElementById('merchantOrderManager')?.dataset.merchantUserId||merchantOrderManagerMerchantId();
   if(!body||!merchantUserId)return; if(!silent)body.innerHTML='<div class="deals-empty-panel">正在读取订单...</div>';
   try {
-    const [merchant,tables,orders]=await Promise.all([getMerchantOrderMerchant(merchantUserId),loadMerchantOrderTables(merchantUserId,true),(async()=>{const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&select=*&order=updated_at.desc&limit=100`,{method:'GET'});if(!res.ok)throw new Error(await res.text());return await res.json();})()]);
+    const [merchant,tables,orders]=await Promise.all([getMerchantOrderMerchant(merchantUserId),loadMerchantOrderTables(merchantUserId,true),restaurantDataApi.listOrders({merchantUserId,limit:100})]);
     const ids=orders.map(row=>row.id).filter(Boolean); let items=[];
-    if(ids.length){const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_items?order_id=in.(${ids.map(encodeURIComponent).join(',')})&select=*&order=batch_no.asc,created_at.asc`,{method:'GET'});if(res.ok)items=await res.json();}
+    if(ids.length) items=await restaurantDataApi.listOrderItems({orderIds:ids});
     Object.assign(merchantOrderState(),{merchant,tables,orders,items}); const status=merchantOrderState().managerStatus||'processing';
     const statusMatch={processing:row=>['pending','confirmed','preparing'].includes(row.status),reminded:row=>row.status==='reminded',served:row=>row.status==='served',completed:row=>row.status==='completed'};
     const list=orders.filter(statusMatch[status]||statusMatch.processing).sort((a,b)=>merchantOrderLastActivity(a,items)-merchantOrderLastActivity(b,items));
@@ -17313,10 +17317,10 @@ function closeMerchantPrintPreview(){document.body.classList.remove('printing-me
 function merchantPrintTime(value){const d=value?new Date(value):new Date();return d.toLocaleString('zh-CN',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
 async function merchantPrintContext(orderId,itemId){
   const state=merchantOrderState();let merchant=state.merchant,order=(state.orders||[]).find(row=>String(row.id)===String(orderId)),items=(state.items||[]).filter(row=>String(row.order_id)===String(orderId));
-  if(!order){const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`,{method:'GET'});if(!res.ok)throw new Error(await res.text());order=(await res.json())[0];}
+  if(!order) order=await restaurantDataApi.getOrder({orderId});
   if(!order)throw new Error('order_not_found');
   if(!merchant||String(merchant.user_id)!==String(order.merchant_user_id))merchant=await getMerchantOrderMerchant(order.merchant_user_id);
-  if(!items.length){const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_items?order_id=eq.${encodeURIComponent(orderId)}&select=*&order=batch_no.asc,created_at.asc`,{method:'GET'});if(!res.ok)throw new Error(await res.text());items=await res.json();}
+  if(!items.length) items=await restaurantDataApi.listOrderItems({orderIds:[orderId]});
   const item=itemId?items.find(row=>Number(row.id)===Number(itemId)):null;return {merchant,order,items,item};
 }
 function merchantKitchenTicketHtml(ctx){const {merchant,order,items}=ctx;return `<div class="merchant-print-paper ticket"><div class="print-title">后 厨 制 作 单</div><div class="print-subtitle">${escHtml(merchant?.business_name||'乐生活商家')}</div><div class="print-meta"><span>${escHtml(order.table_name||'到店订单')}</span><b>${escHtml(order.order_code||'')}</b></div><div class="print-meta"><span>${escHtml(order.user_name||'顾客')}</span><span>${merchantPrintTime(order.created_at)}</span></div><div class="print-lines">${items.filter(item=>!item.is_served).map(item=>`<div class="print-line"><span><b>${escHtml(item.product_name)}</b> × ${Number(item.quantity||0)}${item.batch_no>1?' · 加菜':''}</span><span>${item.kitchen_done?'已完成':'待制作'}</span></div>`).join('')||'<div class="print-line"><span>该订单菜品均已上桌</span></div>'}</div>${order.note?`<div style="margin-top:12px;font-size:13px;"><b>备注：</b>${escHtml(order.note)}</div>`:''}<div class="print-foot">请按菜品完成制作后交由传菜上桌<br>${merchantPrintTime()}</div></div>`;}
@@ -17324,7 +17328,7 @@ function merchantDrinkLabelHtml(ctx){const {merchant,order,item}=ctx;if(!item)re
 function merchantCustomerBillHtml(ctx,bill){const {merchant,order,items}=ctx;const subtotal=Number(bill?.subtotal??order.subtotal??0),discount=Number(bill?.discount_amount??0),tip=Number(bill?.tip_amount??0),total=Number(bill?.total_amount??(subtotal-discount+tip));return `<div class="merchant-print-paper ticket"><div class="print-title">消 费 账 单</div><div class="print-subtitle">${escHtml(merchant?.business_name||'乐生活商家')}</div><div class="print-meta"><span>${escHtml(order.table_name||'到店消费')}</span><b>${escHtml(order.order_code||'')}</b></div><div class="print-meta"><span>${merchantPrintTime(order.created_at)}</span><span>${bill?.payment_method==='cash'?'现金':bill?.payment_method==='card'?'刷卡':bill?.payment_method==='online'?'在线支付':'待结算'}</span></div><div class="print-lines">${items.map(item=>`<div class="print-line"><span>${escHtml(item.product_name)} × ${Number(item.quantity||0)}</span><span>${merchantOrderMoney(Number(item.unit_price||0)*Number(item.quantity||0))}</span></div>`).join('')}<div class="print-line"><span>菜品小计</span><b>${merchantOrderMoney(subtotal)}</b></div>${discount?`<div class="print-line"><span>优惠</span><span>-${merchantOrderMoney(discount)}</span></div>`:''}${tip?`<div class="print-line"><span>小费</span><span>${merchantOrderMoney(tip)}</span></div>`:''}<div class="print-line" style="font-size:16px;"><b>应付合计</b><b>${merchantOrderMoney(total)}</b></div></div><div class="print-foot">感谢光临，欢迎再次到店<br>${merchantPrintTime(bill?.created_at||Date.now())}</div></div>`;}
 async function openMerchantPrintPreview(type,orderId,itemId){
   const sheet=document.getElementById('merchantPrintPreview'),body=document.getElementById('merchantPrintPreviewBody'),title=document.getElementById('merchantPrintPreviewTitle');if(!sheet||!body)return;sheet.classList.add('open');body.innerHTML='<div class="deals-empty-panel">正在生成打印内容...</div>';
-  try{const ctx=await merchantPrintContext(orderId,itemId);let bill=null;if(type==='bill'){const res=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_bills?order_id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`,{method:'GET'});if(res.ok)bill=(await res.json())[0]||null;}const labels={kitchen:'后厨单预览',label:'饮品标签预览',bill:'顾客账单预览'},content=type==='label'?merchantDrinkLabelHtml(ctx):type==='bill'?merchantCustomerBillHtml(ctx,bill):merchantKitchenTicketHtml(ctx);title.textContent=labels[type]||'打印预览';window._merchantPrintPreviewState={type,orderId,itemId};body.innerHTML=`${content}<div class="merchant-print-actions"><button onclick="closeMerchantPrintPreview()">返回</button><button class="primary" onclick="printMerchantPreview()">调用系统打印</button></div>`;}catch(error){console.warn('打印预览生成失败:',error.message);body.innerHTML='<div class="deals-empty-panel">打印内容读取失败，请刷新订单后再试。</div>';}
+  try{const ctx=await merchantPrintContext(orderId,itemId);let bill=null;if(type==='bill') bill=await restaurantDataApi.getBillByOrder({orderId});const labels={kitchen:'后厨单预览',label:'饮品标签预览',bill:'顾客账单预览'},content=type==='label'?merchantDrinkLabelHtml(ctx):type==='bill'?merchantCustomerBillHtml(ctx,bill):merchantKitchenTicketHtml(ctx);title.textContent=labels[type]||'打印预览';window._merchantPrintPreviewState={type,orderId,itemId};body.innerHTML=`${content}<div class="merchant-print-actions"><button onclick="closeMerchantPrintPreview()">返回</button><button class="primary" onclick="printMerchantPreview()">调用系统打印</button></div>`;}catch(error){console.warn('打印预览生成失败:',error.message);body.innerHTML='<div class="deals-empty-panel">打印内容读取失败，请刷新订单后再试。</div>';}
 }
 function printMerchantPreview(){document.body.classList.add('printing-merchant-ticket');const finish=()=>document.body.classList.remove('printing-merchant-ticket');window.addEventListener('afterprint',finish,{once:true});setTimeout(finish,1500);window.print();}
 async function renderMerchantKitchenDisplay(silent){
@@ -17669,11 +17673,11 @@ async function openMerchantOrderHistory(){
   sheet.classList.add('open');body.innerHTML='<div class="deals-empty-panel">正在读取消费记录...</div>';
   try{
     const [billResult,rentalResult]=await Promise.allSettled([
-      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_bills?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=created_at.desc&limit=200`,{method:'GET'}),
+      restaurantDataApi.listBills({userId:session.user.id,limit:200}),
       rentalApi.customerBookings()
     ]);
-    if(billResult.status!=='fulfilled'||!billResult.value.ok)throw new Error(billResult.status==='fulfilled'?await billResult.value.text():billResult.reason?.message);
-    const bills=await billResult.value.json();
+    if(billResult.status!=='fulfilled')throw new Error(billResult.reason?.message);
+    const bills=billResult.value;
     let rentalBookings=[];
     if(rentalResult.status==='fulfilled') rentalBookings=Array.isArray(rentalResult.value)?rentalResult.value:[];
     const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id)).filter(Boolean))];
@@ -17698,17 +17702,16 @@ async function openMerchantOrderBillDetail(billId){
   if(!body||!bill)return;
   window._merchantOrderHistoryDetailId=String(billId);body.innerHTML='<div class="deals-empty-panel">正在读取账单明细...</div>';
   try{
-    const [orderRes,itemRes]=await Promise.all([
-      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_orders?id=eq.${encodeURIComponent(bill.order_id)}&select=*&limit=1`,{method:'GET'}),
-      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_order_items?order_id=eq.${encodeURIComponent(bill.order_id)}&select=*&order=batch_no.asc,created_at.asc,id.asc`,{method:'GET'})
+    const [order,items]=await Promise.all([
+      restaurantDataApi.getOrder({orderId:bill.order_id}),
+      restaurantDataApi.listOrderItems({orderIds:[bill.order_id],order:'batch_no.asc,created_at.asc,id.asc'})
     ]);
-    const order=orderRes.ok?(await orderRes.json())[0]||{}:{},items=itemRes.ok?await itemRes.json():[];
     const claimIds=Array.isArray(bill.coupon_claim_ids)?bill.coupon_claim_ids:[];
     let claims=[];
     if(claimIds.length){const claimRes=await authedFetch(`${SUPABASE_URL}/rest/v1/merchant_coupon_claims?id=in.(${claimIds.map(Number).filter(Number.isFinite).join(',')})&select=id,coupon_snapshot,status`,{method:'GET'});if(claimRes.ok)claims=await claimRes.json();}
     const merchant=window._merchantIdentityCache[bill.merchant_user_id]||{};
     const couponText=claims.length?claims.map(claim=>escHtml((claim.coupon_snapshot||{}).title||'优惠券')).join('、'):'未使用优惠券';
-    body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回消费记录</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${escHtml(merchant.business_name||'乐生活商家')}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">${new Date(bill.created_at).toLocaleString('zh-CN')} · ${merchantBillPaymentText(bill.payment_method)} · ${escHtml(order.order_code||'')}</div><div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;">${items.length?items.map(item=>`<div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(item.product_name||'商品')} × ${Number(item.quantity||0)}</span><b>${merchantOrderMoney(Number(item.unit_price||0)*Number(item.quantity||0))}</b></div>`).join(''):'<div style="font-size:12px;color:var(--ink-faint);">菜品明细暂不可用</div>'}</div><div style="margin-top:13px;padding-top:10px;border-top:1px solid var(--line);"><div class="merchant-order-line"><span>菜品小计</span><b>${merchantOrderMoney(bill.subtotal)}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>使用优惠券</span><span style="max-width:64%;text-align:right;color:var(--ink-soft);">${couponText}</span></div><div class="merchant-order-line" style="margin-top:8px;"><span>优惠金额</span><b style="color:var(--berry);">-${merchantOrderMoney(bill.discount_amount)}</b></div>${Number(bill.tip_amount)?`<div class="merchant-order-line" style="margin-top:8px;"><span>小费</span><b>${merchantOrderMoney(bill.tip_amount)}</b></div>`:''}<div class="merchant-order-line" style="margin-top:11px;font-size:16px;"><b>实付金额</b><b style="color:var(--berry);">${merchantOrderMoney(bill.total_amount)}</b></div></div></section>`;
+    body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回消费记录</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${escHtml(merchant.business_name||'乐生活商家')}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">${new Date(bill.created_at).toLocaleString('zh-CN')} · ${merchantBillPaymentText(bill.payment_method)} · ${escHtml(order?.order_code||'')}</div><div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;">${items.length?items.map(item=>`<div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(item.product_name||'商品')} × ${Number(item.quantity||0)}</span><b>${merchantOrderMoney(Number(item.unit_price||0)*Number(item.quantity||0))}</b></div>`).join(''):'<div style="font-size:12px;color:var(--ink-faint);">菜品明细暂不可用</div>'}</div><div style="margin-top:13px;padding-top:10px;border-top:1px solid var(--line);"><div class="merchant-order-line"><span>菜品小计</span><b>${merchantOrderMoney(bill.subtotal)}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>使用优惠券</span><span style="max-width:64%;text-align:right;color:var(--ink-soft);">${couponText}</span></div><div class="merchant-order-line" style="margin-top:8px;"><span>优惠金额</span><b style="color:var(--berry);">-${merchantOrderMoney(bill.discount_amount)}</b></div>${Number(bill.tip_amount)?`<div class="merchant-order-line" style="margin-top:8px;"><span>小费</span><b>${merchantOrderMoney(bill.tip_amount)}</b></div>`:''}<div class="merchant-order-line" style="margin-top:11px;font-size:16px;"><b>实付金额</b><b style="color:var(--berry);">${merchantOrderMoney(bill.total_amount)}</b></div></div></section>`;
   }catch(error){console.warn('账单明细读取失败:',error.message);body.innerHTML='<div class="deals-empty-panel">账单明细暂时无法读取，请稍后重试。</div>';}
 }
 
@@ -17774,7 +17777,7 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Coupon API Batch】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Restaurant Data API Batch】`);
 </script>
 </body>
 </html>
