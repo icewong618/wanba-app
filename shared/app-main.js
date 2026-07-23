@@ -307,7 +307,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.572';
+const APP_VERSION = '5.573';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -13056,7 +13056,20 @@ async function submitPost(){
       setPublishProgress('正在同步更新…', 84);
       const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, community_meta:communityMeta, youtube:ytId, event, tags: tagsArr, location: location || null };
       if(uploadedImages.length > 0){ fields.image = image; fields.images = images; fields.image_thumbnail = imageThumbnail; fields.image_thumbnails = imageThumbnails; }
-      await supabaseUpdatePost(idToUpdate, fields);
+      const savedPost = await supabaseUpdatePost(idToUpdate, fields);
+      if(uploadedImages.length > 0 && !savedPost?.image){
+        throw new Error('封面保存未生效，请重试');
+      }
+      if(p && savedPost){
+        Object.assign(p, savedPost);
+        syncPostCopies(p);
+        // 个人页首次才读到的旧笔记也要立即补进首页，不能等下次网络刷新。
+        if((savedPost.visibility || 'public') === 'public' && !posts.some(item => String(item.id) === String(savedPost.id))){
+          posts.unshift(compactFeedPost(savedPost));
+        }
+        renderFeed();
+        if(currentTab === 'profile') initProfilePage();
+      }
       console.log('✓ 数据库已同步更新 id=', idToUpdate);
       setPublishProgress('发布完成', 100);
       hidePublishProgress();
@@ -14701,4 +14714,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Post Menu & Video Cover Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Video Cover Persistence Fix】`);

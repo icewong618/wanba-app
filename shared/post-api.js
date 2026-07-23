@@ -15,7 +15,17 @@
       return rows[0] || null;
     };
     const updatePost = async (postId, fields) => {
-      await request(`?id=eq.${encodeURIComponent(postId)}`, { method:'PATCH', body:JSON.stringify(fields) }, '更新失败');
+      const response = await request(
+        `?id=eq.${encodeURIComponent(postId)}`,
+        { method:'PATCH', headers:{ Prefer:'return=representation' }, body:JSON.stringify(fields) },
+        '更新失败'
+      );
+      const rows = await response.json().catch(() => []);
+      // RLS 未匹配时，PostgREST 可能返回成功状态却没有实际更新任何行。
+      if(!Array.isArray(rows) || rows.length === 0){
+        throw new Error('更新未生效：未找到可编辑的笔记');
+      }
+      return rows[0];
     };
     const deletePost = async postId => {
       await request(`?id=eq.${encodeURIComponent(postId)}`, { method:'DELETE' }, '删除失败');
