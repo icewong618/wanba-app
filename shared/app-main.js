@@ -93,6 +93,8 @@ const ICONS = {
   home:'<path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path>',
   calendar:'<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path>',
   bag:'<path d="M6 8h12l-1 12H7z"></path><path d="M9 8a3 3 0 0 1 6 0"></path>',
+  card:'<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18"></path><path d="M7 15h3"></path>',
+  link:'<path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"></path><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"></path>',
   message:'<path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path>',
   food:'<path d="M6 3v18M10 3v18M6 8h4"></path><path d="M16 3v18"></path><path d="M16 3c3 2 4 5 2 8"></path>',
   user:'<circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path>',
@@ -308,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.595';
+const APP_VERSION = '5.596';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -1190,7 +1192,9 @@ function openCoverCropper(img, dataUrl, target){
   overlay?.classList.add('open');
   requestAnimationFrame(() => {
     bindCoverCropDrag();
+    // WebView 在遮罩刚打开的一帧里可能仍使用旧宽度；下一帧再定位一次，避免预览偏右。
     renderCoverCropper();
+    requestAnimationFrame(renderCoverCropper);
   });
 }
 function closeCoverCropper(){
@@ -1225,8 +1229,10 @@ function renderCoverCropper(){
   clampCoverCrop();
   cropImg.style.width = `${m.dispW}px`;
   cropImg.style.height = `${m.dispH}px`;
-  cropImg.style.left = `calc(50% + ${coverCropState.x}px)`;
-  cropImg.style.top = `calc(50% + ${coverCropState.y}px)`;
+  // 不使用 calc(50% + px)：部分 App WebView 会把它按页面坐标而不是裁剪框坐标计算。
+  cropImg.style.left = `${m.width / 2 + coverCropState.x}px`;
+  cropImg.style.top = `${m.height / 2 + coverCropState.y}px`;
+  cropImg.style.transform = 'translate3d(-50%,-50%,0)';
 }
 function setCoverCropZoom(value){
   const prev = coverCropState.zoom || 1;
@@ -6101,8 +6107,8 @@ function closePublicProfileMenu(){ document.getElementById('publicProfileMenu')?
 function openPublicUserDm(userId, name){
   if(!(session && session.user)){ showToast('请先登录后再发私信'); openAuth(); return; }
   closePublicProfileMenu();
-  closeUserPublicPage();
-  openInternalModule('/messages/', '5.446', { to:userId, name });
+  // 主页上的私信直接在当前页发起会话；避免独立消息模块在 App WebView 中被路由层吞掉。
+  openDmTo(userId, name);
 }
 async function openUserPublicPage(userId, fallbackName){
   if(!userId){ showToast('没有找到用户主页'); return; }
@@ -8358,26 +8364,41 @@ function switchProfileTab(tab){
   }
   if(tab === 'memberships') loadUserMembershipCards(true);
 }
-function showProfileBrowsingHistory(){
-  browsingHistory = posts.slice(0, 10).map((p, idx) => ({
-    ...p,
-    viewedAt: new Date(Date.now() - idx * 3600000).toLocaleString('zh-CN')
-  }));
-  
+async function showProfileBrowsingHistory(){
+  if(!(session && session.user)){ showToast('登录后可查看浏览记录'); openAuth(); return; }
   const historyList = document.getElementById('browsingHistoryList');
-  historyList.innerHTML = browsingHistory.map(item => `
-    <div class="history-item" onclick="openPost(${item.id})">
-      <div class="history-item-thumb">
-        ${item.image ? `<img src="${item.image}" alt="">` : '<div style="background:var(--bg-alt);width:100%;height:100%;"></div>'}
+  const modal = document.getElementById('browsingModal');
+  if(!historyList || !modal) return;
+  modal.style.display = 'flex';
+  historyList.innerHTML = '<div class="deals-empty-panel">正在读取浏览记录...</div>';
+  try {
+    const response = await authedFetch(`${SUPABASE_URL}/rest/v1/post_views?user_id=eq.${encodeURIComponent(session.user.id)}&select=post_id,created_at&order=created_at.desc&limit=240`, { method:'GET' });
+    if(!response.ok) throw new Error(await response.text());
+    const rows = await response.json();
+    const latestByPost = new Map();
+    (rows || []).forEach(row => { if(row.post_id != null && !latestByPost.has(String(row.post_id))) latestByPost.set(String(row.post_id), row.created_at); });
+    const needed = [...latestByPost.keys()];
+    let missing = [];
+    const localById = new Map((posts || []).map(post => [String(post.id), post]));
+    needed.forEach(id => { if(!localById.has(id)) missing.push(id); });
+    if(missing.length){
+      const postResponse = await authedFetch(`${SUPABASE_URL}/rest/v1/posts?id=in.(${missing.map(encodeURIComponent).join(',')})&select=id,title,image,images,author,category,created_at&limit=${Math.min(missing.length, 240)}`, { method:'GET' });
+      if(postResponse.ok) (await postResponse.json()).forEach(post => localById.set(String(post.id), post));
+    }
+    browsingHistory = needed.map(id => {
+      const post = localById.get(String(id));
+      return post ? Object.assign({}, post, { viewedAt:latestByPost.get(String(id)) }) : null;
+    }).filter(Boolean);
+    historyList.innerHTML = browsingHistory.length ? browsingHistory.map(item => `
+      <div class="history-item" onclick="closeBrowsingHistory();openPost(${JSON.stringify(item.id)})">
+        <div class="history-item-thumb">${item.image ? `<img src="${escAttr(item.image)}" alt="">` : '<div style="background:var(--bg-alt);width:100%;height:100%;"></div>'}</div>
+        <div class="history-item-info"><div class="history-item-title">${escHtml(item.title || '未命名笔记')}</div><div class="history-item-time">${new Date(item.viewedAt).toLocaleString('zh-CN')}</div></div>
       </div>
-      <div class="history-item-info">
-        <div class="history-item-title">${item.title}</div>
-        <div class="history-item-time">${item.viewedAt}</div>
-      </div>
-    </div>
-  `).join('');
-  
-  document.getElementById('browsingModal').style.display = 'flex';
+    `).join('') : '<div class="deals-empty-panel">还没有浏览记录。打开一篇笔记后会在这里留下记录。</div>';
+  } catch(error){
+    console.warn('浏览记录读取失败:', error.message);
+    historyList.innerHTML = '<div class="deals-empty-panel">浏览记录暂时无法读取，请稍后重试。</div>';
+  }
 }
 function closeBrowsingHistory(){
   document.getElementById('browsingModal').style.display = 'none';
@@ -14205,6 +14226,126 @@ function menuGlyph(kind){
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${glyphs[kind]||glyphs.settings}</svg>`;
 }
+function ensureHomeFeatureOverlay(){
+  let overlay = document.getElementById('homeFeatureOverlay');
+  if(overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'homeFeatureOverlay';
+  overlay.className = 'home-feature-overlay';
+  overlay.innerHTML = '<section class="home-feature-panel" role="dialog" aria-modal="true"><header class="home-feature-header"><button type="button" aria-label="返回" onclick="closeHomeFeature()">‹</button><h2 id="homeFeatureTitle"></h2><span></span></header><main id="homeFeatureBody" class="home-feature-body"></main></section>';
+  document.body.appendChild(overlay);
+  return overlay;
+}
+function openHomeFeature(title, html){
+  const overlay = ensureHomeFeatureOverlay();
+  document.getElementById('homeFeatureTitle').textContent = title;
+  document.getElementById('homeFeatureBody').innerHTML = html;
+  overlay.classList.add('open');
+}
+function closeHomeFeature(){
+  if(window._homeScanTimer) clearInterval(window._homeScanTimer);
+  window._homeScanTimer = null;
+  if(window._homeScanStream){ window._homeScanStream.getTracks().forEach(track => track.stop()); window._homeScanStream = null; }
+  document.getElementById('homeFeatureOverlay')?.classList.remove('open');
+}
+function homeFeatureRequireAuth(){
+  if(session && session.user) return true;
+  closeHomeFeature();
+  showToast('请先登录');
+  openAuth();
+  return false;
+}
+function homeFriendScore(profile, keyword){
+  const name = String(profile.name || '').trim().toLowerCase();
+  const query = String(keyword || '').trim().toLowerCase();
+  const publicId = String(uidToNumericId(String(profile.user_id || '')) || '');
+  if(publicId === query) return 10000;
+  if(name === query) return 9000;
+  if(name.startsWith(query)) return 7000 - name.length;
+  if(name.includes(query)) return 5000 - name.indexOf(query);
+  const overlap = [...new Set(query)].filter(char => name.includes(char)).length;
+  return overlap * 100;
+}
+function openHomeFriendSearch(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('添加好友', `<div class="home-feature-intro">可搜索昵称或乐生活 ID。昵称结果会优先显示最相近的用户。</div><div class="home-friend-search"><input id="homeFriendKeyword" maxlength="48" placeholder="昵称或乐生活 ID" onkeydown="if(event.key==='Enter')searchHomeFriends()"><button type="button" onclick="searchHomeFriends()">搜索</button></div><div id="homeFriendResults" class="home-feature-list"><div class="home-feature-empty">输入昵称或 ID 开始寻找好友。</div></div>`);
+  setTimeout(() => document.getElementById('homeFriendKeyword')?.focus(), 50);
+}
+async function searchHomeFriends(){
+  if(!homeFeatureRequireAuth()) return;
+  const input = document.getElementById('homeFriendKeyword');
+  const target = document.getElementById('homeFriendResults');
+  const keyword = String(input?.value || '').trim();
+  if(!keyword){ target.innerHTML = '<div class="home-feature-empty">请输入昵称或乐生活 ID。</div>'; return; }
+  target.innerHTML = '<div class="home-feature-empty">正在搜索用户...</div>';
+  try {
+    const safeKeyword = keyword.replace(/[,%()']/g, '').slice(0, 48);
+    const fields = 'user_id,name,avatar,bio,market_code,updated_at';
+    const isId = /^\d{5,}$/.test(safeKeyword);
+    const url = isId
+      ? `${SUPABASE_URL}/rest/v1/profiles?select=${fields}&limit=500`
+      : `${SUPABASE_URL}/rest/v1/profiles?select=${fields}&name=ilike.*${encodeURIComponent(safeKeyword)}*&limit=80`;
+    const response = await authedFetch(url, { method:'GET' });
+    if(!response.ok) throw new Error(await response.text());
+    const rows = (await response.json()).filter(row => String(row.user_id) !== String(session.user.id));
+    const matches = rows.filter(row => !isId || String(uidToNumericId(String(row.user_id))) === safeKeyword || String(row.name || '').toLowerCase().includes(safeKeyword.toLowerCase()))
+      .sort((a,b) => homeFriendScore(b, safeKeyword) - homeFriendScore(a, safeKeyword));
+    target.innerHTML = matches.length ? matches.map(row => {
+      const id = String(row.user_id || '');
+      const name = row.name || '乐生活用户';
+      const avatar = row.avatar || resolveAvatarUrl(id);
+      return `<article class="home-friend-row"><button class="home-friend-main" type="button" onclick="closeHomeFeature();openUserPublicPage('${id.replace(/'/g,'')}','${String(name).replace(/'/g,'')}')"><span class="home-friend-avatar">${avatar ? `<img src="${escAttr(avatar)}" alt="">` : escHtml(initials(name))}</span><span><b>${escHtml(name)}</b><small>ID: ${escHtml(uidToNumericId(id))}${row.bio ? ` · ${escHtml(row.bio).slice(0,24)}` : ''}</small></span></button><button class="home-friend-follow ${isFollowing(id)?'following':''}" type="button" onclick="homeFriendToggle('${id.replace(/'/g,'')}','${String(name).replace(/'/g,'')}')">${isFollowing(id) ? '已添加' : '添加'}</button></article>`;
+    }).join('') : '<div class="home-feature-empty">没有找到相符的用户。</div>';
+  } catch(error){
+    console.warn('好友搜索失败:', error.message);
+    target.innerHTML = '<div class="home-feature-empty">搜索暂时不可用，请稍后重试。</div>';
+  }
+}
+async function homeFriendToggle(userId, name){
+  await toggleFollowUser(userId, name);
+  searchHomeFriends();
+}
+function openHomeCreatorCenter(){
+  if(!homeFeatureRequireAuth()) return;
+  if(currentMerchant && currentMerchant.verified){
+    closeHomeFeature();
+    openMerchantAiFlow();
+    return;
+  }
+  openHomeFeature('创作中心', `<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('spark',26)}</div><h3>专业用户专属</h3><p>商家认证通过后，可使用 AI 发文、内容同步和店铺运营工具。</p><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openMerchantApplySheet()">申请成为商家</button></section>`);
+}
+function openHomeCart(){
+  if(!homeFeatureRequireAuth()) return;
+  const state = typeof merchantOrderState === 'function' ? merchantOrderState() : null;
+  const merchant = state && state.merchant;
+  const lines = state && merchant ? merchantOrderCartRows() : [];
+  const total = lines.reduce((sum,row) => sum + merchantOrderPriceNumber(row.price) * Number(row.quantity || 0), 0);
+  openHomeFeature('购物车', lines.length ? `<section class="home-feature-card"><div class="home-cart-merchant"><b>${escHtml(merchant.business_name || '商家')}</b><small>${lines.length} 件未结算商品</small></div>${lines.map(row => `<div class="home-cart-line"><span>${escHtml(row.name || '商品')} × ${Number(row.quantity || 0)}</span><b>${merchantOrderMoney(merchantOrderPriceNumber(row.price) * Number(row.quantity || 0))}</b></div>`).join('')}<div class="home-cart-line home-cart-total"><b>合计</b><b>${merchantOrderMoney(total)}</b></div><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openMerchantPublicPage('${String(merchant.user_id || '').replace(/'/g,'')}')">回到商家继续结算</button></section>` : '<div class="home-feature-empty">购物车暂时为空。餐饮、零售等未完成下单的商品会按商家显示在这里。</div>');
+}
+function openHomeWallet(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('钱包', `<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('wallet',26)}</div><h3>安全支付方式</h3><p>银行卡、Apple Pay、Google Pay 和 Link 将由 Stripe 的加密支付页保存和管理，乐生活不会保存完整卡号。</p><div class="home-wallet-list"><div>${uiIcon('card',18)}银行卡 <span>在结算时添加</span></div><div>${uiIcon('link',18)}Link <span>Stripe 安全保存</span></div><div>${uiIcon('wallet',18)}Apple Pay / Google Pay <span>设备支持时显示</span></div></div><button class="home-feature-primary" type="button" onclick="closeHomeFeature();showToast('请在租车、票务或商品结算页添加支付方式')">前往支付设置</button></section>`);
+}
+function openHomeCommunity(){
+  openHomeFeature('社区公约', `<section class="home-feature-terms"><h3>一起把乐生活做成可信赖的社区</h3><p>欢迎分享真实的本地生活、商品、活动与经验。请尊重每一位用户，不发布违法、有害、欺诈、侵权、仇恨、骚扰或明显误导的信息。</p><h4>内容与交易</h4><p>发布者应对内容、商品、服务及交易信息的真实性负责。涉及门票、零售、预约或线下服务时，请清楚说明价格、条件、时间和取消规则。</p><h4>保护彼此</h4><p>不得盗用他人的照片、身份、商标或作品；未经同意不得公开他人的私人信息。发现风险内容可使用举报入口，我们会依照社区规则处理。</p><h4>账户与沟通</h4><p>不得冒充他人、批量骚扰、刷量或利用平台进行诈骗。多次或严重违规可能导致内容下架、功能限制或账户处理。</p><p class="home-feature-note">本公约是社区使用规则的基础说明，不构成法律意见；正式服务条款与隐私规则会在公测前补充。</p></section>`);
+}
+async function openHomeScanner(){
+  openHomeFeature('扫一扫', '<div id="homeScannerStatus" class="home-feature-empty">正在打开相机...</div><div class="home-scan-frame"><video id="homeScannerVideo" autoplay muted playsinline></video><span></span></div><p class="home-feature-note">可扫描乐生活二维码、商家二维码或商品条码。</p>');
+  const status = document.getElementById('homeScannerStatus');
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ if(status) status.textContent = '当前浏览器不支持扫码相机。'; return; }
+  try {
+    window._homeScanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+    const video = document.getElementById('homeScannerVideo');
+    if(video) video.srcObject = window._homeScanStream;
+    if(!('BarcodeDetector' in window)){ if(status) status.textContent = '相机已打开，请使用支持扫码的 App 版本。'; return; }
+    const detector = new BarcodeDetector({ formats:['qr_code','code_128','code_39','ean_13'] });
+    if(status) status.textContent = '将二维码或条码放入取景框内。';
+    window._homeScanTimer = setInterval(async () => {
+      try { const codes = await detector.detect(document.getElementById('homeScannerVideo')); const value = codes?.[0]?.rawValue; if(value){ clearInterval(window._homeScanTimer); window._homeScanTimer=null; if(status) status.textContent = `已识别：${String(value).slice(0,80)}`; } } catch(error){}
+    }, 650);
+  } catch(error){ if(status) status.textContent = '相机未能打开，请检查相机权限。'; }
+}
+function openHomeHelp(){ openHomeFeature('帮助与客服', '<section class="home-feature-card"><h3>帮助与客服</h3><p>常见问题、反馈进度与人工客服入口正在整理中。公测期间可使用“我的反馈”提交问题与截图。</p><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openFeedback()">提交反馈</button></section>'); }
 function ensureHomeMenu(){
   let overlay=document.getElementById('homeMenuOverlay');
   if(overlay) return overlay;
@@ -14212,7 +14353,7 @@ function ensureHomeMenu(){
   const setting=(label,icon,action='comingSoon')=>`<button class="home-settings-row" type="button" onclick="handleHomeMenuAction('${action}')">${menuGlyph(icon)}<span>${label}</span><i class="home-settings-chevron">›</i></button>`;
   overlay=document.createElement('div');
   overlay.id='homeMenuOverlay'; overlay.className='home-menu-overlay';
-  overlay.innerHTML=`<aside class="home-menu-panel" role="dialog" aria-modal="true" aria-label="主页菜单" onclick="event.stopPropagation()"><div class="home-menu-head"><b>乐生活</b><button class="home-menu-close" type="button" onclick="closeHomeMenu()" aria-label="关闭">×</button></div><section class="home-menu-group">${row('添加好友','user','comingSoon')}${row('创作中心','pen','creator')}${row('我的草稿','pen','drafts')}</section><section class="home-menu-group">${row('浏览记录','clock','history')}${row('订单','bag','orders')}${row('购物车','cart','cart')}${row('钱包','wallet','wallet')}</section><section class="home-menu-group">${row('社区公约','shield','community')}</section><div class="home-menu-bottom"><button type="button" onclick="handleHomeMenuAction('scan')">${menuGlyph('scan')}<span>扫一扫</span></button><button type="button" onclick="handleHomeMenuAction('help')">${menuGlyph('help')}<span>帮助与客服</span></button><button type="button" onclick="openHomeSettings()">${menuGlyph('settings')}<span>设置</span></button></div></aside><section class="home-settings-panel" role="dialog" aria-modal="true" aria-label="设置"><header class="home-settings-header"><button class="home-settings-back" type="button" onclick="closeHomeSettings()" aria-label="返回">‹</button><h2>设置</h2><span></span></header><div class="home-settings-card">${setting('账号与安全','user')}${setting('通用设置','settings')}${setting('通知设置','help')}${setting('多语言和翻译','pen','language')}${setting('隐私设置','shield')}</div><div class="home-settings-card">${setting('存储空间','bag','cache')}${setting('内容偏好调节','pen','preferences')}${setting('收货地址','user')}${setting('添加小组件','bag')}${setting('未成年人模式','shield')}</div><div class="home-settings-card">${setting('新功能体验','pen')}</div><div class="home-settings-card">${setting('帮助与客服','help')}${setting('关于乐生活','help')}</div><div class="home-settings-card">${setting('切换账号','user','switchAccount')}</div></section>`;
+  overlay.innerHTML=`<aside class="home-menu-panel" role="dialog" aria-modal="true" aria-label="主页菜单" onclick="event.stopPropagation()"><div class="home-menu-head"><b>乐生活</b><button class="home-menu-close" type="button" onclick="closeHomeMenu()" aria-label="关闭">×</button></div><section class="home-menu-group">${row('添加好友','user','friends')}${row('创作中心','pen','creator')}${row('我的草稿','pen','drafts')}</section><section class="home-menu-group">${row('浏览记录','clock','history')}${row('订单','bag','orders')}${row('购物车','cart','cart')}${row('钱包','wallet','wallet')}</section><section class="home-menu-group">${row('社区公约','shield','community')}</section><div class="home-menu-bottom"><button type="button" onclick="handleHomeMenuAction('scan')">${menuGlyph('scan')}<span>扫一扫</span></button><button type="button" onclick="handleHomeMenuAction('help')">${menuGlyph('help')}<span>帮助与客服</span></button><button type="button" onclick="openHomeSettings()">${menuGlyph('settings')}<span>设置</span></button></div></aside><section class="home-settings-panel" role="dialog" aria-modal="true" aria-label="设置"><header class="home-settings-header"><button class="home-settings-back" type="button" onclick="closeHomeSettings()" aria-label="返回">‹</button><h2>设置</h2><span></span></header><div class="home-settings-card">${setting('账号与安全','user')}${setting('通用设置','settings')}${setting('通知设置','help')}${setting('多语言和翻译','pen','language')}${setting('隐私设置','shield')}</div><div class="home-settings-card">${setting('存储空间','bag','cache')}${setting('内容偏好调节','pen','preferences')}${setting('收货地址','user')}${setting('添加小组件','bag')}${setting('未成年人模式','shield')}</div><div class="home-settings-card">${setting('新功能体验','pen')}</div><div class="home-settings-card">${setting('帮助与客服','help')}${setting('关于乐生活','help')}</div><div class="home-settings-card">${setting('切换账号','user','switchAccount')}</div></section>`;
   overlay.addEventListener('click',()=>closeHomeMenu());
   document.body.appendChild(overlay);
   return overlay;
@@ -14224,13 +14365,18 @@ window.closeHomeSettings=function(){ document.getElementById('homeMenuOverlay')?
 window.handleHomeMenuAction=function(action){
   if(action==='language'){ closeHomeMenu(); return window.LeshenghuoI18n?.openPicker?.(); }
   if(action==='drafts'){ closeHomeMenu(); return window.openComposeDrafts?.(); }
-  if(action==='creator'){ closeHomeMenu(); return window.handlePublishClick?.(); }
-  if(action==='history'){ closeHomeMenu(); return window.switchTab?.('profile'); }
+  if(action==='creator'){ closeHomeMenu(); return openHomeCreatorCenter(); }
+  if(action==='friends'){ closeHomeMenu(); return openHomeFriendSearch(); }
+  if(action==='history'){ closeHomeMenu(); return showProfileBrowsingHistory(); }
+  if(action==='orders'){ closeHomeMenu(); return openMerchantOrderHistory(); }
+  if(action==='cart'){ closeHomeMenu(); return openHomeCart(); }
+  if(action==='wallet'){ closeHomeMenu(); return openHomeWallet(); }
+  if(action==='community'){ closeHomeMenu(); return openHomeCommunity(); }
   if(action==='switchAccount'){ closeHomeMenu(); return window.openLogin?.(); }
   if(action==='preferences'){ closeHomeMenu(); return window.switchTab?.('home'); }
   if(action==='cache') return showToast('缓存管理将在后续设置中开放');
-  if(action==='scan') return showToast('扫一扫将在后续版本开放');
-  if(action==='help') return showToast('帮助与客服正在准备中');
+  if(action==='scan'){ closeHomeMenu(); return openHomeScanner(); }
+  if(action==='help'){ closeHomeMenu(); return openHomeHelp(); }
   showToast('该功能正在逐步开放');
 };
 
