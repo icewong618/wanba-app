@@ -307,7 +307,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.574';
+const APP_VERSION = '5.575';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -13035,6 +13035,9 @@ async function submitPost(){
   const images = postMedia.originals.length > 0 ? postMedia.originals : (textCoverImage ? [textCoverImage] : null);
   const imageThumbnail = postMedia.thumbnails.length > 0 ? postMedia.thumbnails[0] : (ytId ? null : (textCoverThumbnail || null));
   const imageThumbnails = postMedia.thumbnails.length > 0 ? postMedia.thumbnails : (textCoverThumbnail ? [textCoverThumbnail] : null);
+  // 发布页关闭会清空上传队列。编辑旧笔记时，必须在关闭前固定本次是否有媒体，
+  // 否则新封面虽已上传，却会在后续数据库更新阶段被误判为没有图片。
+  const hasPostMedia = postMedia.originals.length > 0;
   // 2.93：优先取"我的"页可编辑的昵称
   const authorName = (typeof currentUser !== 'undefined' && currentUser.name && currentUser.name !== '未登录用户')
     ? currentUser.name
@@ -13051,7 +13054,7 @@ async function submitPost(){
       p.category = cat; p.subcategory = subcategory; p.community_meta = communityMeta; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
       p.tiktok_url = tiktokInfo ? tiktokInfo.url : null;
       p.location = location || null;
-      if(uploadedImages.length > 0){ p.image = image; p.images = images; p.image_thumbnail = imageThumbnail; p.image_thumbnails = imageThumbnails; }
+      if(hasPostMedia){ p.image = image; p.images = images; p.image_thumbnail = imageThumbnail; p.image_thumbnails = imageThumbnails; }
       syncPostCopies(p);
     }
     const idToUpdate = editingPostId;
@@ -13064,9 +13067,9 @@ async function submitPost(){
     try {
       setPublishProgress('正在同步更新…', 84);
       const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, community_meta:communityMeta, youtube:ytId, event, tags: tagsArr, location: location || null };
-      if(uploadedImages.length > 0){ fields.image = image; fields.images = images; fields.image_thumbnail = imageThumbnail; fields.image_thumbnails = imageThumbnails; }
+      if(hasPostMedia){ fields.image = image; fields.images = images; fields.image_thumbnail = imageThumbnail; fields.image_thumbnails = imageThumbnails; }
       const savedPost = await supabaseUpdatePost(idToUpdate, fields);
-      if(uploadedImages.length > 0 && !savedPost?.image){
+      if(hasPostMedia && !savedPost?.image){
         throw new Error('封面保存未生效，请重试');
       }
       if(p && savedPost){
@@ -14723,4 +14726,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Video Cover & Accessibility Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Legacy Video Cover Persistence Fix】`);
