@@ -30,6 +30,7 @@
     if(!merchant) return;
     if(action === 'auto_sales') return location.assign(`/autos/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
     if(action === 'retail') return location.assign(`/retail/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
+    if(action === 'inventory') return location.assign(`/inventory/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
     location.assign(`/?merchant_admin=${encodeURIComponent(action)}&merchant_id=${encodeURIComponent(merchant.user_id)}&from=merchant_manage`);
   };
   const count = async path => {
@@ -102,7 +103,10 @@
       ? entry('▱', '二手车管理', '车辆库存、试驾预约与卖车估价线索', 'auto_sales')
       : '';
     const retailEntries = isRetail()
-      ? entry('▣', '零售订单', '确认自取、安排时间和完成交付', 'retail', data.retailOrders > 0)
+      ? [
+          entry('▣', '零售订单', '确认自取、安排时间和完成交付', 'retail', data.retailOrders > 0),
+          entry('▤', '库存管理', '扫码入库、出库、盘点和低库存提醒', 'inventory')
+        ].join('')
       : '';
     const businessEntries = restaurantEntries || rentalEntries || autoEntries || retailEntries
       ? `<div class="section-head"><b>行业功能</b><span>只显示适用于本店的功能</span></div><div class="grid">${restaurantEntries}${rentalEntries}${autoEntries}${retailEntries}</div>`
