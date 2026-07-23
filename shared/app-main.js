@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.594';
+const APP_VERSION = '5.595';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -1357,7 +1357,7 @@ async function syncProfileToDb(){
       gender: currentUser.gender || null,
       birth: currentUser.birth || null,
       cover: currentUser.cover || null,
-      market_code: normalizeMarketCode(currentUser.market_code),
+      market_code: normalizeUserMarketCode(currentUser.market_code),
       ip_location: window._ipLocation || currentUser.location || null,
       updated_at: updatedAt
     };
@@ -1395,7 +1395,7 @@ async function fetchProfileFromDb(){
         gender: row.gender || local.gender,
         birth: row.birth || local.birth,
         cover: row.cover || local.cover,
-        market_code: normalizeMarketCode(row.market_code || local.market_code),
+        market_code: normalizeUserMarketCode(row.market_code || local.market_code),
         location: row.ip_location || local.location,
         avatarUpdatedAt: row.updated_at || local.avatarUpdatedAt
       }));
@@ -3617,17 +3617,38 @@ const MERCHANT_RESERVED_SLUGS = new Set([
 ]);
 const MARKET_OPTIONS = [
   ['la','洛杉矶 LA','洛杉磯 LA','Los Angeles (LA)'],['sgv','圣盖博谷 SGV','聖蓋博谷 SGV','San Gabriel Valley (SGV)'],['oc','橙县 OC','橙縣 OC','Orange County (OC)'],['ie','内陆帝国 IE','內陸帝國 IE','Inland Empire (IE)'],['sd','圣地亚哥 SD','聖地亞哥 SD','San Diego (SD)'],
-  ['sf','旧金山湾区 SF','舊金山灣區 SF','San Francisco Bay Area (SF)'],['nyc','纽约 NYC','紐約 NYC','New York City (NYC)'],['sea','西雅图 SEA','西雅圖 SEA','Seattle (SEA)'],['other','其他地区','其他地區','Other region']
+  ['sf','旧金山湾区 SF','舊金山灣區 SF','San Francisco Bay Area (SF)'],['lv','拉斯维加斯 LV','拉斯維加斯 LV','Las Vegas (LV)'],['nyc','纽约 NYC','紐約 NYC','New York City (NYC)'],['sea','西雅图 SEA','西雅圖 SEA','Seattle (SEA)'],['other','其他地区','其他地區','Other region']
 ];
+/* 个人资料只使用大区；门店仍可保留更细的服务区域选择。 */
+const USER_MARKET_OPTIONS = [
+  ['la','大洛杉矶（LA）','大洛杉磯（LA）','Los Angeles（LA）'],
+  ['sf','湾区（SF）','灣區（SF）','San Francisco Bay Area（SF）'],
+  ['sd','圣地亚哥（SD）','聖地牙哥（SD）','San Diego（SD）'],
+  ['lv','拉斯维加斯（LV）','拉斯維加斯（LV）','Las Vegas（LV）'],
+  ['sea','西雅图（SEA）','西雅圖（SEA）','Seattle（SEA）'],
+  ['nyc','纽约（NYC）','紐約（NYC）','New York City（NYC）']
+];
+const USER_MARKET_ALIASES = { sgv:'la', oc:'la', ie:'la' };
 function normalizeMarketCode(value){
   const code = String(value || '').trim().toLowerCase();
   return MARKET_OPTIONS.some(row => row[0] === code) ? code : 'la';
+}
+function normalizeUserMarketCode(value){
+  const rawCode = String(value || '').trim().toLowerCase();
+  const code = USER_MARKET_ALIASES[rawCode] || rawCode;
+  return USER_MARKET_OPTIONS.some(row => row[0] === code) ? code : 'la';
 }
 function marketSelectOptions(value){
   const selected = normalizeMarketCode(value);
   const language = window.LeshenghuoI18n?.getLanguage?.() || localStorage.getItem('leshenghuo_language') || 'zh-CN';
   const labelIndex = language === 'en' ? 3 : (language === 'zh-TW' ? 2 : 1);
   return MARKET_OPTIONS.map(row => `<option value="${row[0]}" ${row[0] === selected ? 'selected' : ''}>${row[labelIndex]}</option>`).join('');
+}
+function userMarketSelectOptions(value){
+  const selected = normalizeUserMarketCode(value);
+  const language = window.LeshenghuoI18n?.getLanguage?.() || localStorage.getItem('leshenghuo_language') || 'zh-CN';
+  const labelIndex = language === 'en' ? 3 : (language === 'zh-TW' ? 2 : 1);
+  return USER_MARKET_OPTIONS.map(row => `<option value="${row[0]}" ${row[0] === selected ? 'selected' : ''}>${row[labelIndex]}</option>`).join('');
 }
 function merchantMarketCode(m){ return normalizeMarketCode(m && m.market_code); }
 let merchantSlugCheckTimer = null;
@@ -7141,7 +7162,7 @@ function enterEditMode(){
   document.getElementById('editUserBirth').value = currentUser.birth || '';
   document.getElementById('editUserTags').value = currentUser.tags.join(', ');
   const marketInput = document.getElementById('editUserMarket');
-  if(marketInput) marketInput.innerHTML = marketSelectOptions(currentUser.market_code);
+  if(marketInput) marketInput.innerHTML = userMarketSelectOptions(currentUser.market_code);
   
   // 标签输入实时提示
   const tagInput = document.getElementById('editUserTags');
@@ -7179,7 +7200,7 @@ function saveUserProfile(){
   const gender = document.getElementById('editUserGender').value;
   const birth = document.getElementById('editUserBirth').value; // 如 '1999-06'
   const age = calcAge(birth);
-  const marketCode = normalizeMarketCode(document.getElementById('editUserMarket')?.value);
+  const marketCode = normalizeUserMarketCode(document.getElementById('editUserMarket')?.value);
   // 支持中英文逗号分隔
   const tags = document.getElementById('editUserTags').value
     .split(/[,，]/).map(t => t.trim()).filter(t => t);
