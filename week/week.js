@@ -67,7 +67,7 @@
       // 票务、报名等独立活动以后写入 activity_calendar_items；表尚未部署时仍保持帖子活动可用。
       let calendarRows = [];
       try {
-        const calendarRes = await request('/rest/v1/activity_calendar_items?status=eq.published&select=id,source_type,source_id,source_url,title,summary,cover_image,start_date,end_date,all_day,location,capacity,registered,registration_enabled,created_at&order=start_date.asc&limit=160');
+        const calendarRes = await request('/rest/v1/activity_calendar_items?status=eq.published&select=id,source_type,source_id,source_url,title,summary,cover_image,start_date,end_date,all_day,location,capacity,registered,registration_enabled,metadata,created_at&order=start_date.asc&limit=160');
         if(calendarRes.ok){
           const sourceRows = await calendarRes.json();
           calendarRows = sourceRows.map(item => ({
@@ -82,6 +82,7 @@
             calendar_source_type: item.source_type,
             source_id: item.source_id,
             source_url: item.source_url,
+            calendar_metadata: item.metadata || {},
             event: { start_date:item.start_date, end_date:item.end_date, all_day:item.all_day, capacity:item.capacity, registered:item.registered, registration_enabled:item.registration_enabled },
             tags: item.source_type === 'ticket' ? ['票务活动'] : ['报名活动']
           }));
@@ -105,6 +106,10 @@
     open: id => {
       const row = state.rows.find(item => String(item.id) === String(id));
       if(String(id).startsWith('calendar-')){
+        if(row?.calendar_source_type === 'ticket' && row?.calendar_metadata?.merchant_slug && row?.source_id){
+          const target=`/tickets/?merchant=${encodeURIComponent(row.calendar_metadata.merchant_slug)}&event=${encodeURIComponent(row.source_id)}`;
+          return location.assign(target);
+        }
         if(row?.source_url) return location.assign(row.source_url);
         if(row?.source_id && /^\d+$/.test(String(row.source_id))) return routeInAppShell('post',{id:row.source_id}) || location.assign(`/?post=${encodeURIComponent(row.source_id)}`);
         return alert('该活动详情正在准备中，请稍后再试。');

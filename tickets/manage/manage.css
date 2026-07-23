@@ -22,6 +22,44 @@
   text-transform: uppercase;
 }
 
+.ticket-cover-picker {
+  position: relative;
+  display: flex;
+  width: min(100%, 320px);
+  aspect-ratio: 3 / 4;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-top: 6px;
+  border: 1px dashed var(--sage);
+  border-radius: 12px;
+  background: #edf4ed;
+  cursor: pointer;
+}
+
+.ticket-cover-picker img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+}
+
+.ticket-cover-picker img.has-image {
+  opacity: 1;
+}
+
+.ticket-cover-picker span {
+  position: relative;
+  z-index: 1;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.9);
+  color: var(--sage-deep);
+  font-size: 13px;
+}
+
 .ticket-save-feedback {
   position: fixed;
   z-index: 99999;
@@ -42,4 +80,197 @@
 .ticket-save-feedback.show {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+.manager-main-tabs {
+  gap: 10px;
+}
+
+.manager-main-tabs button {
+  flex: 1 1 0;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  font-size: 16px;
+}
+
+.manager-main-tabs button span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.manager-main-tabs button.on span {
+  color: #fff;
+}
+
+.order-filters {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.order-filters button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 7px;
+  background: #fff;
+  color: var(--ink);
+  font: 800 13px inherit;
+}
+
+.order-filters button.on {
+  background: var(--sage);
+  color: #fff;
+  border-color: var(--sage);
+}
+
+.order-card-button {
+  width: 100%;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.order-card-button .event-meta {
+  margin-bottom: 0;
+}
+
+.pill.is-redeemed {
+  background: #e4eee5;
+  color: #315a40;
+}
+
+.order-detail h2 {
+  margin: 0 0 5px;
+}
+
+.order-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px 10px;
+  padding: 16px 0;
+  font-size: 14px;
+}
+
+.detail-grid span {
+  color: var(--muted);
+}
+
+.detail-grid b {
+  overflow-wrap: anywhere;
+}
+
+.order-ticket-list {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.order-ticket-list h3 {
+  margin: 0 0 7px;
+  font-size: 16px;
+}
+
+.order-ticket-list article {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+
+.order-ticket-list article p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.venue-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.venue-preview-heading span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.section-picker {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 1px 0 9px;
+}
+
+.section-picker button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--ink);
+  font: 800 12px inherit;
+}
+
+.section-picker button i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--section-picker-color);
+}
+
+.section-picker button.on {
+  border-color: var(--section-picker-color);
+  box-shadow: inset 0 0 0 1px var(--section-picker-color);
+}
+
+.venue-preview .seat-section {
+  padding: 13px 0;
+}
+
+.venue-preview .seat-section.is-editing {
+  border: 1px solid var(--seat-section-color);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 8px -2px;
+  background: color-mix(in srgb, var(--seat-section-color) 7%, #fff);
+}
+
+.venue-preview .seat-section.is-readonly {
+  opacity: .76;
+}
+
+.venue-preview .seat-section small {
+  margin-left: 5px;
+  color: var(--sage-deep);
+  font-size: 11px;
+}
+
+.editor-actions {
+  margin-top: 14px;
+}
+
+.editor-mode-note {
+  margin-bottom: 10px;
 }

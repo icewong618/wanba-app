@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.591';
+const APP_VERSION = '5.592';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3977,7 +3977,12 @@ function openShippingCenter(){
 function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.365&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantBookingUrl(m){ return `https://escoopcity.com/booking/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&booking_v=5.580&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantEventsUrl(m){ return `https://escoopcity.com/events/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&events_v=5.581&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
-function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.591&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.592&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function openTicketEventFromPost(merchantSlug, eventId){
+  if(!merchantSlug || !eventId){ showToast('该活动暂未完成票务配置'); return; }
+  const url = `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSlug)}&event=${encodeURIComponent(eventId)}&tickets_v=5.592&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+  openMerchantModule(url);
+}
 async function openMerchantBookingPage(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(merchantUserId);
@@ -4042,7 +4047,7 @@ async function openMerchantTicketsManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.591&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.592&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开票务管理失败:', error.message); showToast('票务管理暂时无法打开，请稍后再试'); }
@@ -10325,7 +10330,18 @@ function renderPostModal(){
   const mediaTools = '';
 
   const activityPeriod = activityPeriodLabel(p);
-  const eventBlock = isSignupEvent(p.event) ? `
+  const ticketEventBlock = p.event?.ticketing && p.event?.ticket_event_id ? `
+    <div class="event-box ticket-event-post-box">
+      <div class="row">
+        <span class="label">${uiIcon('ticket',14)} 票务活动</span>
+        <span class="event-nums">${activityPeriod ? escHtml(activityPeriod) : '活动时间以票务页为准'}</span>
+      </div>
+      <div class="event-foot">
+        <span class="event-nums">选择票种或座位后即可购票</span>
+        <button class="btn-rsvp" onclick="openTicketEventFromPost(${JSON.stringify(String(p.event.merchant_slug || ''))},${JSON.stringify(String(p.event.ticket_event_id || ''))})">购票 / 选座</button>
+      </div>
+    </div>` : '';
+  const eventBlock = ticketEventBlock || (isSignupEvent(p.event) ? `
     <div class="event-box">
       <div class="row">
         <span class="label">${uiIcon('calendar',14)} 活动报名</span>
@@ -10336,7 +10352,7 @@ function renderPostModal(){
         <span class="event-nums">${p.event.registered} / ${p.event.capacity} 人已报名</span>
         <button class="btn-rsvp ${p.event.userJoined?'done':''}" onclick="rsvp()">${p.event.userJoined?'✓ 已报名':'我要报名'}</button>
       </div>
-    </div>` : (activityPeriod ? `<div class="event-box" style="padding:12px 14px;"><div class="row" style="margin:0;"><span class="label">${uiIcon('calendar',14)} 活动时间</span><span class="event-nums">${escHtml(activityPeriod)}</span></div></div>` : '');
+    </div>` : (activityPeriod ? `<div class="event-box" style="padding:12px 14px;"><div class="row" style="margin:0;"><span class="label">${uiIcon('calendar',14)} 活动时间</span><span class="event-nums">${escHtml(activityPeriod)}</span></div></div>` : ''));
 
   const commentThreads = buildCommentThreads(p.comments || []);
   const commentsHtml = commentThreads.map(t => renderCommentThread(t)).join('') || `<div style="font-size:13px;color:var(--ink-faint);padding:6px 0 12px;">还没有评论,来说第一句吧</div>`;
