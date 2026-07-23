@@ -199,6 +199,7 @@ const QUICKLINKS = [
   {key:'本月活动', icon:'calendar'},
   {key:'本周末活动', icon:'calendar'},
   {key:'视频', icon:'video', action:'youtube'},
+  {key:'零工家政', icon:'user', action:'services'},
 ];
 const AVATAR_COLORS = ['#5F8567','#C2603B','#4C87A6','#C2416B','#8A6FB0','#B08B3C'];
 function avatarColor(name){
@@ -307,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.584';
+const APP_VERSION = '5.585';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7563,7 +7564,7 @@ function orderedFeedPosts(list){
 function renderQuicklinks(){
   const row = document.getElementById('quickRow');
   row.innerHTML = QUICKLINKS.map(q => `
-    <button class="quick-link ${currentTag===q.key?'active':''}" onclick="${q.action==='youtube' ? 'openYoutubeHub()' : `setTagFilter('${q.key}')`}">
+    <button class="quick-link ${currentTag===q.key?'active':''}" onclick="${q.action==='youtube' ? 'openYoutubeHub()' : q.action==='services' ? 'openServicesHub()' : `setTagFilter('${q.key}')`}">
       <span class="ic">${uiIcon(q.icon, 14)}</span>${q.key}
     </button>
   `).join('');
@@ -7713,6 +7714,9 @@ function openYoutubeHub(){
       if(preferred) youtubeHubPlay(preferred.youtube, preferred.title || 'YouTube 视频');
     }
   });
+}
+function openServicesHub(){
+  openInternalModule('/services/', '5.585');
 }
 function closeYoutubeHub(){
   const overlay = document.getElementById('youtubeHubOverlay');
