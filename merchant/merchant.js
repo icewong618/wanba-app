@@ -120,7 +120,7 @@
   }
   function cartView() {
     const lines = cart.length ? cart.map(line => `<div class="cart-line"><div>${line.image ? `<img src="${esc(line.image)}" alt="">` : ''}</div><div class="cart-copy"><b>${esc(line.name)}</b><small>${moneyLabel(line.price)}</small><div class="quantity small"><button onclick="MerchantSite.changeCart('${esc(line.id)}',-1)">−</button><b>${Number(line.quantity)}</b><button onclick="MerchantSite.changeCart('${esc(line.id)}',1)">＋</button></div></div><strong>${moneyLabel(Number(line.price) * Number(line.quantity))}</strong></div>`).join('') : '<div class="empty compact">购物车还是空的。</div>';
-    document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>购物车</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div>${lines}${cart.length ? `<div class="cart-total"><span>商品合计</span><b>${moneyLabel(cartTotal())}</b></div><button class="buy-main" onclick="MerchantSite.pickup()">线下自取</button><p class="buy-note">线下自取会通过乐生活私信发送订单咨询；商家确认库存和自取时间后回复您。</p>` : ''}`;
+    document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>购物车</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div>${lines}${cart.length ? `<div class="cart-total"><span>商品合计</span><b>${moneyLabel(cartTotal())}</b></div><button class="buy-main" onclick="MerchantSite.pickup()">提交自取订单</button><p class="buy-note">订单提交后，商家会确认库存并安排自取时间；您可在“我的 - Purchase”查看进度。</p>` : ''}`;
     document.querySelector('#productModal').classList.add('open');
   }
   function pickup() {
@@ -131,7 +131,7 @@
       return;
     }
     const defaultName = session.user.user_metadata?.name || session.user.email?.split('@')[0] || '';
-    document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>线下自取</h2><button class="sheet-close" onclick="MerchantSite.cart()">‹</button></div><p class="product-detail-copy">确认后，商家会在乐生活私信回复库存与自取时间。</p><label class="form-label">联系人</label><input id="pickupName" class="form-input" value="${esc(defaultName)}" maxlength="40" placeholder="填写联系人姓名"><label class="form-label">联系电话</label><input id="pickupPhone" class="form-input" inputmode="tel" maxlength="30" placeholder="填写联系电话"><label class="form-label">备注（可选）</label><textarea id="pickupNote" class="form-input textarea" maxlength="180" placeholder="例如：希望今天傍晚自取"></textarea><div class="cart-total"><span>商品合计</span><b>${moneyLabel(cartTotal())}</b></div><button class="buy-main" onclick="MerchantSite.submitPickup()">发送自取咨询</button>`;
+    document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>线下自取</h2><button class="sheet-close" onclick="MerchantSite.cart()">‹</button></div><p class="product-detail-copy">确认后，商家会安排库存与自取时间，并通过乐生活消息通知您。</p><label class="form-label">联系人</label><input id="pickupName" class="form-input" value="${esc(defaultName)}" maxlength="40" placeholder="填写联系人姓名"><label class="form-label">联系电话</label><input id="pickupPhone" class="form-input" inputmode="tel" maxlength="30" placeholder="填写联系电话"><label class="form-label">备注（可选）</label><textarea id="pickupNote" class="form-input textarea" maxlength="180" placeholder="例如：希望今天傍晚自取"></textarea><div class="cart-total"><span>商品合计</span><b>${moneyLabel(cartTotal())}</b></div><button class="buy-main" onclick="MerchantSite.submitPickup()">确认提交订单</button>`;
   }
   async function submitPickup() {
     const session = getSession();
@@ -140,18 +140,17 @@
     const note = document.getElementById('pickupNote')?.value.trim();
     if (!name || !phone) { alert('请填写联系人和联系电话。'); return; }
     if (!(session?.access_token && session?.user?.id)) { pickup(); return; }
-    const lines = cart.map(line => `• ${line.name} ×${line.quantity}  ${moneyLabel(Number(line.price) * Number(line.quantity))}`).join('\n');
-    const text = `【线下自取订单】\n${lines}\n\n商品合计：${moneyLabel(cartTotal())}\n联系人：${name}\n电话：${phone}${note ? `\n备注：${note}` : ''}\n\n请确认库存和可自取时间后回复我。`;
     const button = document.querySelector('#productSheet .buy-main');
     if (button) { button.disabled = true; button.textContent = '正在发送…'; }
     try {
-      const response = await authRequest('/rest/v1/messages', { method:'POST', headers:{ 'Content-Type':'application/json', Prefer:'return=representation' }, body:JSON.stringify({ from_id:session.user.id, from_name:name, to_id:merchant.user_id, text }) });
-      if (!response.ok) throw new Error(`发送失败（${response.status}）`);
+      const response = await authRequest('/rest/v1/rpc/merchant_retail_order_create', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ p_merchant_user_id:merchant.user_id, p_items:cart.map(line => ({ product_id:String(line.id), quantity:Math.max(1, Number(line.quantity || 1)) })), p_customer_name:name, p_customer_phone:phone, p_customer_note:note || null }) });
+      if (!response.ok) throw new Error(`订单提交失败（${response.status}）`);
+      const order = await response.json();
       cart = []; saveCart();
-      document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>已发送给商家</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div><div class="success">商家会在乐生活私信回复您。您也可以在“消息”中查看后续回复。</div><button class="buy-main" onclick="MerchantSite.close();MerchantSite.refresh()">完成</button>`;
+      document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>订单已提交</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div><div class="success">订单号：${esc(order?.order_code || '')}<br>商家会确认库存并安排自取时间。您可在“我的 - Purchase”查看进度。</div><button class="buy-main" onclick="MerchantSite.close();MerchantSite.refresh()">完成</button>`;
     } catch (error) {
-      if (button) { button.disabled = false; button.textContent = '重新发送自取咨询'; }
-      alert(`发送失败，请稍后重试。${error.message || ''}`);
+      if (button) { button.disabled = false; button.textContent = '重新提交订单'; }
+      alert(`订单提交失败，请稍后重试。${error.message || ''}`);
     }
   }
 

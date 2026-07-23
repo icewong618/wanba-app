@@ -290,7 +290,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.540';
+const APP_VERSION = '5.550';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3959,6 +3959,20 @@ async function openMerchantAutoPage(merchantUserId, tab='buy'){
 function merchantAutoCanManage(merchantUserId){
   return String(merchantUserId || '') === String(activeMerchantWorkspaceId() || '') && (isMerchantWorkspaceOwner() || merchantWorkspaceHasPermission('order_manage'));
 }
+function merchantRetailCanManage(merchantUserId){
+  return String(merchantUserId || '') === String(activeMerchantWorkspaceId() || '') && (isMerchantWorkspaceOwner() || merchantWorkspaceHasPermission('order_manage'));
+}
+async function openMerchantRetailManager(merchantUserId){
+  const id = merchantUserId || activeMerchantWorkspaceId();
+  if(!id || !merchantRetailCanManage(id)){ showToast('你没有这家商家的零售订单管理权限'); return; }
+  try {
+    const merchant = await getMerchantOrderMerchant(id);
+    if(!merchant) throw new Error('merchant_not_found');
+    const url = `https://escoopcity.com/retail/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&retail_v=5.550&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
+    else window.location.href = url;
+  } catch(error){ console.warn('打开零售订单管理失败:', error.message); showToast('零售订单管理暂时无法打开，请稍后再试'); }
+}
 async function openMerchantAutoManager(merchantUserId){
   const id = merchantUserId || activeMerchantWorkspaceId();
   if(!id || !merchantAutoCanManage(id)){ showToast('你没有这家商家的二手车管理权限'); return; }
@@ -4276,6 +4290,7 @@ function merchantContentHtml(m, opts){
   const tableOrderEnabled = merchantFeatures.includes('table_order');
   const rentalEnabled = merchantFeatures.includes('rental');
   const autoSalesEnabled = merchantFeatures.includes('auto_sales');
+  const retailEnabled = String(m.category || '').includes('零售') || String(m.subcategory || '').includes('零售');
   const sectionBody = section === 'store'
     ? merchantStoreHtml(m, isOwnerPage)
     : section === 'coupons'
@@ -4336,6 +4351,7 @@ function merchantContentHtml(m, opts){
       ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 点餐服务</b><p>扫码点餐可选择餐桌；外卖点单可选择自提或送餐上门；扫码排队可提前点菜。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 点餐订单</button><button onclick="openMerchantTakeoutManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖订单</button><button onclick="openMerchantQueueManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>` : `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderEntry('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 5px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 扫码点餐</button><button onclick="openMerchantTakeoutOrder('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖点单</button><button onclick="openMerchantQueuePage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>`}</div>` : ''}
       ${rentalEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('car',14)} 租车预约</b><p>按日或小时预约，商家确认后安排取车；押金和付款状态由商家统一管理。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantRentalManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('settings',14)} 车辆与预约</button><button onclick="openMerchantRentalPage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 查看预约页</button></div>` : `<button onclick="openMerchantRentalPage('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('car',14)} 查看车辆并预约</button>`}</div>` : ''}
       ${autoSalesEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('car',14)} 二手车买卖</b><div style="display:grid;grid-template-columns:repeat(${isOwnerPage ? 3 : 2},minmax(0,1fr));gap:8px;margin-top:10px;">${isOwnerPage ? `<button onclick="openMerchantAutoManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('settings',14)} 管理</button>` : ''}<button onclick="openMerchantAutoPage('${uidSafe}','buy')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 买车</button><button onclick="openMerchantAutoPage('${uidSafe}','sell')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 卖车</button></div></div>` : ''}
+      ${retailEnabled && isOwnerPage ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 零售订单</b><p>处理顾客自取订单，确认库存、安排自取并完成交付。</p><button onclick="openMerchantRetailManager('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('bag',14)} 管理零售订单</button></div>` : ''}
       ${isOwnerPage && merchantFeatures.includes('shipping') ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 物流发货</b><p>录入商品包装码与自购物流运单，并查看乐生活面单额度和邮资预检。</p><button onclick="openShippingCenter()" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('bag',14)} 进入物流中心</button></div>` : ''}
       ${isOwnerPage ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('settings',14)} 商家管理后台</b><p>统一查看经营概览，并进入点餐、会员、优惠券、内容、团队和已开通的业务功能。</p><button onclick="openMerchantManagementCenter('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage-dark);color:#fff;font:800 13px inherit;">${uiIcon('settings',14)} 进入商家管理后台</button></div>` : ''}
       <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
@@ -14468,11 +14484,13 @@ function merchantOrderCardHtml(order,items){
 /* ---------- v5.384：统一 Purchase（餐饮账单 + 租车预约，后续模块可继续注册） ---------- */
 window._merchantOrderHistoryBills = [];
 window._merchantOrderHistoryRentals = [];
+window._merchantOrderHistoryRetail = [];
 window._purchaseHistoryRecords = [];
 window._merchantOrderHistoryDetailId = null;
 function merchantBillPaymentText(method){ return ({cash:'现金',card:'刷卡',online:'在线支付'})[method] || '支付'; }
 function purchaseRentalPaymentText(status){ return ({paid:'已付款',refunded:'已退款',partial_refund:'部分退款',waived:'免单',pending:'待付款'})[status] || status || '待付款'; }
 function purchaseRentalStatusText(status){ return ({pending:'等待商家确认',confirmed:'已确认',active:'租用中',returned:'已归还',overdue:'已逾期',cancelled:'已取消',rejected:'已拒绝'})[status] || status || '预约中'; }
+function purchaseRetailStatusText(status){ return ({pending:'待商家确认',confirmed:'已确认',preparing:'商家备货中',ready_for_pickup:'可到店自取',completed:'已完成',cancelled:'已取消'})[status] || status || '处理中'; }
 function closeMerchantOrderHistory(){
   if(window._merchantOrderHistoryDetailId != null){
     window._merchantOrderHistoryDetailId = null;
@@ -14490,6 +14508,11 @@ function renderMerchantOrderHistoryList(){
       const booking=record.data,merchant=booking.merchant||window._merchantIdentityCache[booking.merchant_user_id]||{},vehicle=booking.vehicle||{};
       return `<button onclick="openPurchaseRentalDetail('${String(booking.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div style="min-width:0;"><b>${escHtml(merchant.business_name||'乐生活租车')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">租车预约 · ${new Date(booking.created_at).toLocaleString('zh-CN')} · ${escHtml(purchaseRentalPaymentText(booking.payment_status))}</span></div><b style="color:var(--berry);">${merchantOrderMoney(booking.total_amount)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">${escHtml(vehicle.name||'租赁车辆')} · ${escHtml(booking.booking_code||'')}<span style="float:right;color:var(--sage-dark);font-weight:900;">${escHtml(purchaseRentalStatusText(booking.status))} ›</span></div></button>`;
     }
+    if(record.kind==='retail'){
+      const order=record.data,merchant=window._merchantIdentityCache[order.merchant_user_id]||{};
+      const names=(Array.isArray(order.items)?order.items:[]).slice(0,2).map(item=>`${item.name||'商品'} ×${Number(item.quantity||0)}`).join('、');
+      return `<button onclick="openPurchaseRetailDetail('${String(order.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div style="min-width:0;"><b>${escHtml(merchant.business_name||'乐生活商店')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">自取订单 · ${new Date(order.created_at).toLocaleString('zh-CN')} · ${escHtml(order.order_code||'')}</span></div><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">${escHtml(names||'商品明细')}<span style="float:right;color:var(--sage-dark);font-weight:900;">${escHtml(purchaseRetailStatusText(order.status))} ›</span></div></button>`;
+    }
     const bill=record.data,merchant=window._merchantIdentityCache[bill.merchant_user_id]||{};
     return `<button onclick="openMerchantOrderBillDetail('${String(bill.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div><b>${escHtml(merchant.business_name||'乐生活商家')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">餐饮消费 · ${new Date(bill.created_at).toLocaleString('zh-CN')} · ${merchantBillPaymentText(bill.payment_method)}</span></div><b style="color:var(--berry);">${merchantOrderMoney(bill.total_amount)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">菜品 ${merchantOrderMoney(bill.subtotal)}${Number(bill.discount_amount)?` · 优惠 -${merchantOrderMoney(bill.discount_amount)}`:''}${Number(bill.tip_amount)?` · 小费 ${merchantOrderMoney(bill.tip_amount)}`:''}<span style="float:right;color:var(--sage-dark);font-weight:900;">查看明细 ›</span></div></button>`;
   }).join(''):'<div class="deals-empty-panel">还没有消费记录。</div>';
@@ -14500,22 +14523,25 @@ async function openMerchantOrderHistory(){
   if(!sheet||!body)return;
   sheet.classList.add('open');body.innerHTML='<div class="deals-empty-panel">正在读取消费记录...</div>';
   try{
-    const [billResult,rentalResult]=await Promise.allSettled([
+    const [billResult,rentalResult,retailResult]=await Promise.allSettled([
       restaurantDataApi.listBills({userId:session.user.id,limit:200}),
-      rentalApi.customerBookings()
+      rentalApi.customerBookings(),
+      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_retail_orders?customer_user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=updated_at.desc&limit=200`,{method:'GET'}).then(async response=>{if(!response.ok)throw new Error(await response.text());return response.json();})
     ]);
     if(billResult.status!=='fulfilled')throw new Error(billResult.reason?.message);
     const bills=billResult.value;
     let rentalBookings=[];
     if(rentalResult.status==='fulfilled') rentalBookings=Array.isArray(rentalResult.value)?rentalResult.value:[];
-    const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id)).filter(Boolean))];
+    let retailOrders=[];
+    if(retailResult.status==='fulfilled') retailOrders=Array.isArray(retailResult.value)?retailResult.value:[];
+    const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id),retailOrders.map(row=>row.merchant_user_id)).filter(Boolean))];
     if(merchantIds.length){
       if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
       (await merchantPublicApi.listByUserIds({userIds:merchantIds,select:'user_id,business_name,logo'})).forEach(row=>setMerchantIdentityCache(row.user_id,row));
     }
     rentalBookings.forEach(row=>{if(row.merchant?.user_id)setMerchantIdentityCache(row.merchant.user_id,row.merchant);});
-    window._merchantOrderHistoryBills=bills;window._merchantOrderHistoryRentals=rentalBookings;
-    window._purchaseHistoryRecords=[...bills.map(data=>({kind:'restaurant',data,created_at:data.created_at})),...rentalBookings.map(data=>({kind:'rental',data,created_at:data.created_at}))].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+    window._merchantOrderHistoryBills=bills;window._merchantOrderHistoryRentals=rentalBookings;window._merchantOrderHistoryRetail=retailOrders;
+    window._purchaseHistoryRecords=[...bills.map(data=>({kind:'restaurant',data,created_at:data.created_at})),...rentalBookings.map(data=>({kind:'rental',data,created_at:data.created_at})),...retailOrders.map(data=>({kind:'retail',data,created_at:data.created_at}))].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
     window._merchantOrderHistoryDetailId=null;renderMerchantOrderHistoryList();
   }catch(error){console.warn('读取消费记录失败:',error.message);body.innerHTML='<div class="deals-empty-panel">消费记录暂时无法读取，请稍后重试。</div>';}
 }
@@ -14526,6 +14552,26 @@ function openPurchaseRentalDetail(bookingId){
   window._merchantOrderHistoryDetailId=`rental:${bookingId}`;
   const merchant=booking.merchant||window._merchantIdentityCache[booking.merchant_user_id]||{},vehicle=booking.vehicle||{},addons=Array.isArray(booking.rental_addons)?booking.rental_addons:[];
   body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回消费记录</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${escHtml(merchant.business_name||'乐生活租车')}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">租车预约 · ${new Date(booking.created_at).toLocaleString('zh-CN')} · ${escHtml(booking.booking_code||'')}</div><div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;"><div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(vehicle.name||'租赁车辆')}</span><b>${merchantOrderMoney(booking.base_amount)}</b></div>${addons.map(item=>`<div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(item.name||'附加服务')}</span><b>${merchantOrderMoney(item.amount??item.price)}</b></div>`).join('')}<div class="merchant-order-line" style="margin:8px 0;"><span>租期</span><span>${new Date(booking.starts_at).toLocaleString('zh-CN')} 至 ${new Date(booking.ends_at).toLocaleString('zh-CN')}</span></div></div><div style="margin-top:13px;padding-top:10px;border-top:1px solid var(--line);"><div class="merchant-order-line"><span>会员/优惠券减免</span><b style="color:var(--berry);">-${merchantOrderMoney(Number(booking.member_discount_amount||0)+Number(booking.coupon_discount_amount||0))}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>押金</span><b>${merchantOrderMoney(booking.deposit_amount)}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>支付状态</span><b>${escHtml(purchaseRentalPaymentText(booking.payment_status))}</b></div><div class="merchant-order-line" style="margin-top:11px;font-size:16px;"><b>预约总额</b><b style="color:var(--berry);">${merchantOrderMoney(booking.total_amount)}</b></div></div></section>`;
+}
+function openPurchaseRetailDetail(orderId){
+  const body=document.getElementById('merchantOrderHistoryBody');
+  const order=(window._merchantOrderHistoryRetail||[]).find(row=>String(row.id)===String(orderId));
+  if(!body||!order)return;
+  window._merchantOrderHistoryDetailId=`retail:${orderId}`;
+  const merchant=window._merchantIdentityCache[order.merchant_user_id]||{};
+  const items=Array.isArray(order.items)?order.items:[];
+  body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回 Purchase</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${escHtml(merchant.business_name||'乐生活商店')}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">自取订单 · ${new Date(order.created_at).toLocaleString('zh-CN')} · ${escHtml(order.order_code||'')}</div><div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;">${items.map(item=>`<div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(item.name||'商品')} × ${Number(item.quantity||0)}</span><b>${merchantOrderMoney(item.line_total??(Number(item.unit_price||0)*Number(item.quantity||0)))}</b></div>`).join('') || '<div style="font-size:12px;color:var(--ink-faint);">商品明细暂不可用</div>'}</div><div style="margin-top:13px;padding-top:10px;border-top:1px solid var(--line);"><div class="merchant-order-line"><span>订单状态</span><b>${escHtml(purchaseRetailStatusText(order.status))}</b></div>${order.pickup_at?`<div class="merchant-order-line" style="margin-top:8px;"><span>自取时间</span><b>${new Date(order.pickup_at).toLocaleString('zh-CN')}</b></div>`:''}${order.merchant_note?`<div style="margin-top:10px;font-size:13px;color:var(--ink-soft);">商家留言：${escHtml(order.merchant_note)}</div>`:''}<div class="merchant-order-line" style="margin-top:12px;font-size:16px;"><b>商品合计</b><b style="color:var(--berry);">${merchantOrderMoney(order.subtotal)}</b></div></div>${order.status==='pending'?`<button onclick="cancelPurchaseRetailOrder('${String(order.id).replace(/'/g,'')}')" style="width:100%;margin-top:16px;border:1px solid var(--berry);border-radius:10px;padding:11px;background:#fff;color:var(--berry);font:800 13px inherit;">取消订单</button>`:''}</section>`;
+}
+async function cancelPurchaseRetailOrder(orderId){
+  if(!confirm('确认取消这笔自取订单吗？'))return;
+  try{
+    const response=await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/merchant_retail_order_cancel`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_order_id:orderId})});
+    if(!response.ok)throw new Error(await response.text());
+    const updated=await response.json();
+    window._merchantOrderHistoryRetail=(window._merchantOrderHistoryRetail||[]).map(row=>String(row.id)===String(orderId)?updated:row);
+    window._purchaseHistoryRecords=(window._purchaseHistoryRecords||[]).map(record=>record.kind==='retail'&&String(record.data?.id)===String(orderId)?{...record,data:updated}:record);
+    openPurchaseRetailDetail(orderId);
+  }catch(error){console.warn('取消零售订单失败:',error.message);showToast('暂时无法取消订单，请稍后重试');}
 }
 async function openMerchantOrderBillDetail(billId){
   const body=document.getElementById('merchantOrderHistoryBody');
@@ -14608,4 +14654,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Retail Store Cart & Pickup Inquiry】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Retail Pickup Order Operations】`);

@@ -29,6 +29,7 @@
   const go = action => {
     if(!merchant) return;
     if(action === 'auto_sales') return location.assign(`/autos/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
+    if(action === 'retail') return location.assign(`/retail/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
     location.assign(`/?merchant_admin=${encodeURIComponent(action)}&merchant_id=${encodeURIComponent(merchant.user_id)}&from=merchant_manage`);
   };
   const count = async path => {
@@ -44,6 +45,7 @@
   };
   const isRental = () => merchant?.category === '住宿旅游' || (!merchant?.category && features().has('rental'));
   const isAutoSales = () => features().has('auto_sales');
+  const isRetail = () => String(merchant?.category || '').includes('零售') || String(merchant?.subcategory || '').includes('零售');
 
   async function load(){
     const slug = query.get('merchant');
@@ -72,8 +74,10 @@
       } else {
         requests.unshift(Promise.resolve(0));
       }
-      const [orders, members, posts, claims] = await Promise.all(requests);
-      render({orders, members, posts, claims});
+      if(isRetail()) requests.push(count(`/rest/v1/merchant_retail_orders?merchant_user_id=eq.${id}&status=not.in.(completed,cancelled)&select=id`));
+      else requests.push(Promise.resolve(0));
+      const [orders, members, posts, claims, retailOrders] = await Promise.all(requests);
+      render({orders, members, posts, claims, retailOrders});
     } catch(error) {
       app.innerHTML = `${top('商家管理后台')}<div class="empty">暂时无法读取后台。请确认当前账号拥有该商家的管理权限。</div>`;
     }
@@ -97,14 +101,18 @@
     const autoEntries = isAutoSales()
       ? entry('▱', '二手车管理', '车辆库存、试驾预约与卖车估价线索', 'auto_sales')
       : '';
-    const businessEntries = restaurantEntries || rentalEntries || autoEntries
-      ? `<div class="section-head"><b>行业功能</b><span>只显示适用于本店的功能</span></div><div class="grid">${restaurantEntries}${rentalEntries}${autoEntries}</div>`
+    const retailEntries = isRetail()
+      ? entry('▣', '零售订单', '确认自取、安排时间和完成交付', 'retail', data.retailOrders > 0)
+      : '';
+    const businessEntries = restaurantEntries || rentalEntries || autoEntries || retailEntries
+      ? `<div class="section-head"><b>行业功能</b><span>只显示适用于本店的功能</span></div><div class="grid">${restaurantEntries}${rentalEntries}${autoEntries}${retailEntries}</div>`
       : '';
 
     app.innerHTML = `${top('商家管理后台')}
       <section class="hero"><div class="eyebrow">乐生活商家</div><h1>${esc(merchant.business_name || '我的店铺')}</h1><p>${esc(merchant.address || '完成店铺资料后，顾客可以从地图和主页找到你。')}</p></section>
       <section class="stats">
         ${isRestaurant() ? `<div class="stat"><span>处理中订单</span><b>${data.orders}</b></div>` : ''}
+        ${isRetail() ? `<div class="stat"><span>待处理零售订单</span><b>${data.retailOrders}</b></div>` : ''}
         <div class="stat"><span>会员人数</span><b>${data.members}</b></div>
         <div class="stat"><span>已发布内容</span><b>${data.posts}</b></div>
         <div class="stat"><span>待核销优惠券</span><b>${data.claims}</b></div>

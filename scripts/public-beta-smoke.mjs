@@ -55,6 +55,10 @@ try {
   await check('messages module', '/messages/', result => {
     if(!/id=["']messagesApp["']/i.test(result.text)) throw new Error('messages module root missing');
   });
+  await check('retail order manager', '/retail/manage/', result => {
+    if(!/id=["']retailManageApp["']/i.test(result.text)) throw new Error('retail order manager root missing');
+    if(!/manage\.js\?v=5\.550/i.test(result.text)) throw new Error('retail order manager cache version is stale');
+  });
   await check('merchant share card', merchantPath, result => {
     if(!/<meta\s+property=["']og:title["']/i.test(result.text)) throw new Error('merchant Open Graph title missing');
     if(!/<meta\s+property=["']og:image["']/i.test(result.text)) throw new Error('merchant Open Graph image missing');

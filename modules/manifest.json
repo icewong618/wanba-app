@@ -1,5 +1,5 @@
 {
-  "version": "5.540",
+  "version": "5.550",
   "modules": [
     { "id": "community", "path": "/", "label": "社区主程序", "status": "active" },
     { "id": "deals", "path": "/deals/", "label": "今日省钱", "status": "active" },
@@ -12,6 +12,7 @@
     { "id": "restaurant-order", "path": "/restaurant/order/", "label": "扫码点餐与外卖", "status": "active" },
     { "id": "restaurant-queue", "path": "/restaurant/queue/", "label": "扫码排队", "status": "active" },
     { "id": "shipping", "path": "/shipping/", "label": "物流中心", "status": "active" },
+    { "id": "retail-manager", "path": "/retail/manage/", "label": "零售订单管理", "status": "active" },
     { "id": "restaurant-manager", "path": "/restaurant/manage/", "label": "餐饮商家管理", "status": "active" },
     { "id": "table-order-legacy", "path": "/order/", "label": "旧点餐入口", "status": "redirect" },
     { "id": "queue-legacy", "path": "/queue/", "label": "旧排队入口", "status": "redirect" }
