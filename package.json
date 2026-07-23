@@ -1,7 +1,7 @@
 {
   "name": "leshenghuo-web",
   "private": true,
-  "version": "5.588.0",
+  "version": "5.589.0",
   "scripts": {
     "migrate:media": "node scripts/migrate-base64-media.js",
     "check:release": "node scripts/release-sanity-check.mjs && node scripts/build-pages-site.mjs",

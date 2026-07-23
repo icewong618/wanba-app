@@ -2,7 +2,11 @@
   const routeInAppShell = (route, payload={}) => window.LeshenghuoModuleBridge?.route(route, payload) || false;
   const { esc, session, request } = window.LeshenghuoModuleRuntime;
   const app = document.getElementById('weekApp');
-  const state = { rows: [], filter: 'all' };
+  const state = { rows: [], filter: 'all', loading: null };
+  const cacheKey = 'leshenghuo_week_module_cache_v1';
+  const cacheTtl = 2 * 60 * 1000;
+  const readCache = () => { try { const value=JSON.parse(localStorage.getItem(cacheKey)||'null'); return value?.rows ? value : null; } catch(e) { return null; } };
+  const writeCache = () => { try { localStorage.setItem(cacheKey,JSON.stringify({at:Date.now(),rows:state.rows})); } catch(e) {} };
   const ymdInLa = date => {
     const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
     const read = type => parts.find(part => part.type === type)?.value || '';
@@ -49,17 +53,21 @@
     const range = weekRange(); const rows = filtered();
     app.innerHTML = `${top()}<section class="week-hero"><h1>本周活动</h1><p>活动笔记、报名活动与后续票务内容统一按时间进入本周。</p><span class="week-range">▣ ${formatYmd(range.start).slice(5).replace('-','/')} - ${formatYmd(range.end).slice(5).replace('-','/')} · 洛杉矶时间</span></section><div class="week-tabs"><button class="${state.filter==='all'?'active':''}" onclick="WeekEvents.filter('all')">全部</button><button class="${state.filter==='today'?'active':''}" onclick="WeekEvents.filter('today')">今天</button><button class="${state.filter==='weekend'?'active':''}" onclick="WeekEvents.filter('weekend')">本周末</button></div><div class="week-summary"><span>本周共 <b>${rows.length}</b> 个活动</span><span>按开始日期排序</span></div><section class="week-feed">${rows.length ? rows.map(card).join('') : '<div class="empty"><div class="empty-icon">▣</div><p>本周还没有活动<br>发布玩乐活动并填写开始、截止日期后，会自动显示在这里。</p></div>'}</section>`;
   };
-  const load = async () => {
-    app.innerHTML = `${top()}<div class="module-loading">正在读取本周活动...</div>`;
+  const load = async (force=false) => {
+    const cached=readCache();
+    if(cached?.rows?.length){ state.rows=cached.rows; render(); if(!force && Date.now()-Number(cached.at||0)<cacheTtl) return; }
+    if(state.loading) return state.loading;
+    if(!cached?.rows?.length) app.innerHTML = `${top()}<div class="module-loading">正在读取本周活动...</div>`;
+    state.loading=(async()=>{
     const select = 'id,title,content,excerpt,category,subcategory,author,image,images,event,tags,user_id,visibility,pinned,created_at,location';
     try {
-      const res = await request(`/rest/v1/posts?select=${select}&or=(visibility.eq.public,visibility.is.null)&order=created_at.desc,id.desc&limit=300`);
+      const res = await request(`/rest/v1/posts?select=${select}&or=(visibility.eq.public,visibility.is.null)&order=created_at.desc,id.desc&limit=160`);
       if(!res.ok) throw new Error(await res.text());
       const postRows = await res.json();
       // 票务、报名等独立活动以后写入 activity_calendar_items；表尚未部署时仍保持帖子活动可用。
       let calendarRows = [];
       try {
-        const calendarRes = await request('/rest/v1/activity_calendar_items?status=eq.published&select=id,source_type,source_id,source_url,title,summary,cover_image,start_date,end_date,all_day,location,capacity,registered,registration_enabled,created_at&order=start_date.asc&limit=300');
+        const calendarRes = await request('/rest/v1/activity_calendar_items?status=eq.published&select=id,source_type,source_id,source_url,title,summary,cover_image,start_date,end_date,all_day,location,capacity,registered,registration_enabled,created_at&order=start_date.asc&limit=160');
         if(calendarRes.ok){
           const sourceRows = await calendarRes.json();
           calendarRows = sourceRows.map(item => ({
@@ -80,15 +88,19 @@
         }
       } catch(e) { console.warn('独立活动读取跳过:', e.message); }
       state.rows = [...postRows, ...calendarRows];
+      writeCache();
       render();
     } catch(error) {
       console.warn('本周活动读取失败:', error.message);
-      app.innerHTML = `${top()}<div class="empty"><div class="empty-icon">!</div><p>暂时无法读取活动内容<br>请稍后刷新再试。</p></div>`;
+      if(state.rows.length) render();
+      else app.innerHTML = `${top()}<div class="empty"><div class="empty-icon">!</div><p>暂时无法读取活动内容<br>请稍后刷新再试。</p></div>`;
     }
+    })();
+    try { return await state.loading; } finally { state.loading=null; }
   };
   window.WeekEvents = {
     back: () => window.LeshenghuoModuleBridge?.back('/') || (history.length > 1 ? history.back() : location.assign('/')),
-    refresh: load,
+    refresh: () => load(true),
     filter: value => { state.filter = value; render(); },
     open: id => {
       const row = state.rows.find(item => String(item.id) === String(id));

@@ -2,7 +2,11 @@
   const routeInAppShell = (route, payload={}) => window.LeshenghuoModuleBridge?.route(route, payload) || false;
   const { esc, session, request } = window.LeshenghuoModuleRuntime;
   const app = document.getElementById('messagesApp');
-  const state = { me:null, posts:[], comments:[], likes:[], favorites:[], follows:[], messages:[], profiles:{} };
+  const state = { me:null, posts:[], comments:[], likes:[], favorites:[], follows:[], messages:[], profiles:{}, loading:null };
+  const cacheKey = () => `leshenghuo_messages_module_cache_v1_${state.me?.id || 'guest'}`;
+  const cacheTtl = 90 * 1000;
+  const readCache = () => { try { const value=JSON.parse(localStorage.getItem(cacheKey())||'null'); return value?.meId===state.me?.id ? value : null; } catch(e) { return null; } };
+  const writeCache = () => { try { localStorage.setItem(cacheKey(),JSON.stringify({at:Date.now(),meId:state.me?.id,posts:state.posts,comments:state.comments,likes:state.likes,favorites:state.favorites,follows:state.follows,messages:state.messages,profiles:state.profiles})); } catch(e) {} };
   const readKey = () => `leshenghuo_message_read_${state.me?.id || 'guest'}`;
   const readMap = () => { try { return JSON.parse(localStorage.getItem(readKey()) || '{}'); } catch(e) { return {}; } };
   const markRead = key => { const values=readMap(); values[key]=new Date().toISOString(); localStorage.setItem(readKey(),JSON.stringify(values)); };
@@ -49,27 +53,34 @@
     markRead('dm'); const rows=state.messages.filter(row=>row.from_id===otherId||row.to_id===otherId).sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at))); const p=profile(otherId,fallback||rows.find(row=>row.from_id===otherId)?.from_name); app.innerHTML=`${top()}<div class="detail-head"><button onclick="Messages.home()">‹</button>${avatar(otherId,p.name,30)}<b>${esc(p.name)}</b></div><section class="thread"><div id="threadList" class="thread-list">${rows.map(row=>`<div class="bubble ${row.from_id===state.me.id?'mine':''}">${esc(row.text||'')}</div>`).join('')||'<div class="empty">开始和对方聊天吧</div>'}</div><div class="thread-compose"><input id="threadInput" placeholder="回复 ${esc(p.name)}…" maxlength="500"><button onclick="Messages.send('${esc(otherId)}','${esc(p.name)}')">发送</button></div></section>`;document.getElementById('threadList')?.scrollTo(0,999999);
   };
   const loadProfiles = async ids => { const unique=[...new Set(ids.filter(Boolean))];if(!unique.length)return;const rows=await list(`/rest/v1/profiles?user_id=in.(${unique.join(',')})&select=user_id,name,avatar`);rows.forEach(row=>{state.profiles[row.user_id]=row;}); };
-  const load = async () => {
+  const load = async (force=false) => {
     const active=session(); state.me=active?.user||null;
     if(!state.me){app.innerHTML=`${top()}<section class="login-empty"><h2>登录后查看消息</h2><p>评论、关注、赞和收藏，以及私信都会在这里。</p><button onclick="location.assign('/?tab=profile')">去登录</button></section>`;return;}
-    app.innerHTML=`${top()}<div class="module-loading">正在读取消息...</div>`;
+    const cached=readCache();
+    if(cached){ Object.assign(state,cached); renderHome(); if(!force && Date.now()-Number(cached.at||0)<cacheTtl) return; }
+    if(state.loading) return state.loading;
+    if(!cached) app.innerHTML=`${top()}<div class="module-loading">正在读取消息...</div>`;
+    state.loading=(async()=>{
     const me=encodeURIComponent(state.me.id);
     const [posts,commentsRows,likes,favorites,follows,messages]=await Promise.all([
-      list(`/rest/v1/posts?user_id=eq.${me}&select=id,title&order=created_at.desc&limit=300`),
-      list('/rest/v1/comments?select=post_id,user_id,name,text,created_at,parent_id,reply_to_user_id,reply_to_name&order=created_at.desc&limit=500'),
-      list('/rest/v1/likes?select=post_id,user_id,name,created_at&order=created_at.desc&limit=500'),
-      list('/rest/v1/favorites?select=post_id,user_id,name,created_at&order=created_at.desc&limit=500'),
-      list(`/rest/v1/follows?or=(followee_id.eq.${me},follower_id.eq.${me})&select=*&order=created_at.desc&limit=500`),
-      list(`/rest/v1/messages?or=(to_id.eq.${me},from_id.eq.${me})&select=*&order=created_at.asc&limit=500`)
+      list(`/rest/v1/posts?user_id=eq.${me}&select=id,title&order=created_at.desc&limit=120`),
+      list('/rest/v1/comments?select=post_id,user_id,name,text,created_at,parent_id,reply_to_user_id,reply_to_name&order=created_at.desc&limit=180'),
+      list('/rest/v1/likes?select=post_id,user_id,name,created_at&order=created_at.desc&limit=180'),
+      list('/rest/v1/favorites?select=post_id,user_id,name,created_at&order=created_at.desc&limit=180'),
+      list(`/rest/v1/follows?or=(followee_id.eq.${me},follower_id.eq.${me})&select=*&order=created_at.desc&limit=180`),
+      list(`/rest/v1/messages?or=(to_id.eq.${me},from_id.eq.${me})&select=*&order=created_at.asc&limit=180`)
     ]);
     state.posts=posts;state.comments=commentsRows;state.likes=likes;state.favorites=favorites;state.follows=follows;state.messages=messages;
     const ids=[state.me.id,...commentsRows.map(row=>row.user_id),...likes.map(row=>row.user_id),...favorites.map(row=>row.user_id),...follows.map(row=>row.follower_id),...messages.flatMap(row=>[row.from_id,row.to_id])];
     await loadProfiles(ids);
+    writeCache();
     const params=new URLSearchParams(location.search);const to=params.get('to');if(to){renderThread(to,params.get('name')||'');}else renderHome();
+    })();
+    try { return await state.loading; } finally { state.loading=null; }
   };
   const follow = async id => { const current=state.follows.find(row=>row.follower_id===state.me.id&&row.followee_id===id);const active=!current?.active;try{let res;if(current){res=await request(`/rest/v1/follows?id=eq.${current.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({active})});const rows=res.ok?await res.json():[];if(rows[0])Object.assign(current,rows[0]);}else{res=await request('/rest/v1/follows',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({follower_id:state.me.id,follower_name:nick(),followee_id:id,active:true})});const rows=res.ok?await res.json():[];if(rows[0])state.follows.push(rows[0]);}if(!res.ok)throw new Error();renderCategory('fans');}catch(e){toast('关注操作失败，请稍后重试');}};
   const send = async (toId,toName) => {const input=document.getElementById('threadInput');const text=input?.value.trim();if(!text)return;try{const res=await request('/rest/v1/messages',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({from_id:state.me.id,from_name:nick(),to_id:toId,text})});if(!res.ok)throw new Error();const rows=await res.json();if(rows[0])state.messages.push(rows[0]);renderThread(toId,toName);}catch(e){toast('发送失败，请稍后重试');}};
   const toast = value => {document.querySelector('.toast')?.remove();const el=document.createElement('div');el.className='toast';el.textContent=value;document.body.appendChild(el);setTimeout(()=>el.remove(),2200);};
-  window.Messages={back:()=>window.LeshenghuoModuleBridge?.back('/') || (history.length>1?history.back():location.assign('/')),refresh:load,home:renderHome,category:renderCategory,thread:(id)=>renderThread(id),follow,send,openPost:id=>routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`),openUser:id=>routeInAppShell('user',{id}) || location.assign(`/?user=${encodeURIComponent(id)}`)};
+  window.Messages={back:()=>window.LeshenghuoModuleBridge?.back('/') || (history.length>1?history.back():location.assign('/')),refresh:()=>load(true),home:renderHome,category:renderCategory,thread:(id)=>renderThread(id),follow,send,openPost:id=>routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`),openUser:id=>routeInAppShell('user',{id}) || location.assign(`/?user=${encodeURIComponent(id)}`)};
   load();
 })();

@@ -12,14 +12,15 @@
         const homeTop = topHeader ? Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap : 138;
         root.style.setProperty('--home-fixed-top', `${homeTop}px`);
         const homeFeed = document.querySelector('#page-home .feed');
-        if(homeFeed && topHeader){
-          // Measure against the rendered fixed bar. This avoids an accumulating
-          // desktop/App offset and keeps the first notes close without being covered.
-          homeFeed.style.setProperty('margin-top', '0px', 'important');
+        const homePage = document.getElementById('page-home');
+        if(homeFeed && homePage && topHeader){
+          // Derive the feed offset from the page origin, rather than its current
+          // margin. Re-measuring the already shifted feed caused the top gap to
+          // grow after repeated App resume and orientation events.
           const headerBottom = topHeader.getBoundingClientRect().bottom;
-          const feedTop = homeFeed.getBoundingClientRect().top;
-          const safeGap = embedded ? 18 : 22;
-          const feedOffset = Math.max(0, Math.ceil(headerBottom + safeGap - feedTop));
+          const pageTop = homePage.getBoundingClientRect().top;
+          const safeGap = embedded ? 8 : 10;
+          const feedOffset = Math.max(0, Math.ceil(headerBottom + safeGap - pageTop));
           homeFeed.style.setProperty('margin-top', `${feedOffset}px`, 'important');
         }
         const weekHeader = document.querySelector('#page-week.active .page-header');

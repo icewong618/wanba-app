@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.588';
+const APP_VERSION = '5.589';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14139,6 +14139,50 @@ function ensureAdminPageAtRoot(){
   }
 }
 
+function menuGlyph(kind){
+  const glyphs={
+    user:'<circle cx="12" cy="8" r="3.5"></circle><path d="M4 21a8 8 0 0 1 16 0"></path>',
+    pen:'<path d="m4 20 4.2-1 9.7-9.7a2.2 2.2 0 0 0-3.1-3.1L5.1 15.9z"></path><path d="m13.5 7.5 3 3"></path>',
+    clock:'<circle cx="12" cy="12" r="8"></circle><path d="M12 7v5l3.2 2"></path>',
+    bag:'<path d="M5 8h14v12H5z"></path><path d="M8 8V6a4 4 0 0 1 8 0v2"></path>',
+    cart:'<path d="M3 4h2l2.2 11h10.6l2-8H6"></path><circle cx="10" cy="20" r="1"></circle><circle cx="17" cy="20" r="1"></circle>',
+    wallet:'<path d="M4 7h15v13H4z"></path><path d="M4 7V5h12"></path><path d="M15 13h4"></path>',
+    shield:'<path d="M12 3 20 6v5c0 5-3.4 8-8 10-4.6-2-8-5-8-10V6z"></path>',
+    scan:'<path d="M4 9V5h4M16 5h4v4M20 15v4h-4M8 19H4v-4"></path>',
+    help:'<circle cx="12" cy="12" r="8"></circle><path d="M9.5 9a2.6 2.6 0 1 1 4.2 2.1c-1.1.8-1.7 1.3-1.7 2.9"></path><path d="M12 17h.01"></path>',
+    settings:'<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.1 2.1-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-3v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L6.6 17l.1-.1A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.5-1H5.3v-3h.2A1.7 1.7 0 0 0 7 10a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.1-2.1.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h3v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.1 2.1-.1.1A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.5 1h.2v3h-.2a1.7 1.7 0 0 0-1.5 1z"></path>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${glyphs[kind]||glyphs.settings}</svg>`;
+}
+function ensureHomeMenu(){
+  let overlay=document.getElementById('homeMenuOverlay');
+  if(overlay) return overlay;
+  const row=(label,icon,action,detail='')=>`<button class="home-menu-action" type="button" onclick="handleHomeMenuAction('${action}')">${menuGlyph(icon)}<span>${label}</span>${detail?`<small>${detail}</small>`:''}</button>`;
+  const setting=(label,icon,action='comingSoon')=>`<button class="home-settings-row" type="button" onclick="handleHomeMenuAction('${action}')">${menuGlyph(icon)}<span>${label}</span><i class="home-settings-chevron">›</i></button>`;
+  overlay=document.createElement('div');
+  overlay.id='homeMenuOverlay'; overlay.className='home-menu-overlay';
+  overlay.innerHTML=`<aside class="home-menu-panel" role="dialog" aria-modal="true" aria-label="主页菜单" onclick="event.stopPropagation()"><div class="home-menu-head"><b>乐生活</b><button class="home-menu-close" type="button" onclick="closeHomeMenu()" aria-label="关闭">×</button></div><section class="home-menu-group">${row('添加好友','user','comingSoon')}${row('创作中心','pen','creator')}${row('我的草稿','pen','drafts')}</section><section class="home-menu-group">${row('浏览记录','clock','history')}${row('订单','bag','orders')}${row('购物车','cart','cart')}${row('钱包','wallet','wallet')}</section><section class="home-menu-group">${row('社区公约','shield','community')}</section><div class="home-menu-bottom"><button type="button" onclick="handleHomeMenuAction('scan')">${menuGlyph('scan')}<span>扫一扫</span></button><button type="button" onclick="handleHomeMenuAction('help')">${menuGlyph('help')}<span>帮助与客服</span></button><button type="button" onclick="openHomeSettings()">${menuGlyph('settings')}<span>设置</span></button></div></aside><section class="home-settings-panel" role="dialog" aria-modal="true" aria-label="设置"><header class="home-settings-header"><button class="home-settings-back" type="button" onclick="closeHomeSettings()" aria-label="返回">‹</button><h2>设置</h2><span></span></header><div class="home-settings-card">${setting('账号与安全','user')}${setting('通用设置','settings')}${setting('通知设置','help')}${setting('多语言和翻译','pen','language')}${setting('隐私设置','shield')}</div><div class="home-settings-card">${setting('存储空间','bag','cache')}${setting('内容偏好调节','pen','preferences')}${setting('收货地址','user')}${setting('添加小组件','bag')}${setting('未成年人模式','shield')}</div><div class="home-settings-card">${setting('新功能体验','pen')}</div><div class="home-settings-card">${setting('帮助与客服','help')}${setting('关于乐生活','help')}</div><div class="home-settings-card">${setting('切换账号','user','switchAccount')}</div></section>`;
+  overlay.addEventListener('click',()=>closeHomeMenu());
+  document.body.appendChild(overlay);
+  return overlay;
+}
+window.openHomeMenu=function(event){ event?.preventDefault?.(); event?.stopPropagation?.(); const overlay=ensureHomeMenu(); overlay.classList.remove('settings-open'); overlay.classList.add('open'); document.body.classList.add('home-menu-open'); };
+window.closeHomeMenu=function(){ const overlay=document.getElementById('homeMenuOverlay'); overlay?.classList.remove('open','settings-open'); document.body.classList.remove('home-menu-open'); };
+window.openHomeSettings=function(){ const overlay=ensureHomeMenu(); overlay.classList.add('settings-open'); };
+window.closeHomeSettings=function(){ document.getElementById('homeMenuOverlay')?.classList.remove('settings-open'); };
+window.handleHomeMenuAction=function(action){
+  if(action==='language'){ closeHomeMenu(); return window.LeshenghuoI18n?.openPicker?.(); }
+  if(action==='drafts'){ closeHomeMenu(); return window.openComposeDrafts?.(); }
+  if(action==='creator'){ closeHomeMenu(); return window.handlePublishClick?.(); }
+  if(action==='history'){ closeHomeMenu(); return window.switchTab?.('profile'); }
+  if(action==='switchAccount'){ closeHomeMenu(); return window.openLogin?.(); }
+  if(action==='preferences'){ closeHomeMenu(); return window.switchTab?.('home'); }
+  if(action==='cache') return showToast('缓存管理将在后续设置中开放');
+  if(action==='scan') return showToast('扫一扫将在后续版本开放');
+  if(action==='help') return showToast('帮助与客服正在准备中');
+  showToast('该功能正在逐步开放');
+};
+
 const appFixedLayout = window.LeshenghuoAppFixedLayout?.create({ isEmbedded:isEmbeddedAppEntry });
 function updateFixedTopLayout(){ return appFixedLayout?.update(); }
 appFixedLayout?.bind();
@@ -14181,9 +14225,9 @@ const appModuleRouter = window.LeshenghuoAppModuleRouter?.create({
   controls.close();
   if(detail.route === 'home') return switchTab('home');
   if(detail.route === 'profile') return switchTab('profile');
-  if(detail.route === 'week') return controls.open('/week/', '5.446');
-  if(detail.route === 'deals') return controls.open('/deals/', '5.446');
-  if(detail.route === 'message') return controls.open('/messages/', '5.446', detail.params || {});
+  if(detail.route === 'week') return controls.open('/week/', '5.589');
+  if(detail.route === 'deals') return controls.open('/deals/', '5.589');
+  if(detail.route === 'message') return controls.open('/messages/', '5.589', detail.params || {});
   if(detail.route === 'post'){
     switchTab('home');
     return setTimeout(() => openPost(detail.id), 80);
@@ -14198,6 +14242,17 @@ function closeInternalModule(){ return appModuleRouter?.close(); }
 function openInternalModule(path, moduleVersion, params={}){ return appModuleRouter?.open(path, moduleVersion, params); }
 window.closeInternalModule = closeInternalModule;
 
+let bottomNavActivatedAt=0;
+let bottomNavActivatedTab='';
+window.activateBottomTab=function(tab,event){
+  event?.preventDefault?.();
+  const now=Date.now();
+  if(tab===bottomNavActivatedTab && now-bottomNavActivatedAt<420) return;
+  bottomNavActivatedAt=now;
+  bottomNavActivatedTab=tab;
+  window.switchTab(tab);
+};
+
 // 修改 switchTab 函数以支持刷新和个人资料页面
 window.switchTab = function(tab){
   // The native App keeps standalone modules in an iframe above the main page.
@@ -14206,18 +14261,18 @@ window.switchTab = function(tab){
   if(tab === 'home' || tab === 'profile' || tab === 'admin') closeInternalModule();
   // 消息中心改由独立模块承载，避免通知与私信继续耦合在首页主程序中。
   if(tab === 'message'){
-    openInternalModule('/messages/', '5.446');
+    openInternalModule('/messages/', '5.589');
     return;
   }
   // 本周活动统一进入独立模块：日期筛选、活动笔记与后续票务/报名活动共用同一入口。
   if(tab === 'week'){
-    openInternalModule('/week/', '5.446');
+    openInternalModule('/week/', '5.589');
     return;
   }
   // 省钱页统一使用独立模块。它与主站同域，同一个 App WebView 内跳转，
   // 不使用 window.open，因此不会拉起外部浏览器。
   if(tab === 'deals'){
-    openInternalModule('/deals/', '5.446');
+    openInternalModule('/deals/', '5.589');
     return;
   }
   ensureAdminPageAtRoot();
@@ -14254,6 +14309,7 @@ window.switchTab = function(tab){
     const home = document.getElementById('page-home');
     if(home){ home.style.marginTop = '0'; home.style.paddingTop = ''; }
     if(feed){ feed.style.paddingTop = '0'; }
+    requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}));
   }
   updateFixedTopLayout();
   
@@ -14305,7 +14361,7 @@ document.addEventListener('touchend', event => {
   const tab = button.dataset.tab;
   if(!tab) return;
   event.preventDefault();
-  window.switchTab(tab);
+  window.activateBottomTab(tab,event);
 }, {passive:false});
 
 /* init */
