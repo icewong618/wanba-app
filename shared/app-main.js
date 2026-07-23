@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.592';
+const APP_VERSION = '5.594';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -619,7 +619,7 @@ function renderAuthMode(){
   if(links){
     links.innerHTML = reset
       ? '<button onclick="openAuth(\'login\')" style="color:var(--sage-dark);">返回登入</button>'
-      : '<button onclick="requestPasswordReset()" style="color:var(--berry);">忘记密码</button>';
+      : '<button onclick="requestPasswordReset()" style="color:var(--berry);">忘记密码</button><button onclick="resendVerificationFromAuth()" style="color:var(--sage-dark);">重新发送验证邮件</button>';
   }
   if(hint) hint.textContent = reset ? '请设置新的登录密码。' : '首次使用该邮箱会自动创建乐生活账号。';
 }
@@ -719,6 +719,25 @@ async function resendVerifyEmail(email){
   const {res} = await authApi.resendSignupVerification(email);
   return res.ok;
 }
+async function resendVerificationFromAuth(){
+  const email = document.getElementById('authEmail')?.value.trim().toLowerCase();
+  const msg = document.getElementById('authMsg');
+  if(!email || !email.includes('@')){ if(msg) msg.textContent = '请先输入注册邮箱。'; return; }
+  const gate = canSendVerify(email);
+  if(!gate.ok){
+    if(msg) msg.textContent = gate.reason === 'limit' ? '发送次数已达上限，请稍后再试。' : `请${gate.wait}秒后再试。`;
+    return;
+  }
+  if(msg){ msg.style.color = 'var(--ink-soft)'; msg.textContent = '正在发送验证邮件…'; }
+  try{
+    const ok = await resendVerifyEmail(email);
+    if(!ok) throw new Error('邮件服务暂时不可用');
+    pushVerifyLog(email);
+    if(msg){ msg.style.color = 'var(--sage-dark)'; msg.textContent = '验证邮件已发送。请只打开最新一封邮件中的链接。'; }
+  }catch(error){
+    if(msg){ msg.style.color = 'var(--berry)'; msg.textContent = `验证邮件发送失败：${error.message || '请稍后重试'}`; }
+  }
+}
 
 /* 认证邮件通过外部 SMTP 发送时可能需要数十秒。统一解析响应，避免网关返回纯文本时让界面永远停在“处理中”。 */
 async function authRequest(url, options, timeoutMs=45000){
@@ -802,16 +821,6 @@ async function submitAuth(){
     } catch(e){ msg.textContent = '密码更新失败，请重新申请重置链接。'; return; }
   }
 
-  const showVerifySent = (isFirst) => {
-    const gate = canSendVerify(email);
-    if(!gate.ok){
-      if(gate.reason === 'limit'){ msg.textContent = '发送次数已达上限（30分钟内最多5次），请稍后再试'; }
-      else { msg.textContent = `请${gate.wait}秒后再试（1分钟内只能发送一次验证邮件）`; }
-      return false;
-    }
-    return true;
-  };
-
   try {
     /* 先登录；仅当该邮箱不是现有账号时才自动创建账号。 */
     const {res, data} = await authRequest(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -834,17 +843,10 @@ async function submitAuth(){
 
     const em = (data.msg || data.error_description || data.message || '').toLowerCase();
 
-    /* 情况A：邮箱未验证 → 补发验证邮件（限频） */
+    /* 情况A：邮箱未验证。不得自动补发：每次补发都会使旧邮件链接失效。 */
     if(em.includes('email not confirmed')){
-      if(!showVerifySent()) return;
-      const ok = await resendVerifyEmail(email);
-      if(ok){
-        const n = pushVerifyLog(email);
-        msg.style.color = 'var(--sage-dark)';
-        msg.textContent = n === 1 ? '已发送验证：请查收验证邮件' : `已第${n}次发送验证：请查收验证邮件`;
-      } else {
-        msg.textContent = '验证邮件发送失败，请稍后再试';
-      }
+      msg.style.color = 'var(--sage-dark)';
+      msg.textContent = '该账号尚未完成邮箱验证。请打开最新确认邮件；未收到时可点下方“重新发送验证邮件”。';
       return;
     }
 
