@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const root = process.cwd();
 const output = path.join(root, '_site');
 const rootFiles = ['index.html', 'app.html', '404.html', 'version.json', 'CNAME', '.nojekyll'];
-const directories = ['assets', 'shared', 'i18n', 'deals', 'week', 'messages', 'restaurant', 'rental', 'autos', 'booking', 'merchant', 'shop', 'shipping', 'retail', 'inventory', 'order', 'vendor'];
+const directories = ['assets', 'shared', 'i18n', 'deals', 'week', 'messages', 'restaurant', 'rental', 'autos', 'booking', 'events', 'merchant', 'shop', 'shipping', 'retail', 'inventory', 'order', 'vendor'];
 
 const copy = source => {
   const sourcePath = path.join(root, source);
