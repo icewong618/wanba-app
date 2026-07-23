@@ -4,7 +4,7 @@
   const isDataImage = value => typeof value === 'string' && value.startsWith('data:image/');
   const mediaKind = kind => allowedKinds.includes(kind) ? kind : 'posts';
 
-  const create = ({ apiUrl, getAccessToken, refreshAccessToken } = {}) => {
+  const create = ({ apiUrl, supabaseUrl, supabaseKey, publicOrigin='https://media.escoopcity.com', getAccessToken, refreshAccessToken } = {}) => {
     const dataUrlToBlob = async dataUrl => {
       const source = await fetch(dataUrl);
       if(!source.ok) throw new Error('图片读取失败');
@@ -83,7 +83,38 @@
       return { originals, thumbnails };
     };
 
-    return { dataUrlToBlob, createThumbnailDataUrl, uploadBlob, uploadDataUrl, uploadPostAssets };
+    const mediaKeyFromUrl = value => {
+      const prefix = `${String(publicOrigin || '').replace(/\/$/, '')}/`;
+      return typeof value === 'string' && value.startsWith(prefix) ? value.slice(prefix.length) : '';
+    };
+
+    // The database first confirms that no public record still needs this file.
+    // A failed cleanup is intentionally silent: retained history is more important than reclaiming a file early.
+    const releaseUrl = async value => {
+      const key = mediaKeyFromUrl(value);
+      let token = getAccessToken?.();
+      if(!key || !token || !supabaseUrl || !supabaseKey) return false;
+      const releasable = async accessToken => fetch(`${supabaseUrl}/rest/v1/rpc/media_asset_is_releasable`, {
+        method:'POST',
+        headers:{ apikey:supabaseKey, Authorization:`Bearer ${accessToken}`, 'Content-Type':'application/json' },
+        body:JSON.stringify({ p_url:value })
+      });
+      let check = await releasable(token);
+      if(check.status === 401 && await refreshAccessToken?.()){
+        token = getAccessToken?.();
+        if(token) check = await releasable(token);
+      }
+      if(!check.ok || !(await check.json().catch(() => false))) return false;
+      const remove = accessToken => fetch(`${apiUrl}/upload?key=${encodeURIComponent(key)}`, { method:'DELETE', headers:{ Authorization:`Bearer ${accessToken}` } });
+      let response = await remove(token);
+      if(response.status === 401 && await refreshAccessToken?.()){
+        token = getAccessToken?.();
+        if(token) response = await remove(token);
+      }
+      return response.ok;
+    };
+
+    return { dataUrlToBlob, createThumbnailDataUrl, uploadBlob, uploadDataUrl, uploadPostAssets, mediaKeyFromUrl, releaseUrl };
   };
 
   window.LeshenghuoMediaUpload = { create, isDataImage, mediaKind };

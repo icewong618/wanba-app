@@ -290,7 +290,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.530';
+const APP_VERSION = '5.540';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -2055,6 +2055,7 @@ async function saveMerchantProductFromEditor(){
   if(!name){ showToast('请填写商品名称'); return; }
   const products = merchantProducts(currentMerchant).slice();
   const state = window._merchantItemEditor || {};
+  const previousImage = state.index != null && products[state.index] ? products[state.index].image || '' : '';
   let image = state.image || '';
   try {
     if(isDataImageUrl(image)){
@@ -2083,15 +2084,19 @@ async function saveMerchantProductFromEditor(){
   if(state.index != null && products[state.index]) products[state.index] = row;
   else products.unshift(row);
   const ok = await saveMerchantListField('products', products);
-  if(ok) closeMerchantProductEditor();
+  if(ok){
+    closeMerchantProductEditor();
+    if(previousImage && previousImage !== image) releaseMediaUrl(previousImage);
+  }
 }
 async function deleteMerchantProduct(index){
   if(!(session && session.user) || !currentMerchant){ showToast('请先登录商家账号'); return; }
   const products = merchantProducts(currentMerchant).slice();
   if(!products[index]) return;
   if(!confirm(`确定删除「${products[index].name || '这个商品'}」吗？`)) return;
+  const removedImage = products[index].image || '';
   products.splice(index, 1);
-  await saveMerchantListField('products', products);
+  if(await saveMerchantListField('products', products)) releaseMediaUrl(removedImage);
 }
 async function toggleMerchantProductActive(index){
   if(!(session && session.user) || !currentMerchant){ showToast('请先登录商家账号'); return; }
@@ -2823,6 +2828,7 @@ async function saveMerchantCouponFromEditor(){
   if(!title){ showToast('请填写优惠券标题'); return; }
   const coupons = merchantCoupons(currentMerchant).slice();
   const state = window._merchantItemEditor || {};
+  const previousImage = state.index != null && coupons[state.index] ? coupons[state.index].image || '' : '';
   const pricingScope=document.getElementById('merchantCouponRuleScope')?.value||'threshold';
   const pricingBenefit=document.getElementById('merchantCouponRuleBenefit')?.value||'fixed';
   const basePricingType=pricingScope==='whole'?(pricingBenefit==='percent'?'whole_percent':'whole_fixed'):(pricingBenefit==='percent'?'percent':pricingBenefit==='gift'?'gift':'fixed');
@@ -2863,15 +2869,19 @@ async function saveMerchantCouponFromEditor(){
   if(state.index != null && coupons[state.index]) coupons[state.index] = row;
   else coupons.unshift(row);
   const ok = await saveMerchantListField('coupons', coupons);
-  if(ok) closeMerchantProductEditor();
+  if(ok){
+    closeMerchantProductEditor();
+    if(previousImage && previousImage !== image) releaseMediaUrl(previousImage);
+  }
 }
 async function deleteMerchantCoupon(index){
   if(!(session && session.user) || !currentMerchant){ showToast('请先登录商家账号'); return; }
   const coupons = merchantCoupons(currentMerchant).slice();
   if(!coupons[index]) return;
   if(!confirm(`确定删除「${coupons[index].title || '这张优惠券'}」吗？`)) return;
+  const removedImage = coupons[index].image || '';
   coupons.splice(index, 1);
-  await saveMerchantListField('coupons', coupons);
+  if(await saveMerchantListField('coupons', coupons)) releaseMediaUrl(removedImage);
 }
 async function toggleMerchantCouponActive(index){
   if(!(session && session.user) || !currentMerchant){ showToast('请先登录商家账号'); return; }
@@ -13627,6 +13637,9 @@ const mediaCacheController = window.LeshenghuoMediaCache?.create({
 function isR2MediaUrl(value){ return mediaCacheController ? mediaCacheController.isMediaUrl(value) : typeof value === 'string' && value.startsWith(R2_MEDIA_PUBLIC_ORIGIN + '/'); }
 const mediaUploadController = window.LeshenghuoMediaUpload?.create({
   apiUrl: R2_MEDIA_API_URL,
+  supabaseUrl: SUPABASE_URL,
+  supabaseKey: SUPABASE_KEY,
+  publicOrigin: R2_MEDIA_PUBLIC_ORIGIN,
   getAccessToken: () => session?.access_token || null,
   refreshAccessToken: () => typeof refreshSession === 'function' ? refreshSession() : false
 });
@@ -13635,6 +13648,16 @@ async function createThumbnailDataUrl(dataUrl){ return mediaUploadController?.cr
 async function uploadMediaBlob(blob, kind){ return mediaUploadController?.uploadBlob(blob, kind); }
 async function uploadMediaDataUrl(value, kind){ return mediaUploadController?.uploadDataUrl(value, kind); }
 async function uploadPostMediaAssets(values, existingThumbnails=[]){ return mediaUploadController?.uploadPostAssets(values, existingThumbnails); }
+async function releaseMediaUrl(value){
+  try {
+    const removed = await mediaUploadController?.releaseUrl(value);
+    if(removed) console.info('已回收未引用的媒体文件');
+    return !!removed;
+  } catch(error){
+    console.warn('媒体回收跳过:', error?.message || error);
+    return false;
+  }
+}
 async function warmMediaCache(url){
   if(mediaCacheController) return mediaCacheController.warm(url);
 }
@@ -14585,4 +14608,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Regional Micro Sites】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Retail Store Cart & Pickup Inquiry】`);

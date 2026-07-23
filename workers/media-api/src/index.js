@@ -85,7 +85,10 @@ export default {
       const user = await authenticatedUser(request, env);
       const key = String(url.searchParams.get('key') || '');
       if (!user) return response({ error: 'Authentication required.' }, 401, request);
-      if (!key.includes(`/${user.id}/`)) return response({ error: 'You can only delete your own media.' }, 403, request);
+      const match = key.match(/^([a-z-]+)\/([0-9a-f-]{36})\/[^/]+\.(?:jpg|png|webp)$/i);
+      if (!match || !ALLOWED_KINDS.has(match[1]) || match[2].toLowerCase() !== String(user.id).toLowerCase()) {
+        return response({ error: 'You can only delete your own media.' }, 403, request);
+      }
       await env.MEDIA_BUCKET.delete(key);
       return response({ ok: true }, 200, request);
     }
