@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.596';
+const APP_VERSION = '5.597';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14314,17 +14314,60 @@ function openHomeCreatorCenter(){
   }
   openHomeFeature('创作中心', `<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('spark',26)}</div><h3>专业用户专属</h3><p>商家认证通过后，可使用 AI 发文、内容同步和店铺运营工具。</p><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openMerchantApplySheet()">申请成为商家</button></section>`);
 }
-function openHomeCart(){
+async function openHomeCart(){
   if(!homeFeatureRequireAuth()) return;
-  const state = typeof merchantOrderState === 'function' ? merchantOrderState() : null;
-  const merchant = state && state.merchant;
-  const lines = state && merchant ? merchantOrderCartRows() : [];
-  const total = lines.reduce((sum,row) => sum + merchantOrderPriceNumber(row.price) * Number(row.quantity || 0), 0);
-  openHomeFeature('购物车', lines.length ? `<section class="home-feature-card"><div class="home-cart-merchant"><b>${escHtml(merchant.business_name || '商家')}</b><small>${lines.length} 件未结算商品</small></div>${lines.map(row => `<div class="home-cart-line"><span>${escHtml(row.name || '商品')} × ${Number(row.quantity || 0)}</span><b>${merchantOrderMoney(merchantOrderPriceNumber(row.price) * Number(row.quantity || 0))}</b></div>`).join('')}<div class="home-cart-line home-cart-total"><b>合计</b><b>${merchantOrderMoney(total)}</b></div><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openMerchantPublicPage('${String(merchant.user_id || '').replace(/'/g,'')}')">回到商家继续结算</button></section>` : '<div class="home-feature-empty">购物车暂时为空。餐饮、零售等未完成下单的商品会按商家显示在这里。</div>');
+  openHomeFeature('购物车','<div class="home-feature-empty">正在读取未结算商品...</div>');
+  const groups=new Map();
+  try{
+    for(let i=0;i<localStorage.length;i+=1){
+      const key=localStorage.key(i)||'';if(!key.startsWith('scoop_merchant_cart_'))continue;
+      const merchantId=key.slice('scoop_merchant_cart_'.length);let lines=[];try{lines=JSON.parse(localStorage.getItem(key)||'[]');}catch(error){}if(!Array.isArray(lines)||!lines.length)continue;
+      groups.set(merchantId,{merchantId,lines:lines.filter(row=>row&&Number(row.quantity)>0),source:'retail'});
+    }
+    const state=typeof merchantOrderState==='function'?merchantOrderState():null;
+    const restaurantLines=state&&state.merchant?merchantOrderCartRows():[];
+    if(restaurantLines.length&&state.merchant?.user_id) groups.set(String(state.merchant.user_id),{merchantId:String(state.merchant.user_id),lines:restaurantLines,source:'restaurant',merchant:state.merchant});
+    const ids=[...groups.keys()].filter(Boolean);
+    if(ids.length){const response=await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${ids.map(encodeURIComponent).join(',')})&select=user_id,business_name,logo,slug`,{method:'GET'});if(response.ok){(await response.json()).forEach(row=>{const group=groups.get(String(row.user_id));if(group)group.merchant=Object.assign({},group.merchant||{},row);});}}
+    const rows=[...groups.values()].filter(group=>group.lines.length);
+    openHomeFeature('购物车',rows.length?rows.map(group=>{const total=group.lines.reduce((sum,row)=>sum+merchantOrderPriceNumber(row.price)*Number(row.quantity||0),0),merchant=group.merchant||{};return `<section class="home-feature-card"><div class="home-cart-merchant"><b>${escHtml(merchant.business_name||'商家')}</b><small>${group.source==='restaurant'?'餐饮点餐':'零售商品'} · ${group.lines.reduce((n,row)=>n+Number(row.quantity||0),0)} 件未结算</small></div>${group.lines.slice(0,8).map(row=>`<div class="home-cart-line"><span>${escHtml(row.name||'商品')} × ${Number(row.quantity||0)}</span><b>${merchantOrderMoney(merchantOrderPriceNumber(row.price)*Number(row.quantity||0))}</b></div>`).join('')}${group.lines.length>8?'<div class="home-feature-note">其余商品请回到商家继续查看。</div>':''}<div class="home-cart-line home-cart-total"><b>合计</b><b>${merchantOrderMoney(total)}</b></div><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openMerchantPublicPage('${String(group.merchantId).replace(/'/g,'')}')">回到商家结算</button></section>`;}).join(''):'<div class="home-feature-empty">购物车暂时为空。餐饮、零售等未完成下单的商品会按商家显示在这里。</div>');
+  }catch(error){console.warn('购物车读取失败:',error.message);openHomeFeature('购物车','<div class="home-feature-empty">购物车暂时无法读取，请稍后重试。</div>');}
 }
-function openHomeWallet(){
+async function homeWalletRequest(payload){
+  const response=await authedFetch(`${SUPABASE_URL}/functions/v1/stripe-wallet`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(data.error||'钱包服务暂时不可用');
+  return data;
+}
+function loadStripeJs(){
+  if(window.Stripe) return Promise.resolve(window.Stripe);
+  return new Promise((resolve,reject)=>{const old=document.getElementById('stripe-js-sdk');if(old){old.addEventListener('load',()=>resolve(window.Stripe),{once:true});old.addEventListener('error',reject,{once:true});return;}const script=document.createElement('script');script.id='stripe-js-sdk';script.src='https://js.stripe.com/v3/';script.onload=()=>resolve(window.Stripe);script.onerror=()=>reject(new Error('Stripe 加载失败'));document.head.appendChild(script);});
+}
+async function openHomeWallet(){
   if(!homeFeatureRequireAuth()) return;
-  openHomeFeature('钱包', `<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('wallet',26)}</div><h3>安全支付方式</h3><p>银行卡、Apple Pay、Google Pay 和 Link 将由 Stripe 的加密支付页保存和管理，乐生活不会保存完整卡号。</p><div class="home-wallet-list"><div>${uiIcon('card',18)}银行卡 <span>在结算时添加</span></div><div>${uiIcon('link',18)}Link <span>Stripe 安全保存</span></div><div>${uiIcon('wallet',18)}Apple Pay / Google Pay <span>设备支持时显示</span></div></div><button class="home-feature-primary" type="button" onclick="closeHomeFeature();showToast('请在租车、票务或商品结算页添加支付方式')">前往支付设置</button></section>`);
+  openHomeFeature('钱包','<div class="home-feature-empty">正在读取安全支付方式...</div>');
+  try{
+    const data=await homeWalletRequest({action:'list'}),methods=Array.isArray(data.methods)?data.methods:[];
+    openHomeFeature('钱包',`<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('wallet',26)}</div><h3>安全支付方式</h3><p>银行卡、Apple Pay、Google Pay 和 Link 由 Stripe 的加密页面管理。乐生活不会读取或保存完整卡号。</p><div class="home-wallet-list">${methods.length?methods.map(method=>`<div>${uiIcon('card',18)}${escHtml(String(method.brand||'card').toUpperCase())} •••• ${escHtml(method.last4||'')} <span>${method.exp_month||''}/${method.exp_year||''}</span><button type="button" onclick="walletRemoveMethod('${escAttr(method.id)}')">移除</button></div>`).join(''):'<div class="home-feature-note">尚未保存支付方式。</div>'}</div><button class="home-feature-primary" type="button" onclick="walletBeginSetup()">添加支付方式</button><p class="home-feature-note">${data.payment_environment==='test'?'当前为 Stripe 测试环境，不会产生真实扣款。':'支付方式会用于后续结算，实际扣款仍需你确认。'}</p></section>`);
+  }catch(error){openHomeFeature('钱包',`<div class="home-feature-empty">${escHtml(error.message||'钱包暂时无法读取')}</div>`);}
+}
+async function walletBeginSetup(){
+  try{
+    openHomeFeature('添加支付方式','<div class="home-feature-empty">正在建立 Stripe 安全支付页...</div>');
+    const data=await homeWalletRequest({action:'setup'}),StripeCtor=await loadStripeJs();
+    if(!StripeCtor||!data.client_secret||!data.publishable_key) throw new Error('Stripe 支付方式暂不可用');
+    const stripe=StripeCtor(data.publishable_key),elements=stripe.elements({clientSecret:data.client_secret}),payment=elements.create('payment');
+    openHomeFeature('添加支付方式',`<section class="home-feature-card"><h3>添加支付方式</h3><p>卡号、Apple Pay、Google Pay 或 Link 仅在 Stripe 加密组件内填写。</p><div id="walletPaymentElement" class="wallet-payment-element"></div><button class="home-feature-primary" type="button" onclick="walletConfirmSetup()">安全保存</button><button class="home-feature-secondary" type="button" onclick="openHomeWallet()">取消</button></section>`);
+    payment.mount('#walletPaymentElement');window._walletStripe={stripe,elements};
+  }catch(error){showToast(error.message||'暂时无法打开支付方式');openHomeWallet();}
+}
+async function walletConfirmSetup(){
+  const context=window._walletStripe;if(!context){showToast('支付页面已失效，请重新打开');return;}
+  try{const submit=await context.elements.submit();if(submit.error)throw submit.error;const result=await context.stripe.confirmSetup({elements:context.elements,confirmParams:{return_url:window.location.href},redirect:'if_required'});if(result.error)throw result.error;window._walletStripe=null;showToast('支付方式已安全保存');openHomeWallet();}catch(error){showToast(error.message||'保存支付方式失败');}
+}
+async function walletRemoveMethod(paymentMethodId){
+  if(!confirm('确认移除这张支付卡吗？'))return;
+  try{await homeWalletRequest({action:'detach',payment_method_id:paymentMethodId});showToast('已移除支付方式');openHomeWallet();}catch(error){showToast(error.message||'移除失败');}
 }
 function openHomeCommunity(){
   openHomeFeature('社区公约', `<section class="home-feature-terms"><h3>一起把乐生活做成可信赖的社区</h3><p>欢迎分享真实的本地生活、商品、活动与经验。请尊重每一位用户，不发布违法、有害、欺诈、侵权、仇恨、骚扰或明显误导的信息。</p><h4>内容与交易</h4><p>发布者应对内容、商品、服务及交易信息的真实性负责。涉及门票、零售、预约或线下服务时，请清楚说明价格、条件、时间和取消规则。</p><h4>保护彼此</h4><p>不得盗用他人的照片、身份、商标或作品；未经同意不得公开他人的私人信息。发现风险内容可使用举报入口，我们会依照社区规则处理。</p><h4>账户与沟通</h4><p>不得冒充他人、批量骚扰、刷量或利用平台进行诈骗。多次或严重违规可能导致内容下架、功能限制或账户处理。</p><p class="home-feature-note">本公约是社区使用规则的基础说明，不构成法律意见；正式服务条款与隐私规则会在公测前补充。</p></section>`);
@@ -14346,6 +14389,13 @@ async function openHomeScanner(){
   } catch(error){ if(status) status.textContent = '相机未能打开，请检查相机权限。'; }
 }
 function openHomeHelp(){ openHomeFeature('帮助与客服', '<section class="home-feature-card"><h3>帮助与客服</h3><p>常见问题、反馈进度与人工客服入口正在整理中。公测期间可使用“我的反馈”提交问题与截图。</p><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openFeedback()">提交反馈</button></section>'); }
+async function clearHomeLocalCache(){
+  try{
+    await clearWebRuntimeCaches();
+    Object.keys(localStorage).filter(key=>key.startsWith('leshenghuo_media_')||key.startsWith('wanba_posts_')).forEach(key=>localStorage.removeItem(key));
+    showToast('已清理本机缓存');
+  }catch(error){showToast('缓存清理失败，请稍后再试');}
+}
 function ensureHomeMenu(){
   let overlay=document.getElementById('homeMenuOverlay');
   if(overlay) return overlay;
@@ -14353,7 +14403,7 @@ function ensureHomeMenu(){
   const setting=(label,icon,action='comingSoon')=>`<button class="home-settings-row" type="button" onclick="handleHomeMenuAction('${action}')">${menuGlyph(icon)}<span>${label}</span><i class="home-settings-chevron">›</i></button>`;
   overlay=document.createElement('div');
   overlay.id='homeMenuOverlay'; overlay.className='home-menu-overlay';
-  overlay.innerHTML=`<aside class="home-menu-panel" role="dialog" aria-modal="true" aria-label="主页菜单" onclick="event.stopPropagation()"><div class="home-menu-head"><b>乐生活</b><button class="home-menu-close" type="button" onclick="closeHomeMenu()" aria-label="关闭">×</button></div><section class="home-menu-group">${row('添加好友','user','friends')}${row('创作中心','pen','creator')}${row('我的草稿','pen','drafts')}</section><section class="home-menu-group">${row('浏览记录','clock','history')}${row('订单','bag','orders')}${row('购物车','cart','cart')}${row('钱包','wallet','wallet')}</section><section class="home-menu-group">${row('社区公约','shield','community')}</section><div class="home-menu-bottom"><button type="button" onclick="handleHomeMenuAction('scan')">${menuGlyph('scan')}<span>扫一扫</span></button><button type="button" onclick="handleHomeMenuAction('help')">${menuGlyph('help')}<span>帮助与客服</span></button><button type="button" onclick="openHomeSettings()">${menuGlyph('settings')}<span>设置</span></button></div></aside><section class="home-settings-panel" role="dialog" aria-modal="true" aria-label="设置"><header class="home-settings-header"><button class="home-settings-back" type="button" onclick="closeHomeSettings()" aria-label="返回">‹</button><h2>设置</h2><span></span></header><div class="home-settings-card">${setting('账号与安全','user')}${setting('通用设置','settings')}${setting('通知设置','help')}${setting('多语言和翻译','pen','language')}${setting('隐私设置','shield')}</div><div class="home-settings-card">${setting('存储空间','bag','cache')}${setting('内容偏好调节','pen','preferences')}${setting('收货地址','user')}${setting('添加小组件','bag')}${setting('未成年人模式','shield')}</div><div class="home-settings-card">${setting('新功能体验','pen')}</div><div class="home-settings-card">${setting('帮助与客服','help')}${setting('关于乐生活','help')}</div><div class="home-settings-card">${setting('切换账号','user','switchAccount')}</div></section>`;
+  overlay.innerHTML=`<aside class="home-menu-panel" role="dialog" aria-modal="true" aria-label="主页菜单" onclick="event.stopPropagation()"><div class="home-menu-head"><b>乐生活</b><button class="home-menu-close" type="button" onclick="closeHomeMenu()" aria-label="关闭">×</button></div><section class="home-menu-group">${row('添加好友','user','friends')}${row('创作中心','pen','creator')}${row('我的草稿','pen','drafts')}</section><section class="home-menu-group">${row('浏览记录','clock','history')}${row('订单','bag','orders')}${row('购物车','cart','cart')}${row('钱包','wallet','wallet')}</section><section class="home-menu-group">${row('社区公约','shield','community')}</section><div class="home-menu-bottom"><button type="button" onclick="handleHomeMenuAction('scan')">${menuGlyph('scan')}<span>扫一扫</span></button><button type="button" onclick="handleHomeMenuAction('help')">${menuGlyph('help')}<span>帮助与客服</span></button><button type="button" onclick="openHomeSettings()">${menuGlyph('settings')}<span>设置</span></button></div></aside><section class="home-settings-panel" role="dialog" aria-modal="true" aria-label="设置"><header class="home-settings-header"><button class="home-settings-back" type="button" onclick="closeHomeSettings()" aria-label="返回">‹</button><h2>设置</h2><span></span></header><div class="home-settings-card">${setting('账号与安全','user','security')}${setting('通用设置','settings','general')}${setting('通知设置','help','notifications')}${setting('多语言和翻译','pen','language')}${setting('隐私设置','shield','privacy')}</div><div class="home-settings-card">${setting('存储空间','bag','cache')}${setting('内容偏好调节','pen','preferences')}${setting('收货地址','user','address')}${setting('添加小组件','bag')}${setting('未成年人模式','shield')}</div><div class="home-settings-card">${setting('新功能体验','pen')}</div><div class="home-settings-card">${setting('帮助与客服','help','help')}${setting('关于乐生活','help','community')}</div><div class="home-settings-card">${setting('切换账号','user','switchAccount')}</div></section>`;
   overlay.addEventListener('click',()=>closeHomeMenu());
   document.body.appendChild(overlay);
   return overlay;
@@ -14372,9 +14422,14 @@ window.handleHomeMenuAction=function(action){
   if(action==='cart'){ closeHomeMenu(); return openHomeCart(); }
   if(action==='wallet'){ closeHomeMenu(); return openHomeWallet(); }
   if(action==='community'){ closeHomeMenu(); return openHomeCommunity(); }
+  if(action==='security'){ closeHomeMenu(); return openHomeFeature('账号与安全',`<section class="home-feature-card"><h3>账号与安全</h3><p>${escHtml(session?.user?.email||'当前账户')}</p><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openAuth('reset')">重置密码</button><p class="home-feature-note">密码重置会发送至当前账号邮箱。</p></section>`); }
+  if(action==='general'){ closeHomeMenu(); return openHomeFeature('通用设置','<section class="home-feature-card"><h3>通用设置</h3><p>显示模式、字体大小和自动播放等选项会逐步开放。当前会优先跟随设备的语言与系统外观设置。</p></section>'); }
+  if(action==='notifications'){ closeHomeMenu(); return openHomeFeature('通知设置','<section class="home-feature-card"><h3>通知设置</h3><p>在 App 中可按需开启本地提醒；浏览网页不会自动请求通知权限。</p><button class="home-feature-primary" type="button" onclick="requestAppPermission(\'local-notification\')">开启本地提醒</button></section>'); }
+  if(action==='privacy'){ closeHomeMenu(); return openHomeFeature('隐私设置','<section class="home-feature-terms"><h3>隐私设置</h3><p>乐生活仅在你使用相应功能时请求相机、位置、相册或通讯录权限。公开笔记、昵称和头像会依照你的发布及资料设置展示。</p><p>需要导出个人数据或提交隐私请求时，可在“我的反馈”中说明需求。</p></section>'); }
+  if(action==='address'){ closeHomeMenu(); return openHomeFeature('收货地址','<section class="home-feature-card"><h3>收货地址</h3><p>零售配送和邮资服务接入后，可在这里安全管理常用收货地址。当前请在具体订单内填写地址。</p></section>'); }
   if(action==='switchAccount'){ closeHomeMenu(); return window.openLogin?.(); }
   if(action==='preferences'){ closeHomeMenu(); return window.switchTab?.('home'); }
-  if(action==='cache') return showToast('缓存管理将在后续设置中开放');
+  if(action==='cache'){ closeHomeMenu(); return openHomeFeature('存储空间','<section class="home-feature-card"><h3>本机缓存</h3><p>缓存用于加快图片和已浏览内容的加载，不影响云端笔记、订单或资料。清理后首次打开图片可能稍慢。</p><button class="home-feature-primary" type="button" onclick="clearHomeLocalCache()">清理本机缓存</button></section>'); }
   if(action==='scan'){ closeHomeMenu(); return openHomeScanner(); }
   if(action==='help'){ closeHomeMenu(); return openHomeHelp(); }
   showToast('该功能正在逐步开放');
@@ -14960,6 +15015,9 @@ function merchantOrderCardHtml(order,items){
 window._merchantOrderHistoryBills = [];
 window._merchantOrderHistoryRentals = [];
 window._merchantOrderHistoryRetail = [];
+window._merchantOrderHistoryTickets = [];
+window._merchantOrderHistoryAutoLeads = [];
+window._merchantOrderHistoryAutoSales = [];
 window._purchaseHistoryRecords = [];
 window._merchantOrderHistoryDetailId = null;
 function merchantBillPaymentText(method){ return ({cash:'现金',card:'刷卡',online:'在线支付'})[method] || '支付'; }
@@ -14979,6 +15037,14 @@ function renderMerchantOrderHistoryList(){
   if(!body)return;
   const records=window._purchaseHistoryRecords||[];
   body.innerHTML=records.length?records.map(record=>{
+    if(record.kind==='ticket'){
+      const order=record.data;
+      return `<button onclick="openPurchaseTicketDetail('${String(order.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div style="min-width:0;"><b>${escHtml(order.merchant_name||'乐生活票务')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">票务订单 · ${new Date(order.created_at).toLocaleString('zh-CN')} · ${escHtml(order.order_code||'')}</span></div><b style="color:var(--berry);">${merchantOrderMoney(order.total_amount)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">${escHtml(order.event_title||'活动门票')} × ${Number(order.quantity||0)}<span style="float:right;color:var(--sage-dark);font-weight:900;">${escHtml(order.payment_status==='paid'||order.payment_status==='free'?'已出票':'待付款')} ›</span></div></button>`;
+    }
+    if(record.kind==='auto_lead'||record.kind==='auto_sale'){
+      const item=record.data,isSale=record.kind==='auto_sale';
+      return `<button onclick="openPurchaseAutoDetail('${record.kind}','${String(item.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div style="min-width:0;"><b>${escHtml(item.merchant_name||'乐生活二手车')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">${isSale?'车辆成交':'估价 / 试驾'} · ${new Date(item.created_at).toLocaleString('zh-CN')}</span></div>${isSale?`<b style="color:var(--berry);">${merchantOrderMoney(item.sale_amount)}</b>`:''}</div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">${escHtml(item.listing_title||item.vehicle_data?.title||item.vehicle_data?.make||'车辆记录')}<span style="float:right;color:var(--sage-dark);font-weight:900;">${escHtml(item.status||'处理中')} ›</span></div></button>`;
+    }
     if(record.kind==='rental'){
       const booking=record.data,merchant=booking.merchant||window._merchantIdentityCache[booking.merchant_user_id]||{},vehicle=booking.vehicle||{};
       return `<button onclick="openPurchaseRentalDetail('${String(booking.id).replace(/'/g,'')}')" class="merchant-dash-card" style="display:block;width:100%;text-align:left;box-shadow:none;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:12px;"><div style="min-width:0;"><b>${escHtml(merchant.business_name||'乐生活租车')}</b><span style="display:block;margin-top:4px;font-size:12px;color:var(--ink-faint);">租车预约 · ${new Date(booking.created_at).toLocaleString('zh-CN')} · ${escHtml(purchaseRentalPaymentText(booking.payment_status))}</span></div><b style="color:var(--berry);">${merchantOrderMoney(booking.total_amount)}</b></div><div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">${escHtml(vehicle.name||'租赁车辆')} · ${escHtml(booking.booking_code||'')}<span style="float:right;color:var(--sage-dark);font-weight:900;">${escHtml(purchaseRentalStatusText(booking.status))} ›</span></div></button>`;
@@ -14998,10 +15064,11 @@ async function openMerchantOrderHistory(){
   if(!sheet||!body)return;
   sheet.classList.add('open');body.innerHTML='<div class="deals-empty-panel">正在读取消费记录...</div>';
   try{
-    const [billResult,rentalResult,retailResult]=await Promise.allSettled([
+    const [billResult,rentalResult,retailResult,centerResult]=await Promise.allSettled([
       restaurantDataApi.listBills({userId:session.user.id,limit:200}),
       rentalApi.customerBookings(),
-      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_retail_orders?customer_user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=updated_at.desc&limit=200`,{method:'GET'}).then(async response=>{if(!response.ok)throw new Error(await response.text());return response.json();})
+      authedFetch(`${SUPABASE_URL}/rest/v1/merchant_retail_orders?customer_user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=updated_at.desc&limit=200`,{method:'GET'}).then(async response=>{if(!response.ok)throw new Error(await response.text());return response.json();}),
+      authedFetch(`${SUPABASE_URL}/rest/v1/rpc/customer_order_center`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(async response=>{if(!response.ok)throw new Error(await response.text());return response.json();})
     ]);
     if(billResult.status!=='fulfilled')throw new Error(billResult.reason?.message);
     const bills=billResult.value;
@@ -15009,14 +15076,16 @@ async function openMerchantOrderHistory(){
     if(rentalResult.status==='fulfilled') rentalBookings=Array.isArray(rentalResult.value)?rentalResult.value:[];
     let retailOrders=[];
     if(retailResult.status==='fulfilled') retailOrders=Array.isArray(retailResult.value)?retailResult.value:[];
-    const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id),retailOrders.map(row=>row.merchant_user_id)).filter(Boolean))];
+    const center=centerResult.status==='fulfilled'&&centerResult.value&&typeof centerResult.value==='object'?centerResult.value:{};
+    const tickets=Array.isArray(center.tickets)?center.tickets:[],autoLeads=Array.isArray(center.auto_leads)?center.auto_leads:[],autoSales=Array.isArray(center.auto_sales)?center.auto_sales:[];
+    const merchantIds=[...new Set(bills.map(b=>b.merchant_user_id).concat(rentalBookings.map(row=>row.merchant_user_id),retailOrders.map(row=>row.merchant_user_id),tickets.map(row=>row.merchant_user_id),autoLeads.map(row=>row.merchant_user_id),autoSales.map(row=>row.merchant_user_id)).filter(Boolean))];
     if(merchantIds.length){
       if(!merchantPublicApi) throw new Error('商家资料接口未初始化');
       (await merchantPublicApi.listByUserIds({userIds:merchantIds,select:'user_id,business_name,logo'})).forEach(row=>setMerchantIdentityCache(row.user_id,row));
     }
     rentalBookings.forEach(row=>{if(row.merchant?.user_id)setMerchantIdentityCache(row.merchant.user_id,row.merchant);});
-    window._merchantOrderHistoryBills=bills;window._merchantOrderHistoryRentals=rentalBookings;window._merchantOrderHistoryRetail=retailOrders;
-    window._purchaseHistoryRecords=[...bills.map(data=>({kind:'restaurant',data,created_at:data.created_at})),...rentalBookings.map(data=>({kind:'rental',data,created_at:data.created_at})),...retailOrders.map(data=>({kind:'retail',data,created_at:data.created_at}))].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+    window._merchantOrderHistoryBills=bills;window._merchantOrderHistoryRentals=rentalBookings;window._merchantOrderHistoryRetail=retailOrders;window._merchantOrderHistoryTickets=tickets;window._merchantOrderHistoryAutoLeads=autoLeads;window._merchantOrderHistoryAutoSales=autoSales;
+    window._purchaseHistoryRecords=[...bills.map(data=>({kind:'restaurant',data,created_at:data.created_at})),...rentalBookings.map(data=>({kind:'rental',data,created_at:data.created_at})),...retailOrders.map(data=>({kind:'retail',data,created_at:data.created_at})),...tickets.map(data=>({kind:'ticket',data,created_at:data.created_at})),...autoLeads.map(data=>({kind:'auto_lead',data,created_at:data.created_at})),...autoSales.map(data=>({kind:'auto_sale',data,created_at:data.created_at}))].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
     window._merchantOrderHistoryDetailId=null;renderMerchantOrderHistoryList();
   }catch(error){console.warn('读取消费记录失败:',error.message);body.innerHTML='<div class="deals-empty-panel">消费记录暂时无法读取，请稍后重试。</div>';}
 }
@@ -15027,6 +15096,20 @@ function openPurchaseRentalDetail(bookingId){
   window._merchantOrderHistoryDetailId=`rental:${bookingId}`;
   const merchant=booking.merchant||window._merchantIdentityCache[booking.merchant_user_id]||{},vehicle=booking.vehicle||{},addons=Array.isArray(booking.rental_addons)?booking.rental_addons:[];
   body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回消费记录</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${escHtml(merchant.business_name||'乐生活租车')}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">租车预约 · ${new Date(booking.created_at).toLocaleString('zh-CN')} · ${escHtml(booking.booking_code||'')}</div><div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;"><div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(vehicle.name||'租赁车辆')}</span><b>${merchantOrderMoney(booking.base_amount)}</b></div>${addons.map(item=>`<div class="merchant-order-line" style="margin:8px 0;"><span>${escHtml(item.name||'附加服务')}</span><b>${merchantOrderMoney(item.amount??item.price)}</b></div>`).join('')}<div class="merchant-order-line" style="margin:8px 0;"><span>租期</span><span>${new Date(booking.starts_at).toLocaleString('zh-CN')} 至 ${new Date(booking.ends_at).toLocaleString('zh-CN')}</span></div></div><div style="margin-top:13px;padding-top:10px;border-top:1px solid var(--line);"><div class="merchant-order-line"><span>会员/优惠券减免</span><b style="color:var(--berry);">-${merchantOrderMoney(Number(booking.member_discount_amount||0)+Number(booking.coupon_discount_amount||0))}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>押金</span><b>${merchantOrderMoney(booking.deposit_amount)}</b></div><div class="merchant-order-line" style="margin-top:8px;"><span>支付状态</span><b>${escHtml(purchaseRentalPaymentText(booking.payment_status))}</b></div><div class="merchant-order-line" style="margin-top:11px;font-size:16px;"><b>预约总额</b><b style="color:var(--berry);">${merchantOrderMoney(booking.total_amount)}</b></div></div></section>`;
+}
+function openPurchaseTicketDetail(orderId){
+  const body=document.getElementById('merchantOrderHistoryBody'),order=(window._merchantOrderHistoryTickets||[]).find(row=>String(row.id)===String(orderId));
+  if(!body||!order)return;
+  window._merchantOrderHistoryDetailId=`ticket:${orderId}`;
+  const tickets=Array.isArray(order.tickets)?order.tickets:[];
+  body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回 Purchase</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${escHtml(order.event_title||'活动门票')}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">${escHtml(order.merchant_name||'乐生活票务')} · ${escHtml(order.order_code||'')} · ${new Date(order.created_at).toLocaleString('zh-CN')}</div>${order.event_starts_at?`<div style="margin-top:11px;font-size:13px;color:var(--ink-soft);">活动时间：${new Date(order.event_starts_at).toLocaleString('zh-CN')}${order.location_text?` · ${escHtml(order.location_text)}`:''}</div>`:''}<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;">${tickets.length?tickets.map(ticket=>`<div class="merchant-order-line" style="margin:9px 0;"><span>${escHtml(ticket.holder_name||'持票人')} · ${escHtml(ticket.ticket_code||'')}</span><b style="color:${ticket.status==='redeemed'?'var(--sage-dark)':'var(--berry)'};">${ticket.status==='redeemed'?'已核销':ticket.status==='issued'?'可使用':escHtml(ticket.status||'')}</b></div>`).join(''):'<div style="font-size:12px;color:var(--ink-faint);">订单付款完成后会在这里显示电子票。</div>'}</div><div class="merchant-order-line" style="margin-top:14px;padding-top:11px;border-top:1px solid var(--line);font-size:16px;"><b>订单金额</b><b style="color:var(--berry);">${merchantOrderMoney(order.total_amount)}</b></div></section>`;
+}
+function openPurchaseAutoDetail(kind,id){
+  const body=document.getElementById('merchantOrderHistoryBody'),isSale=kind==='auto_sale',item=((isSale?window._merchantOrderHistoryAutoSales:window._merchantOrderHistoryAutoLeads)||[]).find(row=>String(row.id)===String(id));
+  if(!body||!item)return;
+  window._merchantOrderHistoryDetailId=`${kind}:${id}`;
+  const vehicle=item.vehicle_data&&typeof item.vehicle_data==='object'?item.vehicle_data:{};
+  body.innerHTML=`<button onclick="closeMerchantOrderHistory()" style="border:0;background:transparent;color:var(--sage-dark);padding:2px 0 14px;font:900 13px inherit;">‹ 返回 Purchase</button><section class="merchant-dash-card" style="box-shadow:none;"><b style="font-size:18px;">${isSale?'车辆成交记录':'车辆服务记录'}</b><div style="margin-top:7px;font-size:12px;color:var(--ink-faint);">${escHtml(item.merchant_name||'乐生活二手车')} · ${new Date(item.created_at).toLocaleString('zh-CN')}</div><div style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px;"><div class="merchant-order-line" style="margin:8px 0;"><span>车辆</span><b>${escHtml(item.listing_title||vehicle.title||[vehicle.year,vehicle.make,vehicle.model].filter(Boolean).join(' ')||'车辆信息')}</b></div><div class="merchant-order-line" style="margin:8px 0;"><span>状态</span><b>${escHtml(item.status||'处理中')}</b></div>${item.preferred_at?`<div class="merchant-order-line" style="margin:8px 0;"><span>预约时间</span><b>${new Date(item.preferred_at).toLocaleString('zh-CN')}</b></div>`:''}${item.appointment_location?`<div class="merchant-order-line" style="margin:8px 0;"><span>地点</span><b>${escHtml(item.appointment_location)}</b></div>`:''}${item.quoted_amount?`<div class="merchant-order-line" style="margin:8px 0;"><span>报价</span><b>${merchantOrderMoney(item.quoted_amount)}</b></div>`:''}${isSale?`<div class="merchant-order-line" style="margin:12px 0 0;padding-top:11px;border-top:1px solid var(--line);font-size:16px;"><b>成交金额</b><b style="color:var(--berry);">${merchantOrderMoney(item.sale_amount)}</b></div>`:''}</div></section>`;
 }
 function openPurchaseRetailDetail(orderId){
   const body=document.getElementById('merchantOrderHistoryBody');
