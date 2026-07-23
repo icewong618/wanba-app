@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-  const version = '5.571';
+  const version = '5.572';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -69,7 +69,7 @@
 <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
 <script src="./i18n/i18n.js?v=5.404"></script>
 <script src="./shared/module-runtime.js?v=5.523"></script>
-<script src="./shared/feed-data.js?v=5.431"></script>
+<script src="./shared/feed-data.js?v=5.572"></script>
 <script src="./shared/feed-cache.js?v=5.432"></script>
 <script src="./shared/feed-render.js?v=5.433"></script>
 <script src="./shared/retry-controller.js?v=5.434"></script>
@@ -96,7 +96,7 @@
 <script src="./shared/follow-api.js?v=5.458"></script>
 <script src="./shared/comment-threading.js?v=5.459"></script>
 <script src="./shared/post-detail-api.js?v=5.460"></script>
-<script src="./shared/post-api.js?v=5.461"></script>
+<script src="./shared/post-api.js?v=5.572"></script>
 <script src="./shared/compose-draft-store.js?v=5.462"></script>
 <script src="./shared/location-api.js?v=5.465"></script>
 <script src="./shared/feedback-api.js?v=5.466"></script>
@@ -244,7 +244,7 @@
 </div>
 
 <!-- 笔记管理底部面板 -->
-<div id="ownerSheet" style="display:none;position:fixed;inset:0;background:rgba(42,39,33,.45);z-index:980;" onclick="if(event.target.id==='ownerSheet')closeOwnerSheet()">
+<div id="ownerSheet" style="display:none;position:fixed;inset:0;background:rgba(42,39,33,.45);z-index:13020;" onclick="if(event.target.id==='ownerSheet')closeOwnerSheet()">
   <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:18px 18px 0 0;padding:10px 16px 26px;animation:slideUp .25s ease;">
     <div style="width:40px;height:4px;background:var(--line);border-radius:999px;margin:6px auto 14px;"></div>
     <div id="ownerSheetBody"></div>
@@ -1176,6 +1176,6 @@
   <div class="publish-progress-track"><div class="publish-progress-bar" id="publishProgressBar"></div></div>
 </div>
 
-<script src="./shared/app-main.js?v=5.571"></script>
+<script src="./shared/app-main.js?v=5.572"></script>
 </body>
 </html>

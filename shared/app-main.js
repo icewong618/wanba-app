@@ -307,7 +307,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.571';
+const APP_VERSION = '5.572';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -1601,7 +1601,9 @@ function postThumbnailCoverSrc(p){
 }
 function postCoverImgHtml(p, alt, useThumbnail=false){
   const cover = useThumbnail ? postThumbnailCoverSrc(p) : postUploadedCoverSrc(p);
-  if(cover) return `<img src="${escAttr(cover)}" alt="${escAttr(alt || p.title || '')}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+  const original = postUploadedCoverSrc(p);
+  const fallback = original && original !== cover ? ` onerror="this.onerror=null;this.src='${escAttr(original)}';"` : '';
+  if(cover) return `<img src="${escAttr(cover)}"${fallback} alt="${escAttr(alt || p.title || '')}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
   if(p && p.youtube) return youtubeThumbImgHtml(p.youtube, alt || p.title || 'YouTube封面').replace('<img ', '<img style="width:100%;height:100%;object-fit:cover;display:block;" ');
   return '';
 }
@@ -8046,6 +8048,12 @@ function findPostById(id){
   return posts.find(p=>String(p.id)===String(id)) || ownProfilePosts.find(p=>String(p.id)===String(id));
 }
 function getPost(){ return findPostById(activePostId); }
+function syncPostCopies(source){
+  if(!source || source.id == null) return;
+  [posts, ownProfilePosts].forEach(list => list.forEach(item => {
+    if(item !== source && String(item.id) === String(source.id)) Object.assign(item, source);
+  }));
+}
 
 /* ---- profile page ---- */
 let browsingHistory = [];
@@ -8087,7 +8095,7 @@ async function loadOwnProfilePosts(){
   if(ownProfilePostsLoadPromise) return ownProfilePostsLoadPromise;
   ownProfilePostsLoadPromise = (async () => {
     const select = [
-      'id','title','content','excerpt','category','subcategory','author','image',
+      'id','title','content','excerpt','category','subcategory','author','image','image_thumbnail','images','image_thumbnails',
       'youtube','likes','event','tags','user_id','visibility','pinned','created_at','scheduled_at','location'
     ].join(',');
     const url = `${SUPABASE_URL}/rest/v1/posts?user_id=eq.${encodeURIComponent(myUid)}&select=${select}&order=created_at.desc,id.desc&limit=300`;
@@ -10187,7 +10195,7 @@ function renderPostModal(){
       <span onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:inline-flex;">${avatarCircleHtml(p.author, p.user_id)}</span>
       <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;">${safeAuthor}${identityBadgeHtml(p.user_id)}</span>
       ${p.user_id && !isOwnPost ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
-      ${isOwnPost ? `<button class="xhs-share" title="管理笔记" aria-label="管理笔记" onclick="openOwnerSheet()" style="font-size:20px;position:relative;z-index:6;">☰</button>` : `<button class="xhs-share" title="转发" onclick="openPostShare(${JSON.stringify(p.id)})">${uiIcon('share',19)}</button>`}
+      ${isOwnPost ? `<button class="xhs-share" title="管理笔记" aria-label="管理笔记" onclick="openOwnerSheet(event)" style="font-size:20px;position:relative;z-index:6;">☰</button>` : `<button class="xhs-share" title="转发" onclick="openPostShare(${JSON.stringify(p.id)})">${uiIcon('share',19)}</button>`}
     </div>
     <div class="xhs-scroll">
       ${media ? `<div class="modal-media ${p.youtube || tikTokInfo ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
@@ -12515,7 +12523,9 @@ function visLabel(v){
   if(v === 'mutual') return '互关好友可见';
   return '公开可见';
 }
-function openOwnerSheet(){
+function openOwnerSheet(event){
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
   const p = getPost();
   if(!p) return;
   const body = document.getElementById('ownerSheetBody');
@@ -12526,7 +12536,12 @@ function openOwnerSheet(){
     <button class="sheet-item" onclick="closeOwnerSheet();openPostShare(${p.id})"><span class="si">${uiIcon('share',19)}</span>转发</button>
     <button class="sheet-item" style="color:#d9534f;" onclick="ownerDeletePost(${p.id})"><span class="si">${uiIcon('trash',19)}</span>删除</button>
   `;
-  document.getElementById('ownerSheet').style.display = 'block';
+  const sheet = document.getElementById('ownerSheet');
+  if(sheet){
+    sheet.style.display = 'block';
+    // 立即触发布局，避免移动端在下一次触摸事件前才绘制底部菜单。
+    void sheet.offsetHeight;
+  }
 }
 function closeOwnerSheet(){ document.getElementById('ownerSheet').style.display = 'none'; }
 function openVisSheet(){
@@ -13028,6 +13043,7 @@ async function submitPost(){
       p.tiktok_url = tiktokInfo ? tiktokInfo.url : null;
       p.location = location || null;
       if(uploadedImages.length > 0){ p.image = image; p.images = images; p.image_thumbnail = imageThumbnail; p.image_thumbnails = imageThumbnails; }
+      syncPostCopies(p);
     }
     const idToUpdate = editingPostId;
     editingPostId = null;
@@ -14685,4 +14701,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Entertainment Category Refresh】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Post Menu & Video Cover Fix】`);
