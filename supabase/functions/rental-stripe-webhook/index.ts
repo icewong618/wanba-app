@@ -37,6 +37,23 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey);
   const intent = event.data.object as Stripe.PaymentIntent;
+  const ticketOrderId = String(intent.metadata?.ticket_order_id || "");
+  if(ticketOrderId){
+    if(event.type === "payment_intent.succeeded"){
+      const method = await paymentMethodName(stripe, intent);
+      const isTest = String(intent.metadata?.payment_environment || "") !== "live";
+      const paidAt = new Date().toISOString();
+      await admin.from("merchant_ticket_payment_attempts").update({ status:"succeeded", metadata:{payment_environment:isTest?"test":"live",payment_method:method}, updated_at:paidAt }).eq("provider_payment_id",intent.id);
+      const { error } = await admin.rpc("merchant_ticket_issue_order", { p_order_id:ticketOrderId, p_payment_status:"paid", p_payment_method:`${isTest?"stripe_test":"stripe"}_${method}`, p_provider_reference:intent.id });
+      if(error) console.error("ticket issuance failed", error);
+    }
+    if(event.type === "payment_intent.payment_failed" || event.type === "payment_intent.canceled"){
+      await admin.from("merchant_ticket_payment_attempts").update({status:"failed",failure_message:String(intent.last_payment_error?.message||"Payment failed"),updated_at:new Date().toISOString()}).eq("provider_payment_id",intent.id);
+      await admin.from("merchant_ticket_orders").update({payment_status:"failed",updated_at:new Date().toISOString()}).eq("id",ticketOrderId);
+      await admin.rpc("merchant_ticket_release_order_seats",{p_order_id:ticketOrderId});
+    }
+    return json({ received:true });
+  }
   const bookingId = String(intent.metadata?.booking_id || "");
   if (!bookingId) return json({ received: true });
 
