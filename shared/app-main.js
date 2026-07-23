@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.585';
+const APP_VERSION = '5.587';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3969,7 +3969,7 @@ function openShippingCenter(){
 function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.365&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantBookingUrl(m){ return `https://escoopcity.com/booking/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&booking_v=5.580&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantEventsUrl(m){ return `https://escoopcity.com/events/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&events_v=5.581&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
-function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.583&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.587&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 async function openMerchantBookingPage(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(merchantUserId);
@@ -4034,7 +4034,7 @@ async function openMerchantTicketsManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.583&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.587&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开票务管理失败:', error.message); showToast('票务管理暂时无法打开，请稍后再试'); }
@@ -6340,7 +6340,7 @@ function openMerchantEditSheet(){
       <div style="font-size:10.5px;color:var(--ink-faint);line-height:1.45;margin-top:8px;">商家确认一次消费时，会自动增加消费次数并赠送设定的积分。</div>
     </div>
     <div id="merchantProfileSaveStatus" role="status" style="min-height:18px;margin:0 0 8px;color:var(--ink-soft);font-size:12px;"></div>
-    <div style="display:flex;gap:10px;">
+    <div class="merchant-profile-save-actions">
       <button type="button" id="merchantProfileSaveButton" style="flex:1;padding:12px;border-radius:10px;background:var(--sage);color:#fff;border:none;cursor:pointer;font-weight:600;font-size:13px;">✓ 保存</button>
       <button onclick="closeMerchantEditSheet()" style="flex:1;padding:12px;border-radius:10px;background:var(--bg-alt);color:var(--ink);border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:13px;">✕ 取消</button>
     </div>
@@ -6436,17 +6436,22 @@ function captureMerchantStoreLocation(){
 function onMerchantImageSelected(event, type){
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
-  if(!file || !file.type || !file.type.startsWith('image/')) return;
+  if(!file || !file.type || !file.type.startsWith('image/')){
+    if(file) showToast('请选择图片文件');
+    return;
+  }
   const reader = new FileReader();
   reader.onload = ev => {
     const img = new Image();
     img.onload = () => {
+      // Keep the merchant editor behind the cropper. Logo is square; cover is always wide.
       if(type === 'logo') openAvatarCropper(img, ev.target.result, 'merchantLogo');
       else openCoverCropper(img, ev.target.result, 'merchantCover');
     };
     img.onerror = () => showToast('图片读取失败，请换一张试试');
     img.src = ev.target.result;
   };
+  reader.onerror = () => showToast('图片读取失败，请换一张试试');
   reader.readAsDataURL(file);
 }
 /* 保存商家资料：以店长账号为唯一键直接更新或新建，兼容浏览器和原生 App。 */
