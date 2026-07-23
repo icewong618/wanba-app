@@ -307,7 +307,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.573';
+const APP_VERSION = '5.574';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7613,9 +7613,11 @@ function renderYoutubeHub(){
   }
   list.innerHTML = videos.map(p => `<button class="youtube-hub-card" onclick="youtubeHubPlay('${escAttr(p.youtube)}','${escAttr(p.title || 'YouTube 视频')}')"><img src="${youtubeThumbUrl(p.youtube)}" onerror="this.onerror=null;this.src='${youtubeThumbUrl(p.youtube, 'default')}';" alt=""><b>${escHtml(p.title || 'YouTube 视频')}</b></button>`).join('');
 }
+let youtubeHubReturnFocus = null;
 function openYoutubeHub(){
   const overlay = document.getElementById('youtubeHubOverlay');
   if(!overlay) return;
+  youtubeHubReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   overlay.classList.add('open'); overlay.setAttribute('aria-hidden','false');
   renderYoutubeHub();
   const first = youtubeHubVideos()[0];
@@ -7633,9 +7635,16 @@ function openYoutubeHub(){
 function closeYoutubeHub(){
   const overlay = document.getElementById('youtubeHubOverlay');
   if(!overlay) return;
+  // 先移走焦点，再隐藏容器，避免浏览器报 aria-hidden 焦点警告。
+  if(overlay.contains(document.activeElement) && document.activeElement instanceof HTMLElement){
+    document.activeElement.blur();
+  }
   overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true');
   const player = document.getElementById('youtubeHubPlayer');
   if(player) player.innerHTML = '';
+  const returnFocus = youtubeHubReturnFocus;
+  youtubeHubReturnFocus = null;
+  if(returnFocus && document.contains(returnFocus)) setTimeout(() => returnFocus.focus({preventScroll:true}), 0);
 }
 function playYoutubeHubInput(){
   const input = document.getElementById('youtubeHubInput');
@@ -14714,4 +14723,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Video Cover Persistence Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Video Cover & Accessibility Fix】`);
