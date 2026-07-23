@@ -1,0 +1,4 @@
+.seat-section .seat:not(.is-unavailable):not(.is-selected),
+.manager-seat-page .seat:not(.is-unavailable):not(.is-selected) {
+  background: var(--seat-section-color, var(--sage));
+}

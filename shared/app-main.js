@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.590';
+const APP_VERSION = '5.591';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -340,10 +340,14 @@ function isEmbeddedAppEntry(){
       (typeof capacitor.isNativePlatform === 'function' && capacitor.isNativePlatform())
       || (typeof capacitor.getPlatform === 'function' && capacitor.getPlatform() !== 'web')
     ));
+    const nativeBridge = !!window.webkit?.messageHandlers?.capacitor
+      || !!window.webkit?.messageHandlers?.bridge
+      || !!window.androidBridge;
     return params.get('embedded_app') === '1'
       || !!params.get('app_v')
       || sessionStorage.getItem('leshenghuo_embedded_app_entry') === '1'
       || nativeCapacitor
+      || nativeBridge
       || window.parent !== window
       || navigator.standalone === true
       || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
@@ -2419,6 +2423,13 @@ function isNativeAppRuntime(){
       || !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
   } catch(error){ return isEmbeddedAppEntry(); }
 }
+function openMerchantModule(url){
+  if(isNativeAppRuntime() || document.documentElement.classList.contains('app-webview-entry')){
+    openMerchantEmbeddedOrder(url);
+    return;
+  }
+  window.location.href = url;
+}
 function closeMerchantEmbeddedOrder(){
   const sheet=document.getElementById('merchantEmbeddedOrder');
   if(!sheet) return;
@@ -2448,8 +2459,7 @@ async function openMerchantTakeoutPage(merchantUserId){
     const merchant=await getMerchantOrderMerchant(merchantUserId);
     if(!merchant){showToast('暂时无法读取商家资料');return;}
     const url=merchantTakeoutUrl(merchant);
-    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
-    else window.location.href=url;
+    openMerchantModule(url);
   } catch(error){
     console.warn('打开独立外卖点餐页失败:',error.message);
     showToast('点餐页面暂时无法打开，请稍后再试');
@@ -2460,8 +2470,7 @@ async function openMerchantQueuePage(merchantUserId){
     const merchant=await getMerchantOrderMerchant(merchantUserId);
     if(!merchant){showToast('暂时无法读取商家资料');return;}
     const url=merchantQueueUrl(merchant);
-    if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
-    else window.location.href=url;
+    openMerchantModule(url);
   } catch(error){
     console.warn('打开扫码排队页失败:',error.message);
     showToast('排队页面暂时无法打开，请稍后再试');
@@ -3963,13 +3972,12 @@ function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20
 function shippingCenterUrl(){ return `https://escoopcity.com/shipping/?shipping_v=5.530&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function openShippingCenter(){
   const url = shippingCenterUrl();
-  if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
-  else window.location.href = url;
+  openMerchantModule(url);
 }
 function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.365&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantBookingUrl(m){ return `https://escoopcity.com/booking/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&booking_v=5.580&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantEventsUrl(m){ return `https://escoopcity.com/events/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&events_v=5.581&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
-function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.590&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.591&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 async function openMerchantBookingPage(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(merchantUserId);
@@ -4034,7 +4042,7 @@ async function openMerchantTicketsManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.590&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.591&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开票务管理失败:', error.message); showToast('票务管理暂时无法打开，请稍后再试'); }
@@ -5877,6 +5885,10 @@ async function openMerchantPublicPage(userId){
       return;
     }
     setMerchantIdentityCache(m.user_id, m);
+    if(isNativeAppRuntime() || document.documentElement.classList.contains('app-webview-entry')){
+      await openMerchantPublicPageBySlug(merchantSiteSlug(m));
+      return;
+    }
     window.location.assign(merchantSiteUrl(m));
   } catch(e){
     console.warn('打开商家主页失败:', e.message);
