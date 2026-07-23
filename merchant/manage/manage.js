@@ -47,6 +47,16 @@
   const isRental = () => merchant?.category === '住宿旅游' || (!merchant?.category && features().has('rental'));
   const isAutoSales = () => features().has('auto_sales');
   const isRetail = () => String(merchant?.category || '').includes('零售') || String(merchant?.subcategory || '').includes('零售');
+  async function acceptAgreement(){
+    if(!confirm('确认已阅读并同意：商品须合法、真实可交付；订单、退款与争议会保留平台记录；平台可因合规或举报暂停商品展示。')) return;
+    try {
+      const response = await api('/rest/v1/rpc/marketplace_accept_merchant_agreement', { method:'POST', body:JSON.stringify({ p_version:'2026-07-23' }) });
+      if(!response.ok) throw new Error(await response.text());
+      alert('已确认商家交易与争议处理规则。');
+    } catch(error) {
+      alert('确认失败，请检查当前是否为已认证商家主号。');
+    }
+  }
 
   async function load(){
     const slug = query.get('merchant');
@@ -78,7 +88,12 @@
       if(isRetail()) requests.push(count(`/rest/v1/merchant_retail_orders?merchant_user_id=eq.${id}&status=not.in.(completed,cancelled)&select=id`));
       else requests.push(Promise.resolve(0));
       const [orders, members, posts, claims, retailOrders] = await Promise.all(requests);
-      render({orders, members, posts, claims, retailOrders});
+      let compliance = [];
+      if(isRetail()){
+        const complianceResponse = await api('/rest/v1/rpc/marketplace_merchant_listing_controls', { method:'POST', body:'{}' });
+        compliance = complianceResponse.ok ? await complianceResponse.json() : [];
+      }
+      render({orders, members, posts, claims, retailOrders, compliance});
     } catch(error) {
       app.innerHTML = `${top('商家管理后台')}<div class="empty">暂时无法读取后台。请确认当前账号拥有该商家的管理权限。</div>`;
     }
@@ -130,12 +145,13 @@
         ${entry('⚙', '功能中心', '查看和开通商家功能', 'features')}
         ${entry('⌂', '商家主页', '查看顾客看到的店铺页面', 'public')}
       </div>
+      ${isRetail() ? `<div class="row" style="margin-top:12px;"><span><b>商家交易与争议处理规则</b><small>商品合法、真实可交付；平台保留订单与争议处理记录。</small></span><button onclick="MerchantAdmin.acceptAgreement()">确认规则</button></div><div class="tip">${data.compliance?.length ? `有 ${data.compliance.length} 件商品正在合规审核、冻结或下架，审核通过前不会公开展示。` : '当前没有需要处理的商品合规状态。'}</div>` : ''}
       ${businessEntries}
       <div class="section-head"><b>快捷操作</b></div>
       <div class="row"><span><b>查看商家主页</b><small>确认顾客端展示是否完整</small></span><button onclick="MerchantAdmin.go('public')">打开</button></div>
       <div class="row"><span><b>刷新经营数据</b><small>重新读取店铺经营概览</small></span><button onclick="MerchantAdmin.reload()">刷新</button></div>`;
   }
 
-  window.MerchantAdmin = { close, go, reload:load };
+  window.MerchantAdmin = { close, go, reload:load, acceptAgreement };
   load();
 })();

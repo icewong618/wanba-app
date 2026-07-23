@@ -307,7 +307,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.583';
+const APP_VERSION = '5.584';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -1996,7 +1996,7 @@ async function saveMerchantListField(field, rows){
   } catch(error) {
     const t = error.message || '';
     console.warn('商家列表保存失败:', t);
-    showToast('保存失败，请确认已执行 5.00b 或更新 SQL');
+    showToast(t.includes('listing_restricted') ? '该商品可能属于平台限制或禁售范围，暂时不能保存。' : '保存失败，请确认网络后重试');
     return false;
   }
   currentMerchant[field] = rows;
@@ -8951,6 +8951,7 @@ let activeAdminFeedbackReply = null;
 let adminFeedbackStatusFilter = 'pending';
 let adminContentReports = [];
 let adminReportFilter = 'pending';
+let adminMarketplaceReports = [];
 let adminDealOpsReady = true;
 let adminEditingDealId = '';
 let adminActiveUser = null;
@@ -8984,6 +8985,7 @@ function switchAdminTab(tab){
   }
   if(tab === 'feedback' && !adminFeedback.length){ loadAdminFeedback().then(() => { if(adminTab === 'feedback') renderAdminPanel(); }); }
   if(tab === 'reports' && !adminContentReports.length){ loadAdminContentReports().then(() => { if(adminTab === 'reports') renderAdminPanel(); }); }
+  if(tab === 'marketplace' && !adminMarketplaceReports.length){ loadAdminMarketplaceReports().then(() => { if(adminTab === 'marketplace') renderAdminPanel(); }); }
   renderAdminPanel();
 }
 async function loadAdminCenter(force){
@@ -9005,6 +9007,7 @@ async function loadAdminCenter(force){
       await loadAdminDealPrices(false);
       await loadAdminFeedback();
       await loadAdminContentReports();
+      await loadAdminMarketplaceReports();
       renderAdminPanel();
       return;
     }
@@ -9017,6 +9020,7 @@ async function loadAdminCenter(force){
     await loadAdminDealPrices(false);
     await loadAdminFeedback();
     await loadAdminContentReports();
+    await loadAdminMarketplaceReports();
     renderAdminPanel();
   } catch(e){
     console.warn('管理后台读取失败:', e.message);
@@ -9037,6 +9041,7 @@ function adminStatsHtml(){
     <div class="admin-stat"><b>${adminBanned.length}</b><span>封禁记录</span></div>
     <div class="admin-stat"><b>${adminFeedback.filter(x => x.status !== 'resolved').length}</b><span>待处理反馈</span></div>
     <div class="admin-stat"><b>${adminContentReports.filter(x => !['resolved','dismissed'].includes(x.status)).length}</b><span>待处理举报</span></div>
+    <div class="admin-stat"><b>${adminMarketplaceReports.filter(x => !['resolved','dismissed'].includes(x.status)).length}</b><span>商品合规</span></div>
   `;
 }
 function renderAdminPanel(){
@@ -9054,6 +9059,7 @@ function renderAdminPanel(){
   if(adminTab === 'deals') return renderAdminDeals(body);
   if(adminTab === 'feedback') return renderAdminFeedback(body);
   if(adminTab === 'reports') return renderAdminContentReports(body);
+  if(adminTab === 'marketplace') return renderAdminMarketplaceReports(body);
   renderAdminBanned(body);
 }
 async function loadAdminFeedback(){
@@ -9094,6 +9100,40 @@ function renderAdminContentReports(body){
   body.innerHTML = `<div class="search-filter-row" style="margin:0 0 14px;padding:0;">${filters.map(([value,label]) => `<button class="search-filter-chip ${adminReportFilter===value?'active':''}" onclick="setAdminReportFilter('${value}')">${label}</button>`).join('')}</div>` + (rows.length ? `<div class="admin-list">${rows.map(row => { const post = postById.get(String(row.post_id)); const path = post ? postCategoryPath(post.category, post.subcategory) : '笔记已删除或未加载'; return `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(contentReportReasonText(row.reason))} <span class="admin-badge ${row.status === 'resolved' ? 'good' : row.status === 'reviewing' ? 'warn' : 'muted'}">${row.status === 'resolved' ? '已处理' : row.status === 'dismissed' ? '已驳回' : row.status === 'reviewing' ? '处理中' : '待处理'}</span></div><div class="admin-row-meta">举报时间：${adminTimeText(row.created_at)}<br>笔记：${escHtml(row.post_id || '无')} · ${escHtml(path)} · 被举报用户：${escHtml(uidToNumericId(String(row.reported_user_id || '')))}</div>${row.detail ? `<div class="admin-row-text">${escHtml(row.detail)}</div>` : ''}</div></div><div class="admin-actions"><button class="primary" onclick="adminUpdateContentReport(${row.id},'reviewing')">处理中</button><button onclick="adminOpenReportedPost(${JSON.stringify(row.post_id)})">查看笔记</button><button onclick="adminUpdateContentReport(${row.id},'resolved')">已处理</button><button class="danger" onclick="adminUpdateContentReport(${row.id},'dismissed')">驳回</button></div></div>`; }).join('')}</div>` : '<div class="admin-empty">当前筛选下没有内容举报。</div>');
 }
 function setAdminReportFilter(value){ adminReportFilter = value; const body = document.getElementById('adminBody'); if(body) renderAdminContentReports(body); }
+async function loadAdminMarketplaceReports(){
+  if(!adminHasAccess(true)) return [];
+  try {
+    const response = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/marketplace_admin_listing_reports`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ p_limit:120 }) });
+    if(!response.ok) throw new Error(await response.text());
+    adminMarketplaceReports = await response.json();
+  } catch(error) {
+    console.warn('商品合规举报读取失败:', error.message);
+    adminMarketplaceReports = [];
+  }
+  return adminMarketplaceReports;
+}
+function marketplaceReportReasonText(reason){ return ({ prohibited:'禁售或违法商品', counterfeit:'假冒或侵权', fraud:'疑似欺诈', unsafe:'安全风险', stolen:'疑似赃物', privacy:'隐私风险', other:'其他' })[reason] || '其他'; }
+function marketplaceStatusText(status){ return ({ pending:'待处理', reviewing:'审核中', resolved:'已处理', dismissed:'已驳回', review:'合规审核中', frozen:'已冻结', removed:'已下架', active:'已公开' })[status] || status || '待处理'; }
+function renderAdminMarketplaceReports(body){
+  const rows = adminFiltered(adminMarketplaceReports, ['listing_title','reason','detail','source_type','status','listing_status']);
+  body.innerHTML = rows.length ? `<div class="admin-list">${rows.map((row,index) => `<div class="admin-row"><div class="admin-row-top"><div class="admin-row-main"><div class="admin-row-title">${escHtml(row.listing_title || '未命名商品')} <span class="admin-badge ${row.listing_status === 'active' ? 'good' : row.listing_status === 'frozen' || row.listing_status === 'removed' ? 'warn' : 'muted'}">${marketplaceStatusText(row.listing_status || row.status)}</span></div><div class="admin-row-meta">${row.source_type === 'merchant_product' ? '认证商家商品' : '个人小店商品'} · ${marketplaceReportReasonText(row.reason)} · ${adminTimeText(row.created_at)}<br>商品编号：${escHtml(row.source_id || '')}</div>${row.detail ? `<div class="admin-row-text">${escHtml(row.detail)}</div>` : ''}</div></div><div class="admin-actions"><button onclick="adminModerateMarketplaceListing(${index},'review')">审核中</button><button class="primary" onclick="adminModerateMarketplaceListing(${index},'active')">恢复公开</button><button onclick="adminModerateMarketplaceListing(${index},'frozen')">冻结</button><button class="danger" onclick="adminModerateMarketplaceListing(${index},'removed')">下架</button></div></div>`).join('')}</div>` : '<div class="admin-empty">当前没有商品举报。受监管商品会自动进入“合规审核中”。</div>';
+}
+async function adminModerateMarketplaceListing(index,status){
+  if(!adminHasAccess()) return;
+  const row = adminMarketplaceReports[index];
+  if(!row) return;
+  const note = prompt('处理备注（会保存在审核记录中，可留空）', row.moderator_note || '') || '';
+  try {
+    const response = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/marketplace_moderate_listing`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ p_owner_user_id:row.owner_user_id, p_source_type:row.source_type, p_source_id:row.source_id, p_status:status, p_reason_code:row.reason || null, p_note:note }) });
+    if(!response.ok) throw new Error(await response.text());
+    await loadAdminMarketplaceReports();
+    renderAdminPanel();
+    showToast(status === 'active' ? '商品已恢复公开' : status === 'review' ? '商品已转入合规审核' : status === 'frozen' ? '商品已冻结' : '商品已下架');
+  } catch(error) {
+    console.warn('商品合规处理失败:', error.message);
+    showToast('处理失败，请检查管理员权限');
+  }
+}
 function adminOpenReportedPost(postId){
   if(postId === null || postId === undefined){ showToast('该举报没有关联笔记'); return; }
   window.adminReportPostReturn = true;

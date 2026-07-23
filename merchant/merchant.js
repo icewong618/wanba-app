@@ -30,6 +30,7 @@
   let tab = 'posts';
   let cart = [];
   let inventoryState = new Map();
+  let restrictedProducts = new Set();
 
   const social = item => {
     const raw = item.external_links;
@@ -58,6 +59,12 @@
       const response = await api(`/rest/v1/merchants?market_code=eq.${encodeURIComponent(market)}&slug=eq.${encodeURIComponent(slug)}&verified=eq.true&select=*&limit=1`);
       merchant = (await response.json())[0];
       if (!merchant) throw new Error('not found');
+      const controlsResponse = await api('/rest/v1/rpc/marketplace_public_listing_controls', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body:JSON.stringify({ p_owner_user_id:merchant.user_id, p_source_type:'merchant_product' })
+      });
+      const controls = controlsResponse.ok ? await controlsResponse.json() : [];
+      restrictedProducts = new Set(list(controls).map(row => String(row.source_id || '')));
       if (isRetail()) {
         const inventoryResponse = await api('/rest/v1/rpc/merchant_retail_public_inventory', {
           method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ p_merchant_user_id:merchant.user_id })
@@ -81,7 +88,7 @@
     if (features.has('auto_sales')) featureCards.push(['auto_sales', '二手车买卖']);
     const response = await api(`/rest/v1/posts?user_id=eq.${encodeURIComponent(merchant.user_id)}&visibility=eq.public&select=id,title,excerpt,content,image,created_at&order=created_at.desc&limit=30`);
     const posts = await response.json().catch(() => []);
-    const products = list(merchant.products || merchant.store_products).filter(product => product && product.active !== false);
+    const products = list(merchant.products || merchant.store_products).filter(product => product && product.active !== false && !restrictedProducts.has(String(product.id || '')));
     const coupons = list(merchant.coupons).filter(coupon => coupon && coupon.active !== false);
     const body = tab === 'posts'
       ? (posts.length ? posts.map(post => `<article class="post"><h3>${esc(post.title || '商家动态')}</h3><p>${esc(post.excerpt || post.content || '')}</p></article>`).join('') : '<div class="empty">商家暂时还没有发布动态。</div>')
@@ -98,6 +105,7 @@
     if (!product) return;
     const purchasable = isRetail() && isBuyable(product);
     document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>${esc(product.name || product.title || '商品')}</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div>${imgs(product)[0] ? `<img src="${esc(imgs(product)[0])}" class="product-detail-image" alt="">` : ''}<p class="product-detail-copy">${esc(product.description || '请联系商家了解详情。')}</p><h3 class="price">${moneyLabel(product.price)}</h3>${isOutOfStock(product) ? '<p class="stock-notice">该商品暂时缺货，请稍后再试或联系商家。</p>' : purchasable ? `<div class="product-buy-row"><div class="quantity"><button onclick="MerchantSite.productQuantity(${index},-1)">−</button><b id="productQuantity">1</b><button onclick="MerchantSite.productQuantity(${index},1)">＋</button></div><button class="buy-main" onclick="MerchantSite.add(${index})">加入购物车</button></div><button class="buy-secondary" onclick="MerchantSite.buyNow(${index})">线下自取 · 联系商家下单</button><p class="buy-note">订单提交时会先核对库存；商家完成交付后才会扣减库存。</p>` : `<button onclick="location.href='tel:${esc(merchant.phone || '')}'">联系商家</button>`}`;
+    document.querySelector('#productSheet').insertAdjacentHTML('beforeend', `<button class="buy-secondary" style="margin-top:10px;color:#876b5a" onclick="MerchantSite.report(${index})">举报此商品</button>`);
     window._merchantQuantity = 1;
     document.querySelector('#productModal').classList.add('open');
   }
@@ -117,6 +125,24 @@
     else cart.push({ id:String(product.id), name:product.name || product.title || '商品', price:money(product.price), image:imgs(product)[0] || '', quantity });
     saveCart();
     if (closeAfter) { close(); render(); }
+  }
+
+  async function report(index) {
+    const product = window._merchantProducts[index];
+    const session = getSession();
+    if (!product) return;
+    if (!(session?.access_token && session?.user?.id)) { alert('请先登录乐生活后再举报商品。'); return; }
+    const reason = prompt('举报原因：prohibited（禁售品）/ counterfeit（假冒）/ fraud（欺诈）/ unsafe（安全风险）/ stolen（疑似赃物）/ other（其他）', 'other');
+    const allowed = ['prohibited', 'counterfeit', 'fraud', 'unsafe', 'stolen', 'privacy', 'other'];
+    if (!reason) return;
+    if (!allowed.includes(String(reason).trim())) { alert('请填写列表中的英文原因代码。'); return; }
+    const detail = prompt('补充说明（可选）', '') || '';
+    const response = await authRequest('/rest/v1/rpc/marketplace_report_listing', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ p_owner_user_id:merchant.user_id, p_source_type:'merchant_product', p_source_id:String(product.id || ''), p_listing_title:product.name || product.title || '', p_reason:String(reason).trim(), p_detail:detail })
+    });
+    if (!response.ok) { alert('举报提交失败，请稍后再试。'); return; }
+    alert('已收到举报。平台会审核处理；必要时会暂停该商品展示和购买。');
   }
 
   function buyNow(index) { add(index, false); cartView(); }
@@ -170,6 +196,6 @@
 
   const close = () => document.querySelector('#productModal')?.classList.remove('open');
   const copy = () => navigator.clipboard?.writeText(location.href).then(() => alert('链接已复制')).catch(() => prompt('复制链接', location.href));
-  window.MerchantSite = { back, tab:value => { tab = value; render(); }, feature:openFeature, product, productQuantity, add, buyNow, cart:cartView, changeCart, pickup, submitPickup, close, copy, refresh:render, share:() => navigator.share ? navigator.share({ title:merchant.business_name, text:merchant.intro, url:location.href }) : copy() };
+  window.MerchantSite = { back, tab:value => { tab = value; render(); }, feature:openFeature, product, productQuantity, add, report, buyNow, cart:cartView, changeCart, pickup, submitPickup, close, copy, refresh:render, share:() => navigator.share ? navigator.share({ title:merchant.business_name, text:merchant.intro, url:location.href }) : copy() };
   load();
 })();
