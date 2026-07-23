@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.587';
+const APP_VERSION = '5.588';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3969,7 +3969,7 @@ function openShippingCenter(){
 function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.365&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantBookingUrl(m){ return `https://escoopcity.com/booking/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&booking_v=5.580&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantEventsUrl(m){ return `https://escoopcity.com/events/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&events_v=5.581&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
-function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.587&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.588&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 async function openMerchantBookingPage(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(merchantUserId);
@@ -4034,7 +4034,7 @@ async function openMerchantTicketsManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.587&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.588&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开票务管理失败:', error.message); showToast('票务管理暂时无法打开，请稍后再试'); }
@@ -8129,7 +8129,9 @@ async function loadEngagement(){
   } catch(e){ console.warn('互动数据同步失败:', e.message); }
 }
 function closePost(){
-  document.getElementById('postOverlay').classList.remove('open');
+  const overlay = document.getElementById('postOverlay');
+  overlay.classList.remove('open', 'image-detail-open');
+  document.getElementById('postModal')?.classList.remove('image-detail-layout');
   activePostId = null;
   currentImageIndex = 0;
   if(merchantAiReturnAfterPost && merchantAiState){
@@ -10282,6 +10284,7 @@ function renderPostModal(){
   }
   let media = '';
   const tikTokInfo = getPostTikTokInfo(p);
+  const isImagePost = !p.youtube && !tikTokInfo && !!((Array.isArray(p.images) && p.images.length) || p.image);
   const visibleContent = cleanPostContent(p.content);
   if(p.youtube){
     const ytVertical = getPostYoutubeVertical(p);
@@ -10329,17 +10332,11 @@ function renderPostModal(){
   const safeAuthor = escHtml(p.author || '乐生活用户');
   const isOwnPost = !!(session && session.user && String(p.user_id || '') === String(session.user.id));
 
-  document.getElementById('postModal').innerHTML = `
-    <div class="xhs-topbar">
-      <button class="xhs-back" onclick="closePost()">‹</button>
-      <span onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:inline-flex;">${avatarCircleHtml(p.author, p.user_id)}</span>
-      <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;">${safeAuthor}${identityBadgeHtml(p.user_id)}</span>
-      ${p.user_id && !isOwnPost ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
-      ${isOwnPost ? `<button class="xhs-share" title="管理笔记" aria-label="管理笔记" onclick="openOwnerSheet(event)" style="font-size:20px;position:relative;z-index:6;">☰</button>` : `<button class="xhs-share" title="转发" onclick="openPostShare(${JSON.stringify(p.id)})">${uiIcon('share',19)}</button>`}
-    </div>
-    <div class="xhs-scroll">
-      ${media ? `<div class="modal-media ${p.youtube || tikTokInfo ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
-      ${p.images && p.images.length > 1 ? `<div class="carousel-dots" id="carouselDots">${p.images.map((_,i) => `<span class="dot ${i===0?'on':''}"></span>`).join('')}</div>` : ''}
+  const postModal = document.getElementById('postModal');
+  const postOverlay = document.getElementById('postOverlay');
+  postModal.classList.toggle('image-detail-layout', isImagePost);
+  postOverlay.classList.toggle('image-detail-open', isImagePost);
+  const detailContent = `
       <div class="modal-body">
         <h2 class="modal-title display">${p.title}</h2>
         <div class="modal-content">${visibleContent}</div>
@@ -10351,7 +10348,29 @@ function renderPostModal(){
         <div class="xhs-comments-count">共 ${countComments(p)} 条评论</div>
         <div id="commentsList">${commentsHtml}</div>
         <div style="height:10px;"></div>
-      </div>
+      </div>`;
+  const detailMain = isImagePost ? `
+      <div class="xhs-detail-grid">
+        <div class="xhs-media-column">
+          ${media ? `<div class="modal-media">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
+          ${p.images && p.images.length > 1 ? `<div class="carousel-dots" id="carouselDots">${p.images.map((_,i) => `<span class="dot ${i===0?'on':''}"></span>`).join('')}</div>` : ''}
+        </div>
+        <div class="xhs-content-column">${detailContent}</div>
+      </div>` : `
+      ${media ? `<div class="modal-media ${p.youtube || tikTokInfo ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
+      ${p.images && p.images.length > 1 ? `<div class="carousel-dots" id="carouselDots">${p.images.map((_,i) => `<span class="dot ${i===0?'on':''}"></span>`).join('')}</div>` : ''}
+      ${detailContent}`;
+
+  postModal.innerHTML = `
+    <div class="xhs-topbar">
+      <button class="xhs-back" onclick="closePost()">‹</button>
+      <span onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:inline-flex;">${avatarCircleHtml(p.author, p.user_id)}</span>
+      <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;">${safeAuthor}${identityBadgeHtml(p.user_id)}</span>
+      ${p.user_id && !isOwnPost ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
+      ${isOwnPost ? `<button class="xhs-share" title="管理笔记" aria-label="管理笔记" onclick="openOwnerSheet(event)" style="font-size:20px;position:relative;z-index:6;">☰</button>` : `<button class="xhs-share" title="转发" onclick="openPostShare(${JSON.stringify(p.id)})">${uiIcon('share',19)}</button>`}
+    </div>
+    <div class="xhs-scroll">
+      ${detailMain}
     </div>
     <div class="xhs-bottombar">
       <input type="text" id="newCommentInput" placeholder="说点什么…" 
