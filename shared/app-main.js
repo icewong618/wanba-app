@@ -290,7 +290,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.526';
+const APP_VERSION = '5.530';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3572,7 +3572,7 @@ const MERCHANT_RESERVED_SLUGS = new Set([
   'm','app','api','admin','index','index-html','app-html','404','404-html','version-json',
   'versions','assets','favicon','favicon-ico','robots-txt','sitemap-xml','supabase','auth',
   'login','search','home','week','deals','message','messages','profile','merchant','merchants',
-  'restaurant','rental','autos','shop'
+  'restaurant','rental','autos','shop','shipping'
 ]);
 const MARKET_OPTIONS = [
   ['la','洛杉矶 LA','洛杉磯 LA','Los Angeles (LA)'],['sgv','圣盖博谷 SGV','聖蓋博谷 SGV','San Gabriel Valley (SGV)'],['oc','橙县 OC','橙縣 OC','Orange County (OC)'],['ie','内陆帝国 IE','內陸帝國 IE','Inland Empire (IE)'],['sd','圣地亚哥 SD','聖地亞哥 SD','San Diego (SD)'],
@@ -3883,6 +3883,7 @@ function callMerchantPhone(phone){
   window.location.href = `tel:${clean}`;
 }
 const MERCHANT_FEATURE_CATALOG = [
+  { id:'shipping', title:'物流中心', icon:'bag', live:true, description:'录入商品条码与自购运单，使用乐生活面单额度和邮资风险预检。' },
   { id:'rental', title:'租车预约', icon:'car', live:true, phone:true, categories:['住宿旅游'], description:'展示车辆、按日或小时预约、人工确认、取还车记录与运营状态。' },
   { id:'auto_sales', title:'二手车买卖', icon:'car', live:true, phone:true, categories:['交通出行'], subcategories:['车辆销售'], description:'展示在售车辆、预约试驾，并接收客户卖车估价申请。' },
   { id:'table_order', title:'扫码点餐', icon:'bag', live:true, categories:['餐饮饮品'], description:'顾客扫码选择餐桌、点菜和加菜，商家集中处理订单。' },
@@ -3928,6 +3929,12 @@ async function saveMerchantEnabledFeatures(merchant, values){
   return clean;
 }
 function merchantFeatureIcon(feature){ return uiIcon(feature.icon || 'store', 20); }
+function shippingCenterUrl(){ return `https://escoopcity.com/shipping/?shipping_v=5.530&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function openShippingCenter(){
+  const url = shippingCenterUrl();
+  if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
+  else window.location.href = url;
+}
 function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.365&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantAutoUrl(m, tab='buy'){ return `https://escoopcity.com/autos/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tab=${encodeURIComponent(tab === 'sell' ? 'sell' : 'buy')}&auto_v=5.413&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 async function openMerchantAutoPage(merchantUserId, tab='buy'){
@@ -4273,6 +4280,7 @@ function merchantContentHtml(m, opts){
           <button onclick="copyMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}复制微网站链接</button>
           <button onclick="shareMerchantSiteLink('${uidSafe}')">${uiIcon('share',15)}转发店铺</button>
           <button onclick="openMerchantFeatureCenter()">${uiIcon('store',15)}功能中心</button>
+          <button onclick="closeProfileMenu();openShippingCenter()">${uiIcon('bag',15)}物流中心</button>
           <button onclick="closeProfileMenu();openMerchantEditSheet()">${uiIcon('edit',15)}编辑商家资料</button>
           <button onclick="closeProfileMenu();openMerchantTeamManager()">${uiIcon('user',15)}团队与矩阵账号</button>
           ${isDealAdmin ? `<button onclick="closeProfileMenu();switchTab('admin')">${uiIcon('settings',15)}管理后台</button>` : ''}
@@ -4318,6 +4326,7 @@ function merchantContentHtml(m, opts){
       ${tableOrderEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 点餐服务</b><p>扫码点餐可选择餐桌；外卖点单可选择自提或送餐上门；扫码排队可提前点菜。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 点餐订单</button><button onclick="openMerchantTakeoutManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖订单</button><button onclick="openMerchantQueueManager('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>` : `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantOrderEntry('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 5px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('store',14)} 扫码点餐</button><button onclick="openMerchantTakeoutOrder('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('bag',14)} 外卖点单</button><button onclick="openMerchantQueuePage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 5px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('user',14)} 扫码排队</button></div>`}</div>` : ''}
       ${rentalEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('car',14)} 租车预约</b><p>按日或小时预约，商家确认后安排取车；押金和付款状态由商家统一管理。</p>${isOwnerPage ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;"><button onclick="openMerchantRentalManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('settings',14)} 车辆与预约</button><button onclick="openMerchantRentalPage('${uidSafe}')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 查看预约页</button></div>` : `<button onclick="openMerchantRentalPage('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('car',14)} 查看车辆并预约</button>`}</div>` : ''}
       ${autoSalesEnabled ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('car',14)} 二手车买卖</b><div style="display:grid;grid-template-columns:repeat(${isOwnerPage ? 3 : 2},minmax(0,1fr));gap:8px;margin-top:10px;">${isOwnerPage ? `<button onclick="openMerchantAutoManager('${uidSafe}')" style="border:none;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 12px inherit;">${uiIcon('settings',14)} 管理</button>` : ''}<button onclick="openMerchantAutoPage('${uidSafe}','buy')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 买车</button><button onclick="openMerchantAutoPage('${uidSafe}','sell')" style="border:1px solid var(--sage);border-radius:10px;padding:10px 6px;background:#fff;color:var(--sage-dark);font:800 12px inherit;">${uiIcon('car',14)} 卖车</button></div></div>` : ''}
+      ${isOwnerPage && merchantFeatures.includes('shipping') ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('bag',14)} 物流发货</b><p>录入商品包装码与自购物流运单，并查看乐生活面单额度和邮资预检。</p><button onclick="openShippingCenter()" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage);color:#fff;font:800 13px inherit;">${uiIcon('bag',14)} 进入物流中心</button></div>` : ''}
       ${isOwnerPage ? `<div class="merchant-mini-section" style="margin-top:14px;"><b>${uiIcon('settings',14)} 商家管理后台</b><p>统一查看经营概览，并进入点餐、会员、优惠券、内容、团队和已开通的业务功能。</p><button onclick="openMerchantManagementCenter('${uidSafe}')" style="width:100%;margin-top:10px;border:0;border-radius:10px;padding:10px 6px;background:var(--sage-dark);color:#fff;font:800 13px inherit;">${uiIcon('settings',14)} 进入商家管理后台</button></div>` : ''}
       <div style="margin-top:14px;padding:14px;background:var(--sage-dark);border-radius:14px;">
         <div style="display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;">${uiIcon('bag',15)} 会员优惠规则</div>
