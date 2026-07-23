@@ -57,11 +57,11 @@ try {
   });
   await check('retail order manager', '/retail/manage/', result => {
     if(!/id=["']retailManageApp["']/i.test(result.text)) throw new Error('retail order manager root missing');
-    if(!/manage\.js\?v=5\.550/i.test(result.text)) throw new Error('retail order manager cache version is stale');
+    if(!/manage\.js\?v=5\.570/i.test(result.text)) throw new Error('retail order manager cache version is stale');
   });
   await check('inventory manager', '/inventory/manage/', result => {
     if(!/id=["']inventoryManageApp["']/i.test(result.text)) throw new Error('inventory manager root missing');
-    if(!/manage\.js\?v=5\.560/i.test(result.text)) throw new Error('inventory manager cache version is stale');
+    if(!/manage\.js\?v=5\.570/i.test(result.text)) throw new Error('inventory manager cache version is stale');
   });
   await check('merchant share card', merchantPath, result => {
     if(!/<meta\s+property=["']og:title["']/i.test(result.text)) throw new Error('merchant Open Graph title missing');

@@ -63,7 +63,7 @@
       <div class="tool-row"><button onclick="InventoryAdmin.scan()">扫码管理库存</button><button onclick="InventoryAdmin.manual()">手动录入条码</button></div>
       <div class="filters"><button class="${filter==='all'?'on':''}" onclick="InventoryAdmin.filter('all')">全部 ${products.length}</button><button class="${filter==='low'?'on':''}" onclick="InventoryAdmin.filter('low')">库存偏低 ${lowCount}</button><button class="${filter==='unset'?'on':''}" onclick="InventoryAdmin.filter('unset')">未建库存 ${Math.max(products.length-configured,0)}</button></div>
       ${rows.length ? rows.map(productCard).join('') : '<div class="empty">这里没有符合条件的商品。</div>'}
-      <div class="hint">先在“店铺与商品”中建立商品，再在这里用条码绑定商品。库存变动会记录在流水中；零售订单自动扣库存将在下一步接入。</div>`;
+      <div class="hint">先在“店铺与商品”中建立商品，再在这里用条码绑定商品。库存变动会记录在流水中；零售订单在商家完成交付时自动扣减库存。</div>`;
   }
 
   function productCard(product){

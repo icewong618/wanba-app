@@ -290,7 +290,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.560';
+const APP_VERSION = '5.570';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3971,7 +3971,7 @@ async function openMerchantRetailManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/retail/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&retail_v=5.550&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/retail/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&retail_v=5.570&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开零售订单管理失败:', error.message); showToast('零售订单管理暂时无法打开，请稍后再试'); }
@@ -3982,7 +3982,7 @@ async function openMerchantInventoryManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/inventory/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&inventory_v=5.560&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/inventory/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&inventory_v=5.570&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开库存管理失败:', error.message); showToast('库存管理暂时无法打开，请稍后再试'); }
@@ -14668,4 +14668,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Barcode Inventory Management】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Retail Inventory Closure】`);

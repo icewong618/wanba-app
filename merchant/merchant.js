@@ -29,6 +29,7 @@
   let merchant = null;
   let tab = 'posts';
   let cart = [];
+  let inventoryState = new Map();
 
   const social = item => {
     const raw = item.external_links;
@@ -42,7 +43,9 @@
   const cartCount = () => cart.reduce((total, line) => total + Number(line.quantity || 0), 0);
   const cartTotal = () => cart.reduce((total, line) => total + (Number(line.price || 0) * Number(line.quantity || 0)), 0);
   const isRetail = () => String(merchant?.category || '').includes('零售') || String(merchant?.subcategory || '').includes('零售');
-  const isBuyable = product => money(product.price) !== null;
+  const stockState = product => inventoryState.get(String(product?.id || ''));
+  const isOutOfStock = product => stockState(product)?.in_stock === false;
+  const isBuyable = product => money(product.price) !== null && !isOutOfStock(product);
   const openFeature = kind => {
     const base = encodeURIComponent(merchant.slug);
     const paths = { rental:`/rental/?merchant=${base}`, auto_sales:`/autos/?merchant=${base}`, table_order:`/restaurant/?merchant=${base}` };
@@ -55,6 +58,13 @@
       const response = await api(`/rest/v1/merchants?market_code=eq.${encodeURIComponent(market)}&slug=eq.${encodeURIComponent(slug)}&verified=eq.true&select=*&limit=1`);
       merchant = (await response.json())[0];
       if (!merchant) throw new Error('not found');
+      if (isRetail()) {
+        const inventoryResponse = await api('/rest/v1/rpc/merchant_retail_public_inventory', {
+          method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ p_merchant_user_id:merchant.user_id })
+        });
+        const inventoryRows = inventoryResponse.ok ? await inventoryResponse.json() : [];
+        inventoryState = new Map(list(inventoryRows).map(row => [String(row.product_id), row]));
+      }
       cart = readCart();
       render();
     } catch (error) {
@@ -76,7 +86,7 @@
     const body = tab === 'posts'
       ? (posts.length ? posts.map(post => `<article class="post"><h3>${esc(post.title || '商家动态')}</h3><p>${esc(post.excerpt || post.content || '')}</p></article>`).join('') : '<div class="empty">商家暂时还没有发布动态。</div>')
       : tab === 'store'
-        ? (products.length ? products.map((product, index) => `<article class="product" onclick="MerchantSite.product(${index})"><div class="product-image">${imgs(product)[0] ? `<img src="${esc(imgs(product)[0])}" alt="" loading="lazy">` : ''}</div><div><h3>${esc(product.name || product.title || '商品')}</h3><p>${esc(product.description || '')}</p><div class="price">${moneyLabel(product.price)}</div></div></article>`).join('') : '<div class="empty">商家正在整理商品与服务。</div>')
+        ? (products.length ? products.map((product, index) => `<article class="product" onclick="MerchantSite.product(${index})"><div class="product-image">${imgs(product)[0] ? `<img src="${esc(imgs(product)[0])}" alt="" loading="lazy">` : ''}</div><div><h3>${esc(product.name || product.title || '商品')}</h3><p>${esc(product.description || '')}</p><div class="price">${moneyLabel(product.price)}${isOutOfStock(product) ? '<span class="stock-out">暂时缺货</span>' : ''}</div></div></article>`).join('') : '<div class="empty">商家正在整理商品与服务。</div>')
         : (coupons.length ? coupons.map(coupon => `<article class="coupon"><h3>${esc(coupon.title || '店铺优惠')} <b>${esc(coupon.badge || '优惠')}</b></h3><p>${esc(coupon.description || '到店出示使用，具体以商家说明为准。')}</p></article>`).join('') : '<div class="empty">暂时没有可领取的优惠券。</div>');
     const storeTab = isRetail() ? `<button class="${tab === 'store' ? 'on' : ''}" onclick="MerchantSite.tab('store')">店铺</button><button class="cart-tab" onclick="MerchantSite.cart()">购物车${cartCount() ? `<b>${cartCount()}</b>` : ''}</button>` : `<button class="${tab === 'store' ? 'on' : ''}" onclick="MerchantSite.tab('store')">店铺</button>`;
     app.innerHTML = `<header class="top"><button onclick="MerchantSite.back()">‹</button><b>商家微网站</b><button onclick="MerchantSite.share()">⌑</button></header><section class="hero ${merchant.cover_image ? 'cover' : ''}" ${cover}><div class="identity"><div class="logo">${merchant.logo ? `<img src="${esc(merchant.logo)}" alt="">` : esc((merchant.business_name || '商').slice(0, 1))}</div><div><h1>${esc(merchant.business_name || '认证商家')}</h1><small>乐生活认证商家</small></div></div><p class="intro">${esc(merchant.intro || merchant.description || '')}</p></section><section class="info"><div class="meta">${merchant.category ? `<span>${esc(merchant.category)}${merchant.subcategory ? ' · ' + esc(merchant.subcategory) : ''}</span>` : ''}${merchant.business_hours ? `<span>营业时间：${esc(typeof merchant.business_hours === 'string' ? merchant.business_hours : '详见店铺')}</span>` : ''}${merchant.address ? `<span>${esc(merchant.address)}</span>` : ''}</div><div class="actions"><a class="primary" href="tel:${esc(merchant.phone || '')}">联系商家</a><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.address || merchant.business_name || '')}" target="_blank" rel="noopener">导航</a><button onclick="MerchantSite.copy()">复制链接</button></div>${social(merchant).length ? `<div class="social">${social(merchant).map(([name, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(name)}</a>`).join('')}</div>` : ''}</section>${featureCards.length ? `<section class="features">${featureCards.map(([id, name]) => `<button class="feature" onclick="MerchantSite.feature('${id}')">${esc(name)}</button>`).join('')}</section>` : ''}<nav class="tabs"><button class="${tab === 'posts' ? 'on' : ''}" onclick="MerchantSite.tab('posts')">最新动态</button>${storeTab}<button class="${tab === 'coupons' ? 'on' : ''}" onclick="MerchantSite.tab('coupons')">优惠券</button></nav><section class="content">${body}</section><div class="modal" id="productModal" onclick="if(event.target.id==='productModal')MerchantSite.close()"><div class="sheet" id="productSheet"></div></div>`;
@@ -87,7 +97,7 @@
     const product = window._merchantProducts[index];
     if (!product) return;
     const purchasable = isRetail() && isBuyable(product);
-    document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>${esc(product.name || product.title || '商品')}</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div>${imgs(product)[0] ? `<img src="${esc(imgs(product)[0])}" class="product-detail-image" alt="">` : ''}<p class="product-detail-copy">${esc(product.description || '请联系商家了解详情。')}</p><h3 class="price">${moneyLabel(product.price)}</h3>${purchasable ? `<div class="product-buy-row"><div class="quantity"><button onclick="MerchantSite.productQuantity(${index},-1)">−</button><b id="productQuantity">1</b><button onclick="MerchantSite.productQuantity(${index},1)">＋</button></div><button class="buy-main" onclick="MerchantSite.add(${index})">加入购物车</button></div><button class="buy-secondary" onclick="MerchantSite.buyNow(${index})">线下自取 · 联系商家下单</button><p class="buy-note">提交后会把商品、数量和您的联系方式发送到商家私信，商家确认后与您约定自取。</p>` : `<button onclick="location.href='tel:${esc(merchant.phone || '')}'">联系商家</button>`}`;
+    document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>${esc(product.name || product.title || '商品')}</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div>${imgs(product)[0] ? `<img src="${esc(imgs(product)[0])}" class="product-detail-image" alt="">` : ''}<p class="product-detail-copy">${esc(product.description || '请联系商家了解详情。')}</p><h3 class="price">${moneyLabel(product.price)}</h3>${isOutOfStock(product) ? '<p class="stock-notice">该商品暂时缺货，请稍后再试或联系商家。</p>' : purchasable ? `<div class="product-buy-row"><div class="quantity"><button onclick="MerchantSite.productQuantity(${index},-1)">−</button><b id="productQuantity">1</b><button onclick="MerchantSite.productQuantity(${index},1)">＋</button></div><button class="buy-main" onclick="MerchantSite.add(${index})">加入购物车</button></div><button class="buy-secondary" onclick="MerchantSite.buyNow(${index})">线下自取 · 联系商家下单</button><p class="buy-note">订单提交时会先核对库存；商家完成交付后才会扣减库存。</p>` : `<button onclick="location.href='tel:${esc(merchant.phone || '')}'">联系商家</button>`}`;
     window._merchantQuantity = 1;
     document.querySelector('#productModal').classList.add('open');
   }
@@ -100,7 +110,7 @@
 
   function add(index, closeAfter = true) {
     const product = window._merchantProducts[index];
-    if (!product || !isBuyable(product)) return;
+    if (!product || !isBuyable(product)) { if (isOutOfStock(product)) alert('该商品暂时缺货。'); return; }
     const quantity = Math.max(1, Number(window._merchantQuantity || 1));
     const found = cart.find(line => String(line.id) === String(product.id));
     if (found) found.quantity = Math.min(99, Number(found.quantity || 0) + quantity);
@@ -144,7 +154,11 @@
     if (button) { button.disabled = true; button.textContent = '正在发送…'; }
     try {
       const response = await authRequest('/rest/v1/rpc/merchant_retail_order_create', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ p_merchant_user_id:merchant.user_id, p_items:cart.map(line => ({ product_id:String(line.id), quantity:Math.max(1, Number(line.quantity || 1)) })), p_customer_name:name, p_customer_phone:phone, p_customer_note:note || null }) });
-      if (!response.ok) throw new Error(`订单提交失败（${response.status}）`);
+      if (!response.ok) {
+        const text = await response.text();
+        if (/insufficient_stock/i.test(text)) throw new Error('部分商品库存不足，请刷新后调整购物车。');
+        throw new Error(`订单提交失败（${response.status}）`);
+      }
       const order = await response.json();
       cart = []; saveCart();
       document.querySelector('#productSheet').innerHTML = `<div class="sheet-head"><h2>订单已提交</h2><button class="sheet-close" onclick="MerchantSite.close()">×</button></div><div class="success">订单号：${esc(order?.order_code || '')}<br>商家会确认库存并安排自取时间。您可在“我的 - Purchase”查看进度。</div><button class="buy-main" onclick="MerchantSite.close();MerchantSite.refresh()">完成</button>`;

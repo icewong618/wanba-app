@@ -87,7 +87,11 @@
       const updated = await response.json();
       orders = orders.map(row => String(row.id) === String(id) ? updated : row);
       renderDetail(id);
-    } catch(error) { alert('更新订单失败，请稍后重试。'); console.warn(error); }
+    } catch(error) {
+      const message = String(error.message || '');
+      alert(message.includes('insufficient_stock_at_completion') ? '库存不足，暂时不能完成交付。请先到“扫码库存”补货后再试。' : '更新订单失败，请稍后重试。');
+      console.warn(error);
+    }
   }
   const saveNote = id => update(id, orders.find(row => String(row.id) === String(id))?.status || 'confirmed');
   window.RetailAdmin = {close, load, list:renderList, detail:renderDetail, filter:value => { filter=value; renderList(); }, update, saveNote};
