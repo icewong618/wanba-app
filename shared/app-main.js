@@ -308,7 +308,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.589';
+const APP_VERSION = '5.590';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3969,7 +3969,7 @@ function openShippingCenter(){
 function merchantRentalUrl(m){ return `https://escoopcity.com/rental/index.html?merchant=${encodeURIComponent(merchantSiteSlug(m))}&rental_v=5.365&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantBookingUrl(m){ return `https://escoopcity.com/booking/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&booking_v=5.580&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 function merchantEventsUrl(m){ return `https://escoopcity.com/events/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&events_v=5.581&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
-function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.588&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
+function merchantTicketsUrl(m){ return `https://escoopcity.com/tickets/?merchant=${encodeURIComponent(merchantSiteSlug(m))}&tickets_v=5.590&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`; }
 async function openMerchantBookingPage(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(merchantUserId);
@@ -4034,7 +4034,7 @@ async function openMerchantTicketsManager(merchantUserId){
   try {
     const merchant = await getMerchantOrderMerchant(id);
     if(!merchant) throw new Error('merchant_not_found');
-    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.588&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
+    const url = `https://escoopcity.com/tickets/manage/?merchant=${encodeURIComponent(merchantSiteSlug(merchant))}&tickets_v=5.590&app_v=${encodeURIComponent(APP_VERSION)}&refresh_t=${Date.now()}`;
     if(isNativeAppRuntime()) openMerchantEmbeddedOrder(url);
     else window.location.href = url;
   } catch(error){ console.warn('打开票务管理失败:', error.message); showToast('票务管理暂时无法打开，请稍后再试'); }
