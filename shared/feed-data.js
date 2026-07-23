@@ -17,15 +17,15 @@
     };
   };
 
-  const compactPost = (raw, { isValidSubcategory } = {}) => ({
+  const compactPost = (raw, { isValidSubcategory, normalizeSubcategory } = {}) => ({
     id: raw.id,
     title: raw.title || '无标题',
     content: raw.content || '',
     excerpt: raw.excerpt || '',
     category: raw.category || '',
-    subcategory: typeof isValidSubcategory === 'function' && isValidSubcategory(raw.category, raw.subcategory)
-      ? raw.subcategory
-      : null,
+    subcategory: typeof normalizeSubcategory === 'function'
+      ? normalizeSubcategory(raw.category, raw.subcategory)
+      : (typeof isValidSubcategory === 'function' && isValidSubcategory(raw.category, raw.subcategory) ? raw.subcategory : null),
     author: raw.author || '游客',
     image: raw.image || null,
     image_thumbnail: raw.image_thumbnail || null,

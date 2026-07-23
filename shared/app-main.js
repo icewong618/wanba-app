@@ -22,7 +22,7 @@ const MERCHANT_CATEGORY_CONFIG = [
 ];
 const POST_SUBCATEGORIES = {
   '美食':['探店','家常菜','饮品咖啡','烘焙甜品','优惠套餐','外卖推荐'],
-  '玩乐':['亲子遛娃','周末活动','户外运动','展览演出','旅行攻略','兴趣社群'],
+  '玩乐':['亲子遛娃','周末活动','户外运动','展览演出','旅行攻略','影视追剧'],
   '好物':['日用好物','美妆穿搭','数码家电','家居用品','母婴宠物','优惠折扣'],
   '生活':['本地服务','健康运动','学习成长','办事指南','邻里求助','生活分享'],
   '社区':['二手交易','房屋出租','求职招聘','拼车搭子','失物招领','邻里互助']
@@ -35,10 +35,11 @@ const FEED_INTEREST_OPTIONS = [
   {key:'outdoor',label:'户外运动',icon:'map',categories:['玩乐','生活'],subcategories:['户外运动','健康运动'],keywords:['徒步','露营','运动','滑雪']},
   {key:'travel',label:'旅行攻略',icon:'map',categories:['玩乐'],subcategories:['旅行攻略'],keywords:['旅行','旅游','自驾','攻略']},
   {key:'photography',label:'摄影记录',icon:'edit',categories:['生活','玩乐'],keywords:['摄影','拍照','相机','照片']},
-  {key:'anime',label:'漫画二次元',icon:'spark',categories:['玩乐'],subcategories:['兴趣社群'],keywords:['漫画','二次元','动漫','cosplay']},
+  {key:'screen',label:'影视追剧',icon:'video',categories:['玩乐'],subcategories:['影视追剧'],keywords:['电影','电视剧','影视','综艺','追剧','剧集']},
+  {key:'anime',label:'漫画二次元',icon:'spark',categories:['玩乐'],subcategories:['影视追剧'],keywords:['漫画','二次元','动漫','cosplay']},
   {key:'secondhand',label:'二手好物',icon:'bag',categories:['社区','好物'],subcategories:['二手交易','日用好物'],keywords:['二手','转让','闲置','出闲置']},
   {key:'rental',label:'租房找室友',icon:'home',categories:['社区'],subcategories:['房屋出租'],keywords:['租房','房屋','室友','转租']},
-  {key:'friends',label:'交友搭子',icon:'message',categories:['社区','玩乐'],subcategories:['拼车搭子','兴趣社群'],keywords:['交友','搭子','拼车','同城']},
+  {key:'friends',label:'交友搭子',icon:'message',categories:['社区','玩乐'],subcategories:['拼车搭子'],keywords:['交友','搭子','拼车','同城']},
   {key:'jobs',label:'求职招聘',icon:'store',categories:['社区'],subcategories:['求职招聘'],keywords:['招聘','求职','工作','兼职']},
   {key:'deals',label:'省钱优惠',icon:'bag',categories:['好物','美食'],subcategories:['优惠折扣','优惠套餐'],keywords:['折扣','优惠','省钱','deal']},
   {key:'tech',label:'数码家电',icon:'bag',categories:['好物'],subcategories:['数码家电'],keywords:['数码','手机','电脑','家电']},
@@ -79,6 +80,13 @@ const CAT_ALIASES = {
   '邻里':'社区',
   '公告':'社区',
   'community':'社区'
+};
+const POST_SUBCATEGORY_ALIASES = {
+  '兴趣社群':'影视追剧',
+  '影视':'影视追剧',
+  '电影':'影视追剧',
+  '电视剧':'影视追剧',
+  '追剧':'影视追剧'
 };
 const ICONS = {
   search:'<circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>',
@@ -167,14 +175,23 @@ function renderMerchantApplicationSubcategories(selected=''){
   if(feature) feature.textContent = merchantApplicationFeatureText(category);
 }
 function postSubcategoryOptions(category){ return POST_SUBCATEGORIES[normalizeCategory(category)] || []; }
-function isValidPostSubcategory(category, subcategory){ return !!subcategory && postSubcategoryOptions(category).includes(subcategory); }
+function normalizePostSubcategory(category, subcategory){
+  const raw = String(subcategory || '').trim();
+  if(!raw) return null;
+  const normalized = POST_SUBCATEGORY_ALIASES[raw] || raw;
+  return postSubcategoryOptions(category).includes(normalized) ? normalized : null;
+}
+function isValidPostSubcategory(category, subcategory){ return !!normalizePostSubcategory(category, subcategory); }
 function postCategoryPath(category, subcategory){
   const main = catLabel(category);
-  return isValidPostSubcategory(category, subcategory) ? `${main} · ${subcategory}` : main;
+  const normalized = normalizePostSubcategory(category, subcategory);
+  return normalized ? `${main} · ${normalized}` : main;
 }
 function cardCategoryTag(cat, subcategory=''){
-  const label = isValidPostSubcategory(cat, subcategory) ? subcategory : catLabel(cat);
-  return `<span class="cat-tag">${catIcon(cat, 13)}<span>${escHtml(label)}</span></span>`;
+  const normalized = normalizePostSubcategory(cat, subcategory);
+  const label = normalized || catLabel(cat);
+  const icon = normalized === '影视追剧' ? uiIcon('video', 13) : catIcon(cat, 13);
+  return `<span class="cat-tag">${icon}<span>${escHtml(label)}</span></span>`;
 }
 const QUICKLINKS = [
   {key:'遛娃', icon:'home'},
@@ -290,7 +307,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.570';
+const APP_VERSION = '5.571';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -7433,7 +7450,7 @@ function feedScore(post, signals){
   const recency = Math.max(0, 18 - ageDays * 1.25);
   const quality = Math.min(12, Math.log2(1 + Number(post.likes || 0)) * 2) + Math.min(6, Number(post.commentCount || 0) * 0.75) + Math.min(6, Number(post.favs || 0) * 0.9);
   let score = recency + quality;
-  const postSubcategory = String(post.subcategory || '').trim();
+  const postSubcategory = normalizePostSubcategory(post.category, post.subcategory) || String(post.subcategory || '').trim();
   const postText = `${post.title || ''} ${post.excerpt || ''} ${post.content || ''} ${(post.tags || []).join(' ')}`.toLowerCase();
   FEED_INTEREST_OPTIONS.forEach(interest => {
     if(!preferredFeedInterests.has(interest.key)) return;
@@ -7823,7 +7840,7 @@ function renderFeed(){
     list = publicPosts.filter(p => postMatchesQuickLink(p, currentTag));
   } else {
     list = currentFilter==='全部' ? publicPosts : publicPosts.filter(p=>normalizeCategory(p.category)===currentFilter);
-    if(currentSubcategory !== '全部') list = list.filter(p => p.subcategory === currentSubcategory);
+    if(currentSubcategory !== '全部') list = list.filter(p => normalizePostSubcategory(p.category, p.subcategory) === currentSubcategory);
   }
   list = orderedFeedPosts(list);
   const emptyHtml = `<div class="empty" style="grid-column:1/-1;"><span class="display">这里还空空的</span>${currentTag ? '暂时没有符合条件的内容,换个分类看看' : '成为第一个分享的人吧'}</div>`;
@@ -11455,7 +11472,7 @@ function renderPostSubcategoryPicker(){
   picker.innerHTML = options.map(item => `<button type="button" class="subcategory-pick ${selectedSubcategory === item ? 'selected' : ''}" onclick="pickPostSubcategory('${item}')">${item}</button>`).join('') + (selectedSubcategory ? '<button type="button" class="subcategory-clear" onclick="pickPostSubcategory(\'\')">不设置</button>' : '');
 }
 function pickPostSubcategory(item){
-  selectedSubcategory = isValidPostSubcategory(selectedCat, item) ? item : null;
+  selectedSubcategory = normalizePostSubcategory(selectedCat, item);
   communityPostMeta = {};
   renderPostSubcategoryPicker();
   renderCommunityPostFields();
@@ -12815,7 +12832,7 @@ function editPost(id){
   document.getElementById('titleCount').textContent = (p.title || '').length;
   document.getElementById('contentCount').textContent = (p.content || '').length;
   selectedCat = p.category;
-  selectedSubcategory = isValidPostSubcategory(selectedCat, p.subcategory) ? p.subcategory : null;
+  selectedSubcategory = normalizePostSubcategory(selectedCat, p.subcategory);
   communityPostMeta = p.community_meta && typeof p.community_meta === 'object' ? {...p.community_meta} : {};
   eventOn = isSignupEvent(p.event);
   activityLongTerm = !!(p.event && p.event.activity_long_term);
@@ -13746,7 +13763,7 @@ function clearPostsRetry(){
 }
 function compactFeedPost(raw){
   if(window.LeshenghuoFeedData?.compactPost){
-    return window.LeshenghuoFeedData.compactPost(raw, { isValidSubcategory: isValidPostSubcategory });
+    return window.LeshenghuoFeedData.compactPost(raw, { isValidSubcategory: isValidPostSubcategory, normalizeSubcategory: normalizePostSubcategory });
   }
   return {
     id: raw.id,
@@ -13754,7 +13771,7 @@ function compactFeedPost(raw){
     content: raw.content || '',
     excerpt: raw.excerpt || '',
     category: raw.category || '',
-    subcategory: isValidPostSubcategory(raw.category, raw.subcategory) ? raw.subcategory : null,
+    subcategory: normalizePostSubcategory(raw.category, raw.subcategory),
     author: raw.author || '游客',
     image: raw.image || null,
     image_thumbnail: raw.image_thumbnail || null,
@@ -14668,4 +14685,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Retail Inventory Closure】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Entertainment Category Refresh】`);
