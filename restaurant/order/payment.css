@@ -1,0 +1,71 @@
+.payment-banner {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  padding: 15px;
+  border-radius: 13px;
+  background: var(--green);
+  color: #fff;
+}
+
+.payment-banner span {
+  color: #e6f0e8;
+  font-size: 12px;
+}
+
+.payment-test-banner {
+  background: #8a651e;
+}
+
+.stripe-element {
+  min-height: 120px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--soft);
+}
+
+.stripe-error {
+  margin: 12px 0 0;
+  padding: 10px;
+  border-radius: 9px;
+  background: #fff0f0;
+  color: #a44747;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stripe-test-note {
+  margin: 12px 0 0;
+  padding: 10px;
+  border-radius: 9px;
+  background: #fff6df;
+  color: #74531a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stripe-test-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #dfc27c;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.stripe-test-ack input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin: 1px 0 0;
+}
+
+.stripe-test-ack span {
+  font-size: 12px;
+  line-height: 1.45;
+}

@@ -5,9 +5,11 @@
   const query = new URLSearchParams(location.search);
   const state = {
     merchant: null, products: [], category: '全部', cart: {}, claims: [], recentOrders: [], orderItems: {}, screen: 'menu',
+    orderId: '', submitting: false, stripe: null, stripeElements: null, stripeElement: null,
+    paymentEnvironment: '', paymentAmount: 0, paymentResult: null,
     mode: query.get('mode') === 'takeout' ? 'takeout' : 'dinein',
     dinein: { tableCode: String(query.get('table') || '').trim().toLowerCase(), tableName: '', note: '' },
-    takeout: { fulfillment: 'delivery', speed: 'standard', name: '', phone: '', address: '', note: '', scheduledAt: '', couponId: null, payment: 'apple_pay', tipPercent: 0, customTip: '', quote: null }
+    takeout: { fulfillment: 'delivery', speed: 'standard', name: '', phone: '', address: '', note: '', scheduledAt: '', couponId: null, payment: 'online', tipPercent: 0, customTip: '', quote: null }
   };
 
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
@@ -54,6 +56,7 @@
   const back = () => {
     if (state.screen === 'cart') nav('menu');
     else if (state.screen === 'details') nav('cart');
+    else if (state.screen === 'payment') nav('details');
     else if (state.screen === 'orders' || state.screen === 'success') nav('menu');
     else exitOrder();
   };
@@ -147,7 +150,12 @@
     const selectedQuote = quoteForSelectedClaim();
     const couponHtml = eligible.length ? eligible.map(claim => { const snapshot = claim.coupon_snapshot || {}; const active = Number(state.takeout.couponId) === Number(claim.id); const quote = active ? selectedQuote : null; const amount = quote ? Number(quote.discountAmount || 0) : couponDiscount(claim, subtotal()); return `<button class="coupon ${active ? 'on' : ''}" onclick="Order.coupon(${Number(claim.id)})"><span><b>${esc(snapshot.title || '优惠券')}</b><small>${esc(snapshot.description || '下单时可使用')}</small></span><strong>-${money(amount)}</strong></button>`; }).join('') : '<p class="muted">当前没有可用于这笔外卖订单的优惠券。</p>';
     const quoteNotice = selectedQuote ? `<p class="muted" style="margin:9px 0 0;color:${selectedQuote.valid ? '#2f704c' : '#a44747'}">${selectedQuote.valid ? '已按当前支付方式复核优惠金额。' : esc(selectedQuote.reason || '该优惠券暂时不可用于当前订单。')}</p>` : '';
-    app.innerHTML = `${top('订单详情')}${hero()}<section class="fulfillment"><button class="${delivery ? 'on' : ''}" onclick="Order.fulfillment('delivery')"><b>派送</b><span>送餐上门</span></button><button class="${!delivery ? 'on' : ''}" onclick="Order.fulfillment('pickup')"><b>到店自取</b><span>到店取餐</span></button></section><section class="section"><h2>联系人</h2><label>姓名</label><input id="customerName" maxlength="40" value="${esc(state.takeout.name || user()?.user_metadata?.display_name || user()?.user_metadata?.name || '')}" placeholder="姓名（必填）"><label>电话</label><input id="customerPhone" inputmode="tel" maxlength="32" value="${esc(state.takeout.phone)}" placeholder="电话（必填）">${delivery ? `<label>配送地址</label><div class="address-input"><textarea id="deliveryAddress" maxlength="240" placeholder="请输入完整配送地址（必填）">${esc(state.takeout.address)}</textarea><button onclick="Order.lookupAddress()">查找地址</button></div><div id="addressMatches"></div><label>备注</label><textarea id="deliveryNote" maxlength="240" placeholder="例如：门铃号、楼层或特殊要求">${esc(state.takeout.note)}</textarea>` : `<div class="address-card"><b>自取地点</b><br>${esc(state.merchant?.address || '请向商家确认地址')}<br>预计 ${cfg.pickupMinutes} 分钟可取餐</div><label>备注</label><textarea id="deliveryNote" maxlength="240" placeholder="例如：取餐人姓名或特殊要求">${esc(state.takeout.note)}</textarea>`}</section><section class="section"><h2>${delivery ? '派送时间' : '取餐时间'}</h2><div class="choice-grid">${delivery ? `<button class="choice ${state.takeout.speed === 'priority' ? 'on' : ''}" onclick="Order.speed('priority')"><b>优先派送</b><span>优先处理 +${money(cfg.priorityFee)}</span></button>` : ''}<button class="choice ${state.takeout.speed === 'standard' ? 'on' : ''}" onclick="Order.speed('standard')"><b>标准${delivery ? '派送' : '自取'}</b><span>${delivery ? `约 ${cfg.standardMinutes}-${cfg.standardMinutes + 15} 分钟` : `约 ${cfg.pickupMinutes} 分钟`}</span></button><button class="choice ${state.takeout.speed === 'scheduled' ? 'on' : ''}" onclick="Order.speed('scheduled')"><b>预约时间</b><span>选择指定时间</span></button></div>${state.takeout.speed === 'scheduled' ? `<label>预约时间</label><input id="scheduledAt" type="datetime-local" min="${minimum}" value="${esc(state.takeout.scheduledAt)}">` : ''}</section><section class="section"><h2>使用优惠券</h2>${couponHtml}${quoteNotice}<div class="tip"><b>小费</b><div class="tip-buttons">${[0, 15, 18, 20].map(percent => `<button class="${state.takeout.customTip === '' && Number(state.takeout.tipPercent) === percent ? 'on' : ''}" onclick="Order.tip(${percent})">${percent ? `${percent}%` : '不加小费'}</button>`).join('')}<button class="${state.takeout.customTip !== '' ? 'on' : ''}" onclick="Order.customTip()">自定</button></div>${state.takeout.customTip !== '' ? `<input id="customTip" inputmode="decimal" value="${esc(state.takeout.customTip)}" placeholder="输入小费金额" onchange="Order.setCustomTip(this.value)">` : ''}</div></section><section class="section"><h2>订单信息汇总</h2>${cartRows().map(product => `<div class="summary-line"><span>${esc(product.name)} × ${product.quantity}</span><b>${money(price(product.price) * product.quantity)}</b></div>`).join('')}<div class="summary-line"><span>菜品小计</span><b>${money(subtotal())}</b></div>${deliveryFee() ? `<div class="summary-line"><span>优先派送费</span><b>${money(deliveryFee())}</b></div>` : ''}<div class="summary-line"><span>优惠券优惠</span><b class="danger">-${money(discountAmount())}</b></div><div class="summary-line"><span>小费</span><b>${money(tipAmount())}</b></div><div class="summary-line total"><span>应付合计</span><b>${money(totalAmount())}</b></div></section><section class="section"><h2>在线支付方式</h2><div class="payment">${[['apple_pay','Apple Pay'],['google_pay','Google Pay'],['card','信用卡'],['gift_card','商家礼品卡']].map(([id,label]) => `<button class="${state.takeout.payment === id ? 'on' : ''}" onclick="Order.payment('${id}')">${label}</button>`).join('')}</div><div class="notice">付款前已由服务端复核优惠条件；收银结算时会再次核验并生成最终账单。</div></section><button class="primary submit" onclick="Order.submit()">提交订单并前往支付</button>`;
+    app.innerHTML = `${top('订单详情')}${hero()}<section class="fulfillment"><button class="${delivery ? 'on' : ''}" onclick="Order.fulfillment('delivery')"><b>派送</b><span>送餐上门</span></button><button class="${!delivery ? 'on' : ''}" onclick="Order.fulfillment('pickup')"><b>到店自取</b><span>到店取餐</span></button></section><section class="section"><h2>联系人</h2><label>姓名</label><input id="customerName" maxlength="40" value="${esc(state.takeout.name || user()?.user_metadata?.display_name || user()?.user_metadata?.name || '')}" placeholder="姓名（必填）"><label>电话</label><input id="customerPhone" inputmode="tel" maxlength="32" value="${esc(state.takeout.phone)}" placeholder="电话（必填）">${delivery ? `<label>配送地址</label><div class="address-input"><textarea id="deliveryAddress" maxlength="240" placeholder="请输入完整配送地址（必填）">${esc(state.takeout.address)}</textarea><button onclick="Order.lookupAddress()">查找地址</button></div><div id="addressMatches"></div><label>备注</label><textarea id="deliveryNote" maxlength="240" placeholder="例如：门铃号、楼层或特殊要求">${esc(state.takeout.note)}</textarea>` : `<div class="address-card"><b>自取地点</b><br>${esc(state.merchant?.address || '请向商家确认地址')}<br>预计 ${cfg.pickupMinutes} 分钟可取餐</div><label>备注</label><textarea id="deliveryNote" maxlength="240" placeholder="例如：取餐人姓名或特殊要求">${esc(state.takeout.note)}</textarea>`}</section><section class="section"><h2>${delivery ? '派送时间' : '取餐时间'}</h2><div class="choice-grid">${delivery ? `<button class="choice ${state.takeout.speed === 'priority' ? 'on' : ''}" onclick="Order.speed('priority')"><b>优先派送</b><span>优先处理 +${money(cfg.priorityFee)}</span></button>` : ''}<button class="choice ${state.takeout.speed === 'standard' ? 'on' : ''}" onclick="Order.speed('standard')"><b>标准${delivery ? '派送' : '自取'}</b><span>${delivery ? `约 ${cfg.standardMinutes}-${cfg.standardMinutes + 15} 分钟` : `约 ${cfg.pickupMinutes} 分钟`}</span></button><button class="choice ${state.takeout.speed === 'scheduled' ? 'on' : ''}" onclick="Order.speed('scheduled')"><b>预约时间</b><span>选择指定时间</span></button></div>${state.takeout.speed === 'scheduled' ? `<label>预约时间</label><input id="scheduledAt" type="datetime-local" min="${minimum}" value="${esc(state.takeout.scheduledAt)}">` : ''}</section><section class="section"><h2>使用优惠券</h2>${couponHtml}${quoteNotice}<div class="tip"><b>小费</b><div class="tip-buttons">${[0, 15, 18, 20].map(percent => `<button class="${state.takeout.customTip === '' && Number(state.takeout.tipPercent) === percent ? 'on' : ''}" onclick="Order.tip(${percent})">${percent ? `${percent}%` : '不加小费'}</button>`).join('')}<button class="${state.takeout.customTip !== '' ? 'on' : ''}" onclick="Order.customTip()">自定</button></div>${state.takeout.customTip !== '' ? `<input id="customTip" inputmode="decimal" value="${esc(state.takeout.customTip)}" placeholder="输入小费金额" onchange="Order.setCustomTip(this.value)">` : ''}</div></section><section class="section"><h2>订单信息汇总</h2>${cartRows().map(product => `<div class="summary-line"><span>${esc(product.name)} × ${product.quantity}</span><b>${money(price(product.price) * product.quantity)}</b></div>`).join('')}<div class="summary-line"><span>菜品小计</span><b>${money(subtotal())}</b></div>${deliveryFee() ? `<div class="summary-line"><span>优先派送费</span><b>${money(deliveryFee())}</b></div>` : ''}<div class="summary-line"><span>优惠券优惠</span><b class="danger">-${money(discountAmount())}</b></div><div class="summary-line"><span>小费</span><b>${money(tipAmount())}</b></div><div class="summary-line total"><span>应付合计</span><b>${money(totalAmount())}</b></div></section><section class="section"><h2>安全在线支付</h2><p class="muted">下一步由 Stripe 安全显示当前设备可用的 Apple Pay、Google Pay、Link 或银行卡。优惠条件将在创建付款时由服务器再次复核。</p></section><button id="takeoutSubmitButton" class="primary submit" onclick="Order.submit()">提交订单并前往支付</button>`;
+  }
+
+  function renderPayment() {
+    const test = state.paymentEnvironment === 'test';
+    app.innerHTML = `${top('安全支付')}<section id="restaurantPaymentBanner" class="payment-banner ${test ? 'payment-test-banner' : ''}"><b id="restaurantPaymentEnvironment">${state.paymentEnvironment ? (test ? 'Stripe 测试付款' : 'Stripe 正式付款') : '正在检查付款环境'}</b><span>${esc(state.merchant?.business_name || '乐生活商家')} · 订单金额 <strong id="restaurantPaymentAmount">${money(state.paymentAmount || totalAmount())}</strong></span></section><section class="section"><h2>订单金额</h2><div class="summary-line"><span>菜品小计</span><b>${money(subtotal())}</b></div>${deliveryFee() ? `<div class="summary-line"><span>派送费</span><b>${money(deliveryFee())}</b></div>` : ''}<div class="summary-line"><span>优惠券优惠</span><b class="danger">-${money(discountAmount())}</b></div><div class="summary-line"><span>小费</span><b>${money(tipAmount())}</b></div><div class="summary-line total"><span>应付合计</span><b>${money(state.paymentAmount || totalAmount())}</b></div></section><section class="section"><h2>付款方式</h2><p id="restaurantPaymentDescription" class="muted">正在准备 Stripe 安全付款表单...</p><div id="restaurantStripeElement" class="stripe-element">正在加载付款方式...</div><p id="restaurantPaymentError" class="stripe-error" hidden></p><div id="restaurantPaymentTestGuard"></div></section><button id="restaurantConfirmButton" class="primary submit" onclick="Order.preparePayment()" disabled>正在创建付款表单...</button>`;
   }
 
   function renderOrders() {
@@ -157,7 +165,17 @@
 
   function renderSuccess() {
     const dinein = !isTakeout();
-    app.innerHTML = `${top('订单已提交')}<div class="success"><i>✓</i><h1>${dinein ? '餐桌订单已提交' : '外卖订单已提交'}</h1><p class="muted">${dinein ? '订单已发送给商家，请留意上菜情况。' : `订单已发送给商家。预计${state.takeout.fulfillment === 'delivery' ? '送达' : '取餐'}时间可在“已点外卖”中查看。`}</p>${dinein ? '' : '<button class="primary" onclick="Order.orders()">查看已点外卖</button>'}<button class="link" onclick="Order.menu()">继续浏览菜单</button></div>`;
+    const processing = state.paymentResult?.status === 'processing';
+    const title = dinein ? '订单已提交' : (processing ? '付款处理中' : '付款成功');
+    const heading = dinein
+      ? '餐桌订单已提交'
+      : (processing ? '外卖付款处理中' : (state.paymentEnvironment === 'test' ? '测试付款成功' : '外卖付款成功'));
+    const message = dinein
+      ? '订单已发送给商家，请留意上菜情况。'
+      : processing
+        ? 'Stripe 正在确认付款，确认完成后订单会自动更新，请勿重复支付。'
+        : `${state.paymentEnvironment === 'test' ? '本次为 Stripe 测试付款，不会产生真实扣款。' : '付款已确认并发送给商家。'}预计${state.takeout.fulfillment === 'delivery' ? '送达' : '取餐'}时间可在“已点外卖”中查看。`;
+    app.innerHTML = `${top(title)}<div class="success"><i>${processing ? '…' : '✓'}</i><h1>${heading}</h1><p class="muted">${message}</p>${dinein ? '' : '<button class="primary" onclick="Order.orders()">查看已点外卖</button>'}<button class="link" onclick="Order.menu()">继续浏览菜单</button></div>`;
   }
 
   function renderTakeoutAppOnly() {
@@ -171,6 +189,7 @@
       if (!state.merchant) return;
       if (state.screen === 'cart') renderCart();
       else if (state.screen === 'details') renderDetails();
+      else if (state.screen === 'payment') renderPayment();
       else if (state.screen === 'orders') renderOrders();
       else if (state.screen === 'success') renderSuccess();
       else renderMenu();
@@ -217,7 +236,101 @@
       state.addressResults = rows;
     } catch (error) { if (matches) matches.innerHTML = `<p class="muted">${esc(error.message || '地址查询失败，请稍后再试。')}</p>`; }
   }
+  const showPaymentError = message => {
+    const target = document.getElementById('restaurantPaymentError');
+    if (!target) return;
+    target.hidden = false;
+    target.textContent = message;
+  };
+  const syncPaymentEnvironment = () => {
+    const test = state.paymentEnvironment === 'test';
+    const banner = document.getElementById('restaurantPaymentBanner');
+    const title = document.getElementById('restaurantPaymentEnvironment');
+    const description = document.getElementById('restaurantPaymentDescription');
+    const amount = document.getElementById('restaurantPaymentAmount');
+    const guard = document.getElementById('restaurantPaymentTestGuard');
+    banner?.classList.toggle('payment-test-banner', test);
+    if (title) title.textContent = test ? 'Stripe 测试付款' : 'Stripe 正式付款';
+    if (description) description.textContent = 'Stripe 会按当前设备显示可用的 Apple Pay、Google Pay、Link 或银行卡。';
+    if (amount) amount.textContent = money(state.paymentAmount);
+    if (guard) guard.innerHTML = test ? '<p class="stripe-test-note">测试银行卡：4242 4242 4242 4242，任意未来日期、任意 CVC、任意邮编。不会发生真实扣款。</p><label class="stripe-test-ack"><input id="restaurantTestAcknowledgement" type="checkbox"><span>我已了解这是测试付款。</span></label>' : '';
+  };
+  async function preparePayment() {
+    const button = document.getElementById('restaurantConfirmButton');
+    if (!state.orderId) {
+      showPaymentError('订单尚未创建，请返回订单详情后重试。');
+      return;
+    }
+    if (button) { button.disabled = true; button.textContent = '正在创建付款表单...'; }
+    try {
+      const response = await api('/functions/v1/restaurant-stripe-payment', {
+        method: 'POST',
+        body: JSON.stringify({ order_id: state.orderId })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Stripe 付款暂不可用。');
+      if (!payload.client_secret || !payload.publishable_key || !window.Stripe) throw new Error('Stripe 支付尚未完成配置。');
+
+      state.paymentEnvironment = payload.payment_environment === 'live' ? 'live' : 'test';
+      state.paymentAmount = Number(payload.amount || totalAmount());
+      syncPaymentEnvironment();
+      state.stripeElement?.destroy?.();
+      state.stripe = window.Stripe(payload.publishable_key);
+      const elementOptions = { clientSecret: payload.client_secret };
+      if (payload.customer_session_client_secret) elementOptions.customerSessionClientSecret = payload.customer_session_client_secret;
+      state.stripeElements = state.stripe.elements(elementOptions);
+      state.stripeElement = state.stripeElements.create('payment', {
+        layout: { type: 'accordion', visibleAccordionItemsCount: 4 },
+        paymentMethodOrder: ['apple_pay', 'google_pay', 'link', 'card'],
+        wallets: { applePay: 'auto', googlePay: 'auto' }
+      });
+      state.stripeElement.mount('#restaurantStripeElement');
+      if (button) {
+        button.disabled = false;
+        button.textContent = `${state.paymentEnvironment === 'test' ? '确认测试付款' : '确认支付'} ${money(state.paymentAmount)}`;
+        button.onclick = confirmStripePayment;
+      }
+    } catch (error) {
+      showPaymentError(error.message || '暂时无法创建付款，请稍后重试。');
+      if (button) { button.disabled = false; button.textContent = '重新创建付款表单'; }
+    }
+  }
+  async function confirmStripePayment() {
+    if (!state.stripe || !state.stripeElements) { await preparePayment(); return; }
+    if (state.paymentEnvironment === 'test' && !document.getElementById('restaurantTestAcknowledgement')?.checked) {
+      showPaymentError('请先确认你了解这是测试付款。');
+      return;
+    }
+    const button = document.getElementById('restaurantConfirmButton');
+    if (button) { button.disabled = true; button.textContent = '正在确认付款...'; }
+    const result = await state.stripe.confirmPayment({
+      elements: state.stripeElements,
+      confirmParams: {
+        return_url: `${location.origin}${location.pathname}${location.search}`
+      },
+      redirect: 'if_required'
+    });
+    if (result.error) {
+      showPaymentError(result.error.message || '付款未完成。');
+      if (button) { button.disabled = false; button.textContent = `确认支付 ${money(state.paymentAmount)}`; }
+      return;
+    }
+    if (!['succeeded', 'processing'].includes(result.paymentIntent?.status || '')) {
+      showPaymentError('付款尚未完成，请检查付款方式后重试。');
+      if (button) { button.disabled = false; button.textContent = `确认支付 ${money(state.paymentAmount)}`; }
+      return;
+    }
+    state.paymentResult = result.paymentIntent;
+    state.cart = {};
+    state.orderId = '';
+    state.stripeElement?.destroy?.();
+    state.stripeElement = null;
+    state.recentOrders = await loadRecentOrders();
+    await loadOrderItems(state.recentOrders);
+    nav('success');
+  }
   async function submit() {
+    if (state.submitting) return;
     persistFields();
     const rows = cartRows();
     if (!isTakeout()) {
@@ -246,35 +359,52 @@
     const now = new Date();
     const estimateMinutes = state.takeout.speed === 'priority' ? Math.max(15, settings().standardMinutes - 15) : (delivery ? settings().standardMinutes : settings().pickupMinutes);
     const estimateAt = state.takeout.speed === 'scheduled' ? new Date(state.takeout.scheduledAt).toISOString() : new Date(now.getTime() + estimateMinutes * 60000).toISOString();
-    const response = await api('/rest/v1/rpc/merchant_takeout_order_submit', { method:'POST', body:JSON.stringify({
-      p_merchant_user_id: state.merchant.user_id,
-      p_items: rows.map(product => ({ product_id: product.id, quantity: product.quantity })),
-      p_customer_name: state.takeout.name,
-      p_customer_phone: state.takeout.phone,
-      p_fulfillment: delivery ? 'delivery' : 'pickup',
-      p_delivery_address: delivery ? state.takeout.address : '',
-      p_delivery_at: state.takeout.speed === 'scheduled' ? new Date(state.takeout.scheduledAt).toISOString() : null,
-      p_customer_note: state.takeout.note,
-      p_estimated_at: estimateAt,
-      p_requested_payment_method: state.takeout.payment,
-      p_tip_amount: Number(tipAmount().toFixed(2)),
-      p_quoted_discount_amount: Number(discountAmount().toFixed(2)),
-      p_coupon_claim_ids: selectedClaim() ? [Number(selectedClaim().id)] : []
-    }) });
-    if (!response.ok) { console.warn(await response.text()); alert('订单提交失败，请稍后再试。'); return; }
-    state.orderId = await response.json();
-    state.cart = {}; state.recentOrders = await loadRecentOrders(); await loadOrderItems(state.recentOrders); nav('success');
+    const button = document.getElementById('takeoutSubmitButton');
+    state.submitting = true;
+    if (button) { button.disabled = true; button.textContent = '正在创建订单...'; }
+    try {
+      const response = await api('/rest/v1/rpc/merchant_takeout_order_submit', { method:'POST', body:JSON.stringify({
+        p_merchant_user_id: state.merchant.user_id,
+        p_items: rows.map(product => ({ product_id: product.id, quantity: product.quantity })),
+        p_customer_name: state.takeout.name,
+        p_customer_phone: state.takeout.phone,
+        p_fulfillment: delivery ? 'delivery' : 'pickup',
+        p_delivery_address: delivery ? state.takeout.address : '',
+        p_delivery_at: state.takeout.speed === 'scheduled' ? new Date(state.takeout.scheduledAt).toISOString() : null,
+        p_customer_note: state.takeout.note,
+        p_estimated_at: estimateAt,
+        p_requested_payment_method: 'online',
+        p_tip_amount: Number(tipAmount().toFixed(2)),
+        p_quoted_discount_amount: Number(discountAmount().toFixed(2)),
+        p_coupon_claim_ids: selectedClaim() ? [Number(selectedClaim().id)] : [],
+        p_delivery_fee: Number(deliveryFee().toFixed(2))
+      }) });
+      if (!response.ok) {
+        console.warn(await response.text());
+        throw new Error('订单提交失败，请稍后再试。');
+      }
+      state.orderId = await response.json();
+      state.paymentAmount = totalAmount();
+      nav('payment');
+      await preparePayment();
+    } catch (error) {
+      alert(error.message || '订单提交失败，请稍后再试。');
+      if (button) { button.disabled = false; button.textContent = '提交订单并前往支付'; }
+    } finally {
+      state.submitting = false;
+    }
   }
 
   window.Order = {
     back, close, menu: () => nav('menu'), cart: () => nav('cart'), details: async () => { if (isTakeout()) { state.claims = await loadClaims(); await refreshCheckoutQuote(); } nav('details'); }, orders: async () => { state.recentOrders = await loadRecentOrders(); await loadOrderItems(state.recentOrders); nav('orders'); },
     category: value => { state.category = value; render(); }, qty: (id, delta) => { const next = Math.max(0, Math.min(99, Number(state.cart[id] || 0) + Number(delta))); if (next) state.cart[id] = next; else delete state.cart[id]; render(); },
     fulfillment: value => { persistFields(); state.takeout.fulfillment = value; state.takeout.speed = 'standard'; render(); }, speed: value => { persistFields(); state.takeout.speed = value; render(); },
-    coupon: async id => { persistFields(); state.takeout.couponId = Number(state.takeout.couponId) === id ? null : id; await refreshCheckoutQuote(); render(); }, payment: async value => { persistFields(); state.takeout.payment = value; await refreshCheckoutQuote(); render(); },
+    coupon: async id => { persistFields(); state.takeout.couponId = Number(state.takeout.couponId) === id ? null : id; await refreshCheckoutQuote(); render(); },
     tip: value => { persistFields(); state.takeout.tipPercent = value; state.takeout.customTip = ''; render(); }, customTip: () => { persistFields(); state.takeout.customTip = state.takeout.customTip || '0'; render(); }, setCustomTip: value => { persistFields(); state.takeout.customTip = value; render(); },
     lookupAddress, useAddress: index => { const row = state.addressResults?.[index]; if (!row) return; state.takeout.address = row.formatted_address; state.takeout.note = ''; render(); },
     appCoupon: () => alert('优惠券仅限乐生活 App 内领取和使用。请下载或打开乐生活 App 后再试。'),
-    downloadApp: () => alert('乐生活 App 的下载入口将在正式上架后按你的设备自动启用。'), submit
+    downloadApp: () => alert('乐生活 App 的下载入口将在正式上架后按你的设备自动启用。'),
+    submit, preparePayment, confirmStripePayment
   };
 
   (async () => {
