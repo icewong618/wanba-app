@@ -7,6 +7,20 @@
     let distance = 0;
     let tracking = false;
     let busy = false;
+    let holdReady = false;
+    let holdTimer = 0;
+    const clearHold = () => {
+      if(holdTimer) window.clearTimeout(holdTimer);
+      holdTimer = 0;
+      holdReady = false;
+    };
+    const resetTracking = () => {
+      tracking = false;
+      startX = 0;
+      startY = 0;
+      distance = 0;
+      clearHold();
+    };
     const indicator = (state = 'hidden', label = '下拉刷新') => {
       const element = document.getElementById('pullRefreshIndicator');
       const text = document.getElementById('pullRefreshLabel');
@@ -33,6 +47,7 @@
       document.addEventListener('touchstart', event => {
         if(!isEnabled() || busy || event.touches.length !== 1 || blocked(event.target) || !atTop(event.target)) return;
         tracking = true;
+        clearHold();
         startX = event.touches[0].clientX;
         startY = event.touches[0].clientY;
         distance = 0;
@@ -41,20 +56,29 @@
         if(!tracking || busy || event.touches.length !== 1) return;
         const deltaX = Math.abs(event.touches[0].clientX - startX);
         const deltaY = event.touches[0].clientY - startY;
-        if(deltaX > Math.abs(deltaY)){ tracking = false; distance = 0; indicator(); return; }
+        if(deltaX > Math.abs(deltaY)){ resetTracking(); indicator(); return; }
         const nextDistance = Math.max(0, deltaY);
-        if(nextDistance <= 0){ tracking = false; indicator(); return; }
+        if(nextDistance <= 0){ resetTracking(); indicator(); return; }
         distance = Math.min(nextDistance, threshold + 34);
-        if(nextDistance > 16 && event.cancelable) event.preventDefault();
-        indicator(distance >= threshold ? 'ready' : 'pulling', distance >= threshold ? '松开刷新' : '下拉刷新');
-      }, { passive:false });
+        if(distance < threshold){
+          clearHold();
+          indicator('pulling', '继续下拉');
+          return;
+        }
+        if(!holdReady && !holdTimer){
+          indicator('pulling', '保持一下');
+          holdTimer = window.setTimeout(() => {
+            holdTimer = 0;
+            if(!tracking || distance < threshold) return;
+            holdReady = true;
+            indicator('ready', '松开刷新');
+          }, 480);
+        }
+      }, { passive:true });
       document.addEventListener('touchend', async () => {
         if(!tracking) return;
-        const shouldRefresh = distance >= threshold;
-        tracking = false;
-        startX = 0;
-        startY = 0;
-        distance = 0;
+        const shouldRefresh = distance >= threshold && holdReady;
+        resetTracking();
         if(!shouldRefresh){ indicator(); return; }
         busy = true;
         indicator('loading', '正在刷新');
@@ -68,7 +92,7 @@
           setTimeout(() => indicator(), 900);
         } finally { busy = false; }
       }, { passive:true });
-      document.addEventListener('touchcancel', () => { tracking = false; startX = 0; startY = 0; distance = 0; if(!busy) indicator(); }, { passive:true });
+      document.addEventListener('touchcancel', () => { resetTracking(); if(!busy) indicator(); }, { passive:true });
     };
     return { indicator, bind, atTop, blocked };
   };

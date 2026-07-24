@@ -84,6 +84,15 @@ try {
   const missingModules = requiredModules.filter(file => !fs.existsSync(path.join(root, file)));
   if(missingModules.length) fail(`required shared modules missing: ${missingModules.join(', ')}`);
   else console.log(`PASS ${requiredModules.length} required shared modules exist`);
+
+  const pullRefresh = read('shared/app-pull-refresh.js');
+  if(/\bpreventDefault\s*\(/.test(pullRefresh) || /touchmove[\s\S]{0,900}passive\s*:\s*false/.test(pullRefresh)){
+    fail('pull-to-refresh blocks native vertical scrolling');
+  } else if(!pullRefresh.includes('holdReady') || !pullRefresh.includes('保持一下')){
+    fail('pull-to-refresh hold-to-refresh state is missing');
+  } else {
+    console.log('PASS pull-to-refresh preserves native vertical scrolling');
+  }
 } catch(error) {
   fail(error.stack || error.message);
 }
