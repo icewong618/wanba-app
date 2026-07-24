@@ -167,6 +167,9 @@
   #page-home.active{min-height:calc(100dvh - var(--app-bottom-nav-height));overscroll-behavior-y:contain;}
   .pull-refresh-indicator{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:920;display:flex;align-items:center;gap:7px;min-width:116px;justify-content:center;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,252,.96);box-shadow:0 5px 16px rgba(42,39,33,.14);color:var(--sage-dark);font-size:12px;font-weight:900;pointer-events:none;opacity:0;transform:translate(-50%,-18px);transition:opacity .16s ease,transform .16s ease;}
   .page:not(#page-profile){padding-top:calc(12px + env(safe-area-inset-top));}
+  /* Home already reserves the exact measured fixed-header height. */
+  #page-home,
+  #page-home.active{padding-top:0;}
   /* ---------- 内置视频浏览（不会跳转至 YouTube App） ---------- */
   .youtube-hub-overlay{display:none;position:fixed;inset:0;z-index:235;background:var(--bg);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
   .youtube-hub-scroll{flex:1;min-height:0;overflow-y:auto;padding:14px 16px calc(26px + env(safe-area-inset-bottom));}

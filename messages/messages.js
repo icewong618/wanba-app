@@ -2,7 +2,7 @@
   const routeInAppShell = (route, payload={}) => window.LeshenghuoModuleBridge?.route(route, payload) || false;
   const { esc, session, request } = window.LeshenghuoModuleRuntime;
   const app = document.getElementById('messagesApp');
-  const state = { me:null, posts:[], comments:[], likes:[], favorites:[], follows:[], messages:[], profiles:{}, loading:null };
+  const state = { me:null, posts:[], comments:[], likes:[], favorites:[], follows:[], messages:[], profiles:{}, loading:null, view:'home' };
   const cacheKey = () => `leshenghuo_messages_module_cache_v1_${state.me?.id || 'guest'}`;
   const cacheTtl = 90 * 1000;
   const readCache = () => { try { const value=JSON.parse(localStorage.getItem(cacheKey())||'null'); return value?.meId===state.me?.id ? value : null; } catch(e) { return null; } };
@@ -30,12 +30,14 @@
   const top = () => `<header class="module-top"><button onclick="Messages.back()" aria-label="返回">‹</button><b>消息</b><span class="module-top-actions"><button class="module-language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言">文</button><button onclick="Messages.refresh()" aria-label="刷新">↻</button></span></header>`;
   const category = (key,label,klass) => `<button class="message-category" onclick="Messages.category('${key}')"><span class="message-icon ${klass}">${icon(klass)}</span><span>${label}</span>${unread(key)?'<i class="msg-dot"></i>':''}</button>`;
   const renderHome = () => {
+    state.view='home';
     const convs=conversations();
     app.innerHTML=`${top()}<section class="message-categories">${category('cmt','评论和@','cmt')}${category('fans','新增关注','fan')}${category('lf','赞和收藏','like')}</section><div class="section-label">私信${unread('dm')?` · ${unread('dm')} 条新消息`:''}</div>${convs.length?convs.map(conversationHtml).join(''):'<div class="empty">暂无私信 · 在笔记或用户主页可发私信</div>'}`;
   };
   const conversationHtml = item => { const last=item.last||{}; const other=last.from_id===state.me.id?last.to_id:last.from_id; const p=profile(other,last.from_id===state.me.id?'对方':last.from_name); return `<article class="conversation" onclick="Messages.thread('${esc(other)}')">${avatar(other,p.name)}<div class="conversation-main"><div class="conversation-title">${esc(p.name)}</div><div class="conversation-preview">${last.from_id===state.me.id?'我：':''}${esc(last.text||'')}</div></div><span class="row-time">${esc(fmt(last.created_at))}</span></article>`; };
   const detailShell = (title, content) => `${top()}<div class="detail-head"><button onclick="Messages.home()">‹</button><b>${title}</b></div>${content}`;
   const renderCategory = key => {
+    state.view='category';
     markRead(key);
     if(key==='cmt'){
       const rows=comments();
@@ -50,6 +52,7 @@
     app.innerHTML=detailShell('赞和收藏',content);
   };
   const renderThread = (otherId, fallback='') => {
+    state.view='thread';
     markRead('dm'); const rows=state.messages.filter(row=>row.from_id===otherId||row.to_id===otherId).sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at))); const p=profile(otherId,fallback||rows.find(row=>row.from_id===otherId)?.from_name); app.innerHTML=`${top()}<div class="detail-head"><button onclick="Messages.home()">‹</button>${avatar(otherId,p.name,30)}<b>${esc(p.name)}</b></div><section class="thread"><div id="threadList" class="thread-list">${rows.map(row=>`<div class="bubble ${row.from_id===state.me.id?'mine':''}">${esc(row.text||'')}</div>`).join('')||'<div class="empty">开始和对方聊天吧</div>'}</div><div class="thread-compose"><input id="threadInput" placeholder="回复 ${esc(p.name)}…" maxlength="500"><button onclick="Messages.send('${esc(otherId)}','${esc(p.name)}')">发送</button></div></section>`;document.getElementById('threadList')?.scrollTo(0,999999);
   };
   const loadProfiles = async ids => { const unique=[...new Set(ids.filter(Boolean))];if(!unique.length)return;const rows=await list(`/rest/v1/profiles?user_id=in.(${unique.join(',')})&select=user_id,name,avatar`);rows.forEach(row=>{state.profiles[row.user_id]=row;}); };
@@ -81,7 +84,12 @@
   const follow = async id => { const current=state.follows.find(row=>row.follower_id===state.me.id&&row.followee_id===id);const active=!current?.active;try{let res;if(current){res=await request(`/rest/v1/follows?follower_id=eq.${encodeURIComponent(state.me.id)}&followee_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({active})});const rows=res.ok?await res.json():[];if(rows[0])Object.assign(current,rows[0]);else current.active=active;}else{res=await request('/rest/v1/follows',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({follower_id:state.me.id,follower_name:nick(),followee_id:id,active:true})});const rows=res.ok?await res.json():[];if(rows[0])state.follows.push(rows[0]);else state.follows.push({follower_id:state.me.id,followee_id:id,active:true,created_at:new Date().toISOString()});}if(!res.ok)throw new Error();renderCategory('fans');}catch(e){toast('关注操作失败，请稍后重试');}};
   const send = async (toId,toName) => {const input=document.getElementById('threadInput');const text=input?.value.trim();if(!text)return;try{const res=await request('/rest/v1/messages',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({from_id:state.me.id,from_name:nick(),to_id:toId,text})});if(!res.ok)throw new Error();const rows=await res.json();if(rows[0])state.messages.push(rows[0]);renderThread(toId,toName);}catch(e){toast('发送失败，请稍后重试');}};
   const toast = value => {document.querySelector('.toast')?.remove();const el=document.createElement('div');el.className='toast';el.textContent=value;document.body.appendChild(el);setTimeout(()=>el.remove(),2200);};
-  window.Messages={back:()=>window.LeshenghuoModuleBridge?.back('/') || (history.length>1?history.back():location.assign('/')),refresh:()=>load(true),home:renderHome,category:renderCategory,thread:(id)=>renderThread(id),follow,send,openPost:id=>routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`),openUser:id=>routeInAppShell('user',{id}) || location.assign(`/?user=${encodeURIComponent(id)}`)};
+  const back = () => {
+    if(state.view !== 'home'){ renderHome(); return true; }
+    return window.LeshenghuoModuleBridge?.back('/') || (history.length>1?history.back():location.assign('/'));
+  };
+  window.LeshenghuoModuleBridge?.setBackHandler(back);
+  window.Messages={back,refresh:()=>load(true),home:renderHome,category:renderCategory,thread:(id)=>renderThread(id),follow,send,openPost:id=>routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`),openUser:id=>routeInAppShell('user',{id}) || location.assign(`/?user=${encodeURIComponent(id)}`)};
   window.LeshenghuoModulePullRefresh?.bind({ refresh: () => load(true) });
   load();
 })();

@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.609';
+const APP_VERSION = '5.610';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -381,11 +381,15 @@ function notifyAppReady(){ return appUpdateManager?.notifyReady(); }
 
 function appOverlayOpen(id){ return !!document.getElementById(id)?.classList.contains('open'); }
 function appOverlayBack(){
+  if(appOverlayOpen('commentComposerOverlay')){ closeCommentComposer(); return true; }
+  if(appOverlayOpen('shareOverlay')){ closeShareSheet(); return true; }
+  if(appOverlayOpen('contentReportOverlay')){ closeContentReport(); return true; }
   if(appOverlayOpen('homeFeatureOverlay')){ closeHomeFeature(); return true; }
   const menu = document.getElementById('homeMenuOverlay');
   if(menu?.classList.contains('settings-open')){ closeHomeSettings(); return true; }
   if(menu?.classList.contains('open')){ closeHomeMenu(); return true; }
   if(document.getElementById('internalModuleHost')){ closeInternalModule(); return true; }
+  if(appOverlayOpen('postOverlay')){ closePost(); return true; }
   return false;
 }
 function appCurrentRoute(){
@@ -2477,6 +2481,9 @@ window.addEventListener('message',event=>{
   if(event.origin !== window.location.origin) return;
   if(['leshenghuo-close-takeout','leshenghuo-close-rental','leshenghuo-close-auto','leshenghuo-module-close'].includes(event?.data?.type)){
     closeMerchantEmbeddedOrder();
+    if(event.data.type === 'leshenghuo-module-close'){
+      setBottomNavActive(currentTab || 'home');
+    }
   }
 });
 async function openMerchantTakeoutPage(merchantUserId){
@@ -3865,11 +3872,24 @@ function openShareSheet(context){
   if(overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
   if(!overlay) return;
   overlay.style.zIndex = '2147483647';
+  overlay.style.pointerEvents = 'auto';
+  overlay.removeAttribute('inert');
+  overlay.setAttribute('aria-hidden','false');
   overlay.classList.add('open');
   // Force one layout pass so mobile WebViews paint the sheet in this tap.
   void overlay.offsetHeight;
 }
-function closeShareSheet(){ document.getElementById('shareOverlay')?.classList.remove('open'); }
+function closeShareSheet(){
+  const overlay = document.getElementById('shareOverlay');
+  if(!overlay) return;
+  if(overlay.contains(document.activeElement) && document.activeElement instanceof HTMLElement){
+    document.activeElement.blur();
+  }
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden','true');
+  overlay.setAttribute('inert','');
+  overlay.style.pointerEvents = 'none';
+}
 function openShareFriendPicker(){
   const people = shareFollowingPeople(); const sheet = document.getElementById('shareSheet');
   if(!people.length){ showToast('先关注好友，再通过私信分享'); return; }
@@ -3932,12 +3952,16 @@ window.addEventListener('message', event => {
 async function shareNative(label){
   if(!shareContext) return;
   const payload = { title:shareContext.title, text:shareContext.text, url:shareContext.url, dialogTitle:label || '分享乐生活内容' };
+  closeShareSheet();
   try {
     const nativeResult = await requestNativeAction('share', payload);
-    if(nativeResult && nativeResult.handled) return;
-    if(navigator.share) await navigator.share(payload);
-    else await copyCurrentShareLink();
-  } catch(e){}
+    if(!(nativeResult && nativeResult.handled)){
+      if(navigator.share) await navigator.share(payload);
+      else await copyCurrentShareLink();
+    }
+  } catch(e){
+    // Cancelling the system share sheet is not an application error.
+  } finally { closeShareSheet(); }
 }
 function appPermissionItem(label, detail, action, buttonLabel){
   return `<div style="padding:14px 0;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;"><div style="flex:1;min-width:0;"><b style="display:block;font-size:14px;">${escHtml(label)}</b><span style="display:block;margin-top:4px;font-size:12px;line-height:1.55;color:var(--ink-faint);">${escHtml(detail)}</span></div><button onclick="testNativeSystemAction('${action}')" style="flex-shrink:0;padding:8px 11px;border-radius:999px;border:1px solid var(--sage);background:#fff;color:var(--sage-dark);font:900 12px inherit;">${escHtml(buttonLabel)}</button></div>`;
@@ -3973,7 +3997,7 @@ async function shareFacebook(){
   if(isEmbeddedAppEntry() && window.parent && window.parent !== window){ await shareNative('Facebook'); return; }
   window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareContext.url)}`, '_blank', 'noopener');
 }
-function shareSms(){ if(!shareContext) return; window.location.href = `sms:&body=${encodeURIComponent(`${shareContext.title}\n${shareContext.url}`)}`; }
+function shareSms(){ if(!shareContext) return; closeShareSheet(); window.location.href = `sms:&body=${encodeURIComponent(`${shareContext.title}\n${shareContext.url}`)}`; }
 function generateShareImage(){
   if(!shareContext) return; const canvas = document.createElement('canvas'); canvas.width=1080; canvas.height=1440; const ctx=canvas.getContext('2d');
   ctx.fillStyle='#f6f4ec';ctx.fillRect(0,0,1080,1440);ctx.fillStyle='#5e836a';ctx.fillRect(0,0,1080,92);ctx.fillStyle='#fff';ctx.font='700 42px sans-serif';ctx.fillText('乐生活  SCOOP CITY',64,60);ctx.fillStyle='#292722';ctx.font='700 66px sans-serif';
@@ -10616,6 +10640,20 @@ function renderComment(c, isReply){
 }
 /* 评论统一使用独立半屏编辑器，避免 WebView 键盘把笔记详情与首页层同时挤开。 */
 let commentComposerParentId = null;
+function syncCommentComposerViewport(){
+  const viewport = window.visualViewport;
+  const top = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  const height = Math.max(280, Math.round(viewport?.height || window.innerHeight || 640));
+  document.documentElement.style.setProperty('--comment-composer-viewport-top', `${top}px`);
+  document.documentElement.style.setProperty('--comment-composer-viewport-height', `${height}px`);
+}
+function bindCommentComposerViewport(){
+  if(window.__leshenghuoCommentViewportBound) return;
+  window.__leshenghuoCommentViewportBound = true;
+  window.visualViewport?.addEventListener('resize', syncCommentComposerViewport);
+  window.visualViewport?.addEventListener('scroll', syncCommentComposerViewport);
+  window.addEventListener('orientationchange', () => setTimeout(syncCommentComposerViewport, 120));
+}
 function openCommentComposer(parentId=null){
   if(!session || !session.user){ showToast('请先登录后再评论'); openAuth(); return; }
   const p = getPost();
@@ -10631,6 +10669,8 @@ function openCommentComposer(parentId=null){
   if(overlay.parentElement !== document.body) document.body.appendChild(overlay);
   const targetName = parent ? String(parent.name || '乐生活用户') : '';
   sheet.innerHTML = `<div class="comment-composer-head"><span></span><b>${parent ? `回复 ${escHtml(targetName)}` : '写评论'}</b><button class="comment-composer-close" onclick="closeCommentComposer()" aria-label="关闭">×</button></div><textarea id="commentComposerText" class="comment-composer-text" maxlength="500" placeholder="${parent ? `回复 ${escHtml(targetName)}…` : '说点什么…'}"></textarea><button class="comment-composer-submit" onclick="submitCommentComposer()">发送</button>`;
+  bindCommentComposerViewport();
+  syncCommentComposerViewport();
   document.body.classList.add('reply-composer-open');
   overlay.classList.add('open');
   void overlay.offsetHeight;
@@ -14847,6 +14887,14 @@ function clearTransientLayersForBottomNavigation(){
   document.body.classList.remove('reply-composer-open','home-menu-open');
   if(document.getElementById('postOverlay')?.classList.contains('open')) closePost();
 }
+function setBottomNavActive(tab){
+  document.querySelectorAll('.bottom-nav .nav-btn').forEach(button => {
+    const active = button.dataset.tab === tab;
+    button.classList.toggle('active', active);
+    if(active) button.setAttribute('aria-current','page');
+    else button.removeAttribute('aria-current');
+  });
+}
 window.activateBottomTab=function(tab,event){
   event?.preventDefault?.();
   event?.stopPropagation?.();
@@ -14854,6 +14902,7 @@ window.activateBottomTab=function(tab,event){
   if(tab===bottomNavActivatedTab && now-bottomNavActivatedAt<120) return;
   bottomNavActivatedAt=now;
   bottomNavActivatedTab=tab;
+  setBottomNavActive(tab);
   clearTransientLayersForBottomNavigation();
   window.switchTab(tab);
 };
@@ -14864,6 +14913,7 @@ window.switchTab = function(tab){
   // Always dismiss that host before returning to a root navigation destination.
   // Otherwise Home/Profile switches underneath the still-visible module layer.
   if(tab === 'home' || tab === 'profile' || tab === 'admin') closeInternalModule();
+  setBottomNavActive(tab);
   // 消息中心改由独立模块承载，避免通知与私信继续耦合在首页主程序中。
   if(tab === 'message'){
     openInternalModule('/messages/', '5.589');
@@ -14888,17 +14938,12 @@ window.switchTab = function(tab){
     p.classList.remove('active');
     p.style.display = 'none';
   });
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  
   // 显示选定页面（关键：直接设置 display，覆盖内联 display:none）
   const page = document.getElementById(`page-${tab}`);
   if(page){
     page.classList.add('active');
     page.style.display = 'block';
   }
-  const btn = document.querySelector(`[data-tab="${tab}"]`);
-  if(btn) btn.classList.add('active');
-
   // 4.13：非首页不再保留空 header 占位，避免页面顶部出现整块空白
   const topHeader = document.querySelector('header.top');
   if(topHeader) topHeader.classList.toggle('is-hidden', tab !== 'home');
@@ -14912,7 +14957,7 @@ window.switchTab = function(tab){
   if(tab === 'home'){
     const feed = document.getElementById('feed');
     const home = document.getElementById('page-home');
-    if(home){ home.style.marginTop = '0'; home.style.paddingTop = ''; }
+    if(home){ home.style.marginTop = '0'; home.style.paddingTop = '0px'; }
     if(feed){ feed.style.paddingTop = '0'; }
     requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}));
   }
@@ -15566,4 +15611,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Post Detail Overlay and Reply Composer Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Navigation, Feed Spacing and Reply Layer Fix】`);
