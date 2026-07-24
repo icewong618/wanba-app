@@ -93,6 +93,16 @@ try {
   } else {
     console.log('PASS pull-to-refresh preserves native vertical scrolling');
   }
+
+  const mobileSafe = read('shared/styles/mobile-safe.css');
+  const entryMarkup = read('index.html');
+  if(!entryMarkup.includes("classList.add('android-app-entry')")){
+    fail('Android App entry does not declare its platform scroll mode');
+  } else if(!/html\.android-app-entry\s+\.page\.active[\s\S]{0,420}overflow-y\s*:\s*auto/.test(mobileSafe)){
+    fail('Android App active page is missing an explicit native scroll owner');
+  } else {
+    console.log('PASS Android App uses an explicit native page scroller');
+  }
 } catch(error) {
   fail(error.stack || error.message);
 }

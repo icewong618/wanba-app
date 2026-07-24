@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.614';
+const APP_VERSION = '5.615';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -15009,7 +15009,10 @@ window.switchTab = function(tab){
     const home = document.getElementById('page-home');
     if(home){ home.style.marginTop = '0'; home.style.paddingTop = '0px'; }
     if(feed){ feed.style.paddingTop = '0'; }
-    requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}));
+    requestAnimationFrame(()=>{
+      if(home) home.scrollTop = 0;
+      window.scrollTo({top:0,left:0,behavior:'auto'});
+    });
   }
   updateFixedTopLayout();
   
