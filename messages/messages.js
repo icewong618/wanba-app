@@ -86,7 +86,7 @@
   const toast = value => {document.querySelector('.toast')?.remove();const el=document.createElement('div');el.className='toast';el.textContent=value;document.body.appendChild(el);setTimeout(()=>el.remove(),2200);};
   const back = () => {
     if(state.view !== 'home'){ renderHome(); return true; }
-    return window.LeshenghuoModuleBridge?.back('/') || (history.length>1?history.back():location.assign('/'));
+    return window.LeshenghuoModuleBridge.back('/');
   };
   window.LeshenghuoModuleBridge?.setBackHandler(back);
   window.Messages={back,refresh:()=>load(true),home:renderHome,category:renderCategory,thread:(id)=>renderThread(id),follow,send,openPost:id=>routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`),openUser:id=>routeInAppShell('user',{id}) || location.assign(`/?user=${encodeURIComponent(id)}`)};

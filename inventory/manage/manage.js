@@ -19,7 +19,7 @@
     const current = session();
     return fetch(SUPABASE_URL + path, { ...options, headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${current?.access_token || SUPABASE_KEY}`, 'Content-Type':'application/json', ...(options.headers || {}) } });
   };
-  const close = () => history.length > 1 ? history.back() : location.assign('/');
+  const close = () => window.LeshenghuoModuleBridge.back('/');
   const top = title => `<header class="top"><button onclick="InventoryAdmin.close()">‹</button><b>${esc(title)}</b><button onclick="InventoryAdmin.close()">×</button></header>`;
   const low = row => row && Number(row.stock_quantity || 0) <= Number(row.low_stock_threshold || 0);
   const productName = id => products.find(product => String(product.id) === String(id))?.name || '未命名商品';

@@ -14,7 +14,7 @@
   const money = value => `$${Number(value || 0).toFixed(2)}`;
   const time = value => value ? new Intl.DateTimeFormat('zh-CN',{timeZone:'America/Los_Angeles',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)) : '未安排';
   const statusText = status => ({pending:'待确认',confirmed:'已确认',preparing:'备货中',ready_for_pickup:'待自取',completed:'已完成',cancelled:'已取消'})[status] || status;
-  const close = () => history.length > 1 ? history.back() : location.assign('/');
+  const close = () => window.LeshenghuoModuleBridge.back('/');
   const top = title => `<header class="top"><button onclick="RetailAdmin.close()">‹</button><b>${esc(title)}</b><button onclick="RetailAdmin.close()">×</button></header>`;
   const active = row => !['completed','cancelled'].includes(row.status);
   const filtered = () => orders.filter(row => filter === 'active' ? active(row) : row.status === filter);

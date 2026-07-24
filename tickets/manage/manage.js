@@ -6,7 +6,7 @@
   const session=()=>JSON.parse(localStorage.getItem('wanba_session')||'null');
   const mediaUpload=()=>window.LeshenghuoMediaUpload?.create({apiUrl:MEDIA_URL,supabaseUrl:URL,supabaseKey:KEY,getAccessToken:()=>session()?.access_token||null});
   const api=(path,opt={})=>{const s=session();return fetch(URL+path,{...opt,headers:{apikey:KEY,Authorization:`Bearer ${s?.access_token||KEY}`,'Content-Type':'application/json',...(opt.headers||{})}})};
-  const back=()=>{if(window.LeshenghuoModuleBridge?.back?.('/'))return;if(history.length>1)history.back();else location.assign('/')};
+  const back=()=>{return window.LeshenghuoModuleBridge.back('/');};
   const top=t=>`<header class="top"><button onclick="TicketManage.back()">‹</button><b>${esc(t)}</b><button class="close" onclick="TicketManage.back()">×</button></header>`;
   const date=v=>new Intl.DateTimeFormat('zh-CN',{timeZone:'America/Los_Angeles',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));
   const money=v=>Number(v||0)===0?'免费':`$${Number(v).toFixed(2)}`;

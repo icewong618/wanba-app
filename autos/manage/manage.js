@@ -6,7 +6,7 @@ const session=()=>{try{return JSON.parse(localStorage.getItem('wanba_session')||
 const autoSalesApi=window.LeshenghuoAutoSalesApi?.create({supabaseUrl:URL,supabaseKey:KEY});
 const api=(path,opt={})=>autoSalesApi.request(path,opt);
 const money=v=>`$${Number(v||0).toLocaleString('en-US',{maximumFractionDigits:0})}`;
-const close=()=>{if(parent!==window){parent.postMessage({type:'leshenghuo-close-auto'},'*');return}history.length>1?history.back():location.assign('/');};
+const close=()=>{if(parent!==window){parent.postMessage({type:'leshenghuo-close-auto'},'*');return}window.LeshenghuoModuleBridge.back('/');};
 const top=t=>`<header class="top"><button onclick="AutoAdmin.back()">‹</button><b>${esc(t)}</b><span class="right"><button onclick="AutoAdmin.close()">×</button></span></header>`;
 const listingPhoto=x=>Array.isArray(x.photos)&&x.photos[0]?`<img src="${esc(x.photos[0])}" alt="">`:'<div class="photo">🚘</div>';
 const stateText=x=>({available:'在售',reserved:'已预留',sold:'已售出',hidden:'已隐藏',new:'新线索',contacted:'已联系',scheduled:'已安排',reschedule_requested:'申请改期',cancelled:'已取消',quoted:'已报价',closed:'已完成',archived:'已归档'}[x]||x);

@@ -12,7 +12,7 @@
 // Run before the large community page initializes. Native QR links should go
 // straight to the compact restaurant module instead of first booting home.
 (() => {
-const version = '5.611';
+const version = '5.612';
   let attempts = 0;
   const targetFor = raw => {
     if(!raw) return null;
@@ -78,9 +78,9 @@ const version = '5.611';
 <script src="./shared/embedded-module-shell.js?v=5.440"></script>
 <script src="./shared/app-update-manager.js?v=5.608"></script>
 <script src="./shared/native-deep-links.js?v=5.442"></script>
-<script src="./shared/app-gesture-navigation.js?v=5.608"></script>
+<script src="./shared/app-navigation.js?v=5.612"></script>
 <script src="./shared/app-pull-refresh.js?v=5.444"></script>
-<script src="./shared/app-fixed-layout.js?v=5.611"></script>
+<script src="./shared/app-fixed-layout.js?v=5.612"></script>
 <script src="./shared/app-module-router.js?v=5.446"></script>
 <script src="./shared/auth-verification-limits.js?v=5.447"></script>
 <script src="./shared/auth-session.js?v=5.448"></script>
@@ -116,7 +116,7 @@ const version = '5.611';
 <script src="./shared/merchant-membership-api.js?v=5.488"></script>
 <script src="./shared/merchant-public-api.js?v=5.489"></script>
 <script src="./shared/merchant-analytics-api.js?v=5.487"></script>
-<link rel="stylesheet" href="./shared/app-shell.css?v=5.611">
+<link rel="stylesheet" href="./shared/app-shell.css?v=5.612">
 <script src="/vendor/qrcode-generator-2.0.4.js"></script>
 <script>
   try {
@@ -157,7 +157,7 @@ const version = '5.611';
 <div class="launch-screen" id="launchScreen" aria-live="polite">
   <div class="launch-inner">
     <img class="launch-logo" src="./assets/brand/logo-current.png" alt="乐生活 Scoop City">
-    <div class="launch-version" data-app-version>v5.611</div>
+    <div class="launch-version" data-app-version>v5.612</div>
     <div class="launch-slogan">发现身边的精彩生活</div>
     <div class="launch-status" id="launchStatus">正在为你更新本地内容…</div>
     <div class="launch-progress"><span></span></div>
@@ -567,10 +567,10 @@ const version = '5.611';
 </div>
 
 <!-- 搜索页面：点击顶部搜索框弹出 -->
-<div class="overlay" id="searchOverlay" onclick="if(event.target.id==='searchOverlay')closeSearchPage()">
+<div class="overlay" id="searchOverlay" onclick="if(event.target.id==='searchOverlay')appNavigateBack()">
   <div class="modal" id="searchModal">
     <div class="search-modal-head">
-      <button class="search-back-btn" onclick="closeSearchPage()">‹</button>
+      <button class="search-back-btn" onclick="appNavigateBack()">‹</button>
       <input type="text" id="searchInput" placeholder="搜索用户、笔记、地点..." onkeydown="if(event.key==='Enter')performSearch(this.value)">
       <button class="search-submit-btn" onclick="performSearch(document.getElementById('searchInput').value)">搜索</button>
     </div>
@@ -692,7 +692,7 @@ const version = '5.611';
     <button class="merchant-public-action merchant-public-share" onclick="shareCurrentMerchantPublicPage()" aria-label="分享店铺">
       <span class="ui-icon" style="width:18px;height:18px;"><svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"></path><path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path></svg></span>
     </button>
-    <button class="merchant-public-action merchant-public-close" onclick="closeMerchantPublicPage()" aria-label="关闭">✕</button>
+    <button class="merchant-public-action merchant-public-close" onclick="appNavigateBack()" aria-label="关闭">✕</button>
     <div id="merchantPublicBody"></div>
   </div>
 </div>
@@ -857,23 +857,23 @@ const version = '5.611';
 
 <!-- Bottom Navigation -->
 <div class="bottom-nav">
-  <button class="nav-btn active" data-tab="home" onclick="activateBottomTab('home', event)">
+  <button class="nav-btn active" data-tab="home">
     <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg></span>
     <span class="nav-label">首页</span>
   </button>
-  <button class="nav-btn" data-tab="week" onclick="activateBottomTab('week', event)">
+  <button class="nav-btn" data-tab="week">
     <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg></span>
     <span class="nav-label">本周</span>
   </button>
-  <button class="nav-btn" data-tab="deals" onclick="activateBottomTab('deals', event)">
+  <button class="nav-btn" data-tab="deals">
     <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 7h14v12H5z"></path><path d="M8 7V5h8v2"></path><path d="M9 13h6"></path></svg></span>
     <span class="nav-label">省钱</span>
   </button>
-  <button class="nav-btn" data-tab="message" onclick="activateBottomTab('message', event)">
+  <button class="nav-btn" data-tab="message">
     <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg></span>
     <span class="nav-label">消息</span>
   </button>
-  <button class="nav-btn" data-tab="profile" onclick="activateBottomTab('profile', event)">
+  <button class="nav-btn" data-tab="profile">
     <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
     <span class="nav-label">我</span>
   </button>
@@ -1186,6 +1186,6 @@ const version = '5.611';
   <div class="publish-progress-track"><div class="publish-progress-bar" id="publishProgressBar"></div></div>
 </div>
 
-<script src="./shared/app-main.js?v=5.611"></script>
+<script src="./shared/app-main.js?v=5.612"></script>
 </body>
 </html>

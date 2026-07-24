@@ -5,6 +5,10 @@
     const close = () => shell?.close();
     const open = (path, moduleVersion, params = {}) => shell?.open(path, moduleVersion, params);
     const handleRoute = detail => {
+      if(detail?.type === 'leshenghuo-navigation-back'){
+        window.LeshenghuoNavigation?.back?.();
+        return;
+      }
       close();
       if(!detail?.route) return;
       onRootRoute(detail, { open, close });

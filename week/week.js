@@ -100,7 +100,7 @@
     try { return await state.loading; } finally { state.loading=null; }
   };
   window.WeekEvents = {
-    back: () => window.LeshenghuoModuleBridge?.back('/') || (history.length > 1 ? history.back() : location.assign('/')),
+    back: () => window.LeshenghuoModuleBridge.back('/'),
     refresh: () => load(true),
     filter: value => { state.filter = value; render(); },
     open: id => {

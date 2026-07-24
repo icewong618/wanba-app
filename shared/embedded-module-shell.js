@@ -35,6 +35,10 @@
         close();
         return;
       }
+      if(event.data.type === 'leshenghuo-navigation-back'){
+        onRoute?.({ type:'leshenghuo-navigation-back' }, { close, open });
+        return;
+      }
       if(event.data.type === 'leshenghuo-module-route') onRoute?.(event.data, { close, open });
     };
 

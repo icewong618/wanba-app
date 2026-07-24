@@ -24,7 +24,7 @@
       }
     });
   };
-  const close = () => history.length > 1 ? history.back() : location.assign('/');
+  const close = () => window.LeshenghuoModuleBridge.back('/');
   const top = title => `<header class="top"><button onclick="MerchantAdmin.close()">‹</button><b>${esc(title)}</b><button onclick="MerchantAdmin.close()">×</button></header>`;
   const go = action => {
     if(!merchant) return;

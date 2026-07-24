@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.611';
+const APP_VERSION = '5.612';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -393,47 +393,57 @@ function hideLaunchScreen(){ return appUpdateManager?.hideLaunch(); }
 function notifyAppReady(){ return appUpdateManager?.notifyReady(); }
 
 function appOverlayOpen(id){ return !!document.getElementById(id)?.classList.contains('open'); }
-function appOverlayBack(){
+function closeTransientNavigationLayer(){
   if(appOverlayOpen('commentComposerOverlay')){ closeCommentComposer(); return true; }
   if(appOverlayOpen('shareOverlay')){ closeShareSheet(); return true; }
   if(appOverlayOpen('contentReportOverlay')){ closeContentReport(); return true; }
   if(appOverlayOpen('homeFeatureOverlay')){ closeHomeFeature(); return true; }
+  if(appOverlayOpen('ownerSheet')){ closeOwnerSheet(); return true; }
   const menu = document.getElementById('homeMenuOverlay');
   if(menu?.classList.contains('settings-open')){ closeHomeSettings(); return true; }
   if(menu?.classList.contains('open')){ closeHomeMenu(); return true; }
-  if(appOverlayOpen('postOverlay')){ returnFromPost(); return true; }
-  if(document.getElementById('internalModuleHost')){ closeInternalModule(); return true; }
   return false;
 }
 function appCurrentRoute(){
   if(appOverlayOpen('searchOverlay')) return { type:'search' };
   if(appOverlayOpen('postOverlay') && activePostId != null) return { type:'post', id:activePostId };
-  if(appOverlayOpen('merchantPublicOverlay')) return { type:'merchant', userId:document.getElementById('merchantPublicOverlay')?.dataset.userId || '' };
+  if(appOverlayOpen('merchantPublicOverlay')){
+    const overlay = document.getElementById('merchantPublicOverlay');
+    return { type:'merchant', userId:overlay?.dataset.userId || '', slug:overlay?.dataset.slug || '' };
+  }
   if(appOverlayOpen('userPublicOverlay')) return { type:'user', userId:document.getElementById('userPublicOverlay')?.dataset.userId || '', name:document.getElementById('userPublicOverlay')?.dataset.name || '' };
   return { type:'tab', tab:currentTab || 'home' };
 }
-const appGestureNavigation = window.LeshenghuoAppGestureNavigation?.create({
-  isEnabled: () => isEmbeddedAppEntry() || document.documentElement.classList.contains('app-webview-entry'),
-  getCurrentRoute: appCurrentRoute,
-  getCurrentTab: () => currentTab || 'home',
-  onOverlayBack: appOverlayBack,
-  navigate: (route, done) => {
-    closeSearchPage(); closePost(); closeMerchantPublicPage(); closeUserPublicPage();
-    setTimeout(() => {
-      if(route.type === 'tab') switchTab(route.tab || 'home');
-      else if(route.type === 'search') openSearchPage();
-      else if(route.type === 'post') openPost(route.id);
-      else if(route.type === 'merchant') openMerchantPublicPage(route.userId);
-      else if(route.type === 'user') openUserPublicPage(route.userId, route.name || '');
-      done?.();
-    }, 20);
+function renderAppRoute(route){
+  closeSearchPage();
+  closePost();
+  closeMerchantPublicPage();
+  closeUserPublicPage();
+  if(route.type === 'tab') switchTab(route.tab || 'home');
+  else if(route.type === 'search') openSearchPage();
+  else if(route.type === 'post') openPost(route.id);
+  else if(route.type === 'merchant'){
+    if(route.userId) openMerchantPublicPage(route.userId);
+    else if(route.slug) openMerchantPublicPageBySlug(route.slug);
+  }
+  else if(route.type === 'user') openUserPublicPage(route.userId, route.name || '');
+}
+const appNavigation = window.LeshenghuoAppNavigation?.create({
+  getCurrentRoute:appCurrentRoute,
+  renderRoute:renderAppRoute,
+  closeTransient:closeTransientNavigationLayer,
+  isGestureEnabled:() => isEmbeddedAppEntry() || document.documentElement.classList.contains('app-webview-entry'),
+  onRouteChange:route => {
+    const tab = route?.type === 'tab' ? route.tab : currentTab;
+    if(tab) setBottomNavActive(tab);
   }
 });
-function routeTabFromLocation(){ return appGestureNavigation?.routeTabFromLocation() || ''; }
-function appRememberRoute(){ return appGestureNavigation?.remember(); }
-function appGestureBack(){ return appGestureNavigation?.back(); }
-function appGestureForward(){ return appGestureNavigation?.forward(); }
-function bindAppEdgeGestures(){ return appGestureNavigation?.bind(); }
+window.LeshenghuoNavigation = appNavigation;
+window.appNavigateBack = () => appNavigation?.back() || false;
+function routeTabFromLocation(){ return appNavigation?.rootTabFromLocation() || ''; }
+function appGestureBack(){ return appNavigation?.back(); }
+function appGestureForward(){ return appNavigation?.forward(); }
+function bindAppEdgeGestures(){ return appNavigation?.bind(); }
 
 let currentUser = {
   name: '未登录用户',
@@ -6056,11 +6066,12 @@ function routeUserIdFromLocation(){
 async function openMerchantPublicPageBySlug(slug){
   slug = merchantSlugify(slug);
   if(!slug) return false;
-  appRememberRoute();
+  if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'merchant', slug });
   const overlay = document.getElementById('merchantPublicOverlay');
   const body = document.getElementById('merchantPublicBody');
   if(!overlay || !body) return false;
   closeSearchPage();
+  overlay.dataset.slug = slug;
   overlay.classList.add('open');
   body.innerHTML = '<div class="deals-empty-panel">正在打开商家微网站...</div>';
   try {
@@ -6089,6 +6100,7 @@ function closeMerchantPublicPage(){
   if(overlay){
     overlay.classList.remove('open');
     overlay.dataset.userId = '';
+    overlay.dataset.slug = '';
   }
 }
 function publicUserCardHtml(p){
@@ -6133,7 +6145,7 @@ function userPublicContentHtml(userId, profile){
             <button onclick="event.stopPropagation();sharePublicUserPage('${String(userId).replace(/'/g,'')}','${String(name).replace(/'/g,'')}')">${uiIcon('share',15)}转发主页</button>
             <button onclick="event.stopPropagation();openPublicUserDm('${String(userId).replace(/'/g,'')}','${String(name).replace(/'/g,'')}')">${uiIcon('message',15)}发私信</button>
           </div>
-          <button class="public-profile-close" onclick="closeUserPublicPage()" aria-label="关闭">×</button>
+          <button class="public-profile-close" onclick="appNavigateBack()" aria-label="关闭">×</button>
           <div class="profile-cover-info">
             <div class="profile-cover-avatar" style="cursor:default;">${avatar ? `<img src="${escAttr(avatar)}" alt="" style="width:100%;height:100%;object-fit:cover;">` : escHtml(initials(name))}</div>
             <div class="profile-cover-main">
@@ -6186,7 +6198,7 @@ function openPublicUserDm(userId, name){
 }
 async function openUserPublicPage(userId, fallbackName){
   if(!userId){ showToast('没有找到用户主页'); return; }
-  appRememberRoute();
+  if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'user', userId, name:fallbackName || '' });
   if(session && session.user && userId === session.user.id){
     closeSearchPage();
     closeUserPublicPage();
@@ -8141,25 +8153,7 @@ function playIcon(){
 }
 
 /* ---------------- post modal ---------------- */
-let postReturnRoute = null;
-
-function restorePostReturnRoute(route){
-  if(!route) return;
-  if(route.type === 'tab'){
-    if((currentTab || 'home') !== (route.tab || 'home')) switchTab(route.tab || 'home');
-    return;
-  }
-  if(route.type === 'search'){ openSearchPage(); return; }
-  if(route.type === 'merchant'){ openMerchantPublicPage(route.userId); return; }
-  if(route.type === 'user'){ openUserPublicPage(route.userId, route.name || ''); }
-}
-
-function returnFromPost(){
-  const route = postReturnRoute;
-  const hasAdminReturn = !!window.adminReportPostReturn;
-  closePost();
-  if(!hasAdminReturn) restorePostReturnRoute(route);
-}
+function returnFromPost(){ return appNavigation?.back() || closePost(); }
 
 function postDetailLoadingHtml(message='正在打开这篇笔记…'){
   return `<div style="min-height:100%;display:flex;align-items:center;justify-content:center;padding:32px;background:#fff;"><div style="text-align:center;color:var(--ink-soft);font-size:14px;"><div style="width:28px;height:28px;margin:0 auto 12px;border:3px solid var(--sage-light);border-top-color:var(--sage-dark);border-radius:50%;animation:spin .8s linear infinite;"></div>${escHtml(message)}</div></div>`;
@@ -8182,31 +8176,25 @@ async function loadSingleSharedPost(postId){
   }
 }
 function openPostFromUserPage(id){
-  const overlay = document.getElementById('userPublicOverlay');
-  const route = {
-    type:'user',
-    userId:overlay?.dataset.userId || '',
-    name:overlay?.dataset.name || ''
-  };
+  if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'post', id });
   closeUserPublicPage();
-  return openPost(id, route);
+  return openPost(id, null, true);
 }
 
 function openPostFromMerchantPage(id){
-  const overlay = document.getElementById('merchantPublicOverlay');
-  const route = { type:'merchant', userId:overlay?.dataset.userId || '' };
+  if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'post', id });
   closeMerchantPublicPage();
-  return openPost(id, route);
+  return openPost(id, null, true);
 }
 
 function openPostFromSearch(id){
+  if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'post', id });
   closeSearchPage();
-  return openPost(id, { type:'search' });
+  return openPost(id, null, true);
 }
 
-async function openPost(id, explicitReturnRoute=null){
-  if(!appOverlayOpen('postOverlay')) postReturnRoute = explicitReturnRoute || appCurrentRoute();
-  appRememberRoute();
+async function openPost(id, explicitReturnRoute=null, routeRecorded=false){
+  if(!routeRecorded && !appNavigation?.isRestoring()) appNavigation?.enter({ type:'post', id });
   activePostId = id;
   const overlay = document.getElementById('postOverlay');
   let p = getPost();
@@ -8317,7 +8305,6 @@ function closePost(){
     switchTab('admin');
     setTimeout(() => switchAdminTab('reports'), 0);
   }
-  postReturnRoute = null;
 }
 function findPostById(id){
   return posts.find(p=>String(p.id)===String(id)) || ownProfilePosts.find(p=>String(p.id)===String(id));
@@ -10182,7 +10169,7 @@ let searchTypeFilter = '全部';
 let searchKeyword = '';
 
 function openSearchPage(){
-  appRememberRoute();
+  if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'search' });
   const overlay = document.getElementById('searchOverlay');
   const input = document.getElementById('searchInput');
   overlay.classList.add('open');
@@ -13801,7 +13788,7 @@ async function submitFeedback(){
 
 /* close overlays on background click */
 document.getElementById('postOverlay').addEventListener('click', e=>{
-  if(e.target.id==='postOverlay') closePost();
+  if(e.target.id==='postOverlay') returnFromPost();
 });
 document.getElementById('composeOverlay').addEventListener('click', e=>{
   if(e.target.id==='composeOverlay') closeCompose();
@@ -14925,18 +14912,14 @@ const appModuleRouter = window.LeshenghuoAppModuleRouter?.create({
   getAppVersion: () => APP_VERSION,
   onRootRoute: (detail, controls) => {
   controls.close();
-  if(detail.route === 'home') return switchTab('home');
-  if(detail.route === 'profile') return switchTab('profile');
-  if(detail.route === 'week') return controls.open('/week/', '5.589');
-  if(detail.route === 'deals') return controls.open('/deals/', '5.589');
-  if(detail.route === 'message') return controls.open('/messages/', '5.589', detail.params || {});
+  if(['home','profile','week','deals','message'].includes(detail.route)){
+    return appNavigation?.navigate({ type:'tab', tab:detail.route });
+  }
   if(detail.route === 'post'){
-    switchTab('home');
-    return setTimeout(() => openPost(detail.id), 80);
+    return appNavigation?.navigate({ type:'post', id:detail.id });
   }
   if(detail.route === 'user'){
-    switchTab('home');
-    return setTimeout(() => openUserPublicPage(detail.id, detail.name || ''), 80);
+    return appNavigation?.navigate({ type:'user', userId:detail.id, name:detail.name || '' });
   }
   }
 });
@@ -14944,8 +14927,6 @@ function closeInternalModule(){ return appModuleRouter?.close(); }
 function openInternalModule(path, moduleVersion, params={}){ return appModuleRouter?.open(path, moduleVersion, params); }
 window.closeInternalModule = closeInternalModule;
 
-let bottomNavActivatedAt=0;
-let bottomNavActivatedTab='';
 function clearTransientLayersForBottomNavigation(){
   closeShareSheet();
   closeCommentComposer();
@@ -14967,62 +14948,29 @@ function setBottomNavActive(tab){
 window.activateBottomTab=function(tab,event){
   event?.preventDefault?.();
   event?.stopPropagation?.();
-  const now=Date.now();
-  const duplicateTouch = tab===bottomNavActivatedTab
-    && now-bottomNavActivatedAt<120
-    && (
-      (['home','profile','admin'].includes(tab)
-        && currentTab===tab
-        && !document.getElementById('internalModuleHost'))
-      || (['week','deals','message'].includes(tab)
-        && !!document.getElementById('internalModuleHost'))
-    );
-  if(duplicateTouch) return;
-  bottomNavActivatedAt=now;
-  bottomNavActivatedTab=tab;
-  setBottomNavActive(tab);
-  clearTransientLayersForBottomNavigation();
-  window.switchTab(tab);
-  if(tab === 'home'){
-    // App WebViews may leave a just-closed iframe or overlay in the compositor
-    // for one frame. Verify the root page immediately so one tap is enough.
-    requestAnimationFrame(() => {
-      document.getElementById('internalModuleHost')?.remove();
-      const page = document.getElementById('page-home');
-      if(currentTab !== 'home' || !page?.classList.contains('active')){
-        window.switchTab('home');
-      }
-      setBottomNavActive('home');
-    });
-  }
+  return appNavigation?.navigate({ type:'tab', tab }) || window.switchTab(tab);
 };
 
-// 修改 switchTab 函数以支持刷新和个人资料页面
+// Root-page renderer. Route history is owned exclusively by appNavigation.
 window.switchTab = function(tab){
-  // The native App keeps standalone modules in an iframe above the main page.
-  // Always dismiss that host before returning to a root navigation destination.
-  // Otherwise Home/Profile switches underneath the still-visible module layer.
-  if(tab === 'home' || tab === 'profile' || tab === 'admin') closeInternalModule();
+  if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'tab', tab });
+  clearTransientLayersForBottomNavigation();
+  closeInternalModule();
+  currentTab = tab;
   setBottomNavActive(tab);
-  // 消息中心改由独立模块承载，避免通知与私信继续耦合在首页主程序中。
   if(tab === 'message'){
     openInternalModule('/messages/', '5.589');
     return;
   }
-  // 本周活动统一进入独立模块：日期筛选、活动笔记与后续票务/报名活动共用同一入口。
   if(tab === 'week'){
     openInternalModule('/week/', '5.589');
     return;
   }
-  // 省钱页统一使用独立模块。它与主站同域，同一个 App WebView 内跳转，
-  // 不使用 window.open，因此不会拉起外部浏览器。
   if(tab === 'deals'){
     openInternalModule('/deals/', '5.589');
     return;
   }
   ensureAdminPageAtRoot();
-  if(tab !== currentTab) appRememberRoute();
-  currentTab = tab;
   // 隐藏所有页面（同时清除内联样式）
   document.querySelectorAll('.page').forEach(p => {
     p.classList.remove('active');
@@ -15092,17 +15040,6 @@ window.switchTab = function(tab){
   }
   setTimeout(updateFixedTopLayout, 80);
 };
-
-// iOS WebView 在页面复杂或刚恢复前台时可能吞掉合成 click。
-// 对底部主导航使用 touchend 兜底，确保每个入口都可稳定响应。
-document.addEventListener('touchend', event => {
-  const button = event.target && event.target.closest ? event.target.closest('.bottom-nav .nav-btn[data-tab]') : null;
-  if(!button) return;
-  const tab = button.dataset.tab;
-  if(!tab) return;
-  event.preventDefault();
-  window.activateBottomTab(tab,event);
-}, {passive:false});
 
 /* init */
 async function bootApp(){
@@ -15701,4 +15638,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Brand, Navigation and Reply Composer Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Unified Navigation Controller】`);

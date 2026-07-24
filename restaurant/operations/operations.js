@@ -13,7 +13,7 @@
   let snapshot = { permissions:{}, orders:[] };
   let currentFilter = query.get('view') === 'takeout' ? 'takeout' : 'all';
   let reloadTimer = null;
-  const close = () => history.length > 1 ? history.back() : location.assign(`/restaurant/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
+  const close = () => window.LeshenghuoModuleBridge.back(`/restaurant/manage/?merchant=${encodeURIComponent(query.get('merchant') || '')}`);
   const top = () => `<header class="top"><button onclick="RestaurantOperations.close()">‹</button><b>订单工作台</b><button onclick="RestaurantOperations.reload()">↻</button></header>`;
   const toast = message => { document.querySelector('.toast')?.remove(); const node=document.createElement('div'); node.className='toast'; node.textContent=message; document.body.append(node); setTimeout(()=>node.remove(),2600); };
   const friendlyTime = value => { try { return new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit'}).format(new Date(value)); } catch(error) { return ''; } };

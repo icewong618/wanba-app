@@ -16,7 +16,7 @@
       headers:{ apikey:KEY, Authorization:`Bearer ${session?.access_token || KEY}`, 'Content-Type':'application/json', ...(options.headers || {}) }
     });
   };
-  const back = () => history.length > 1 ? history.back() : location.assign('/');
+  const back = () => window.LeshenghuoModuleBridge.back('/');
   let data = null;
 
   function render() {

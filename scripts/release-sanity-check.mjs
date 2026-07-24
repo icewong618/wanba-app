@@ -8,6 +8,7 @@ const requiredModules = [
   'shared/module-runtime.js',
   'shared/app-shell.css',
   'shared/app-main.js',
+  'shared/app-navigation.js',
   'shared/supabase-client.js',
   'shared/profile-api.js',
   'shared/post-api.js',

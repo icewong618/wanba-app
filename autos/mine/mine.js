@@ -7,7 +7,7 @@
   const money = value => `$${Number(value || 0).toLocaleString('en-US',{maximumFractionDigits:0})}`;
   const session = () => { try { return JSON.parse(localStorage.getItem('wanba_session') || 'null'); } catch { return null; } };
   const top = title => `<header class="top"><button onclick="AutoMine.back()" aria-label="返回">‹</button><b>${esc(title)}</b><span><button onclick="AutoMine.close()" aria-label="关闭">×</button></span></header>`;
-  const exit = () => { if (window.parent !== window) { window.parent.postMessage({type:'leshenghuo-close-auto'}, '*'); return; } history.length > 1 ? history.back() : location.assign('/'); };
+  const exit = () => { if (window.parent !== window) { window.parent.postMessage({type:'leshenghuo-close-auto'}, '*'); return; } window.LeshenghuoModuleBridge.back('/'); };
   const autoSalesApi=window.LeshenghuoAutoSalesApi?.create({supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_KEY});
   const api=(path,options={})=>autoSalesApi.request(path,options);
   function typeText(type) { return type === 'sell_quote' ? '卖车估价' : type === 'test_drive' ? '预约试驾' : '车辆咨询'; }

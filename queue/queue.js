@@ -17,7 +17,10 @@
   };
   const ticketKey = () => `leshenghuo_waitlist_${state.merchant?.user_id || ''}`;
   const nav = screen => { state.screen=screen; render(); window.scrollTo(0,0); };
-  const close = () => { if(window.parent!==window) window.parent.postMessage({type:'leshenghuo-close-takeout'},'*'); else if(history.length>1) history.back(); else location.assign('/'); };
+  const close = () => {
+    if(window.parent!==window) window.parent.postMessage({type:'leshenghuo-close-takeout'},'*');
+    else window.LeshenghuoModuleBridge.back('/');
+  };
   const top = title => `<header class="top"><button onclick="Queue.back()" aria-label="返回">‹</button><b>${esc(title)}</b><button onclick="Queue.close()" aria-label="关闭">×</button></header>`;
   const hero = () => `<section class="hero"><h1>${esc(state.merchant?.business_name || '乐生活扫码排队')}</h1><p>${esc(state.merchant?.address || '')}</p></section>`;
   const products = () => state.products.filter(row=>row.active!==false && row.orderable!==false);

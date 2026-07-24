@@ -22,8 +22,8 @@
   const ticketKey = () => `leshenghuo_waitlist_${state.merchant?.user_id || ''}`;
   const nav = screen => { state.screen=screen; render(); window.scrollTo(0,0); };
   const exitQueue = () => {
-    // QR App Links often open the queue as the first WebView entry. In that
-    // case history.back() does nothing, so deliberately return to 首页.
+    // QR App Links may open the queue as the first WebView entry, so leave
+    // through the app shell instead of relying on document history.
     if(window.parent!==window){ window.parent.postMessage({type:'leshenghuo-close-takeout'},'*'); return; }
     const appLink=query.get('embedded_app')==='1'||query.get('native_link')==='1'||!!window.Capacitor?.isNativePlatform?.();
     const home=new URL('/',location.origin);

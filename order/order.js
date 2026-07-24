@@ -42,8 +42,7 @@
   };
   const close = () => {
     if (window.parent !== window) window.parent.postMessage({ type: 'leshenghuo-close-takeout' }, '*');
-    else if (history.length > 1) history.back();
-    else location.assign('/');
+    else window.LeshenghuoModuleBridge.back('/');
   };
   const back = () => {
     if (state.screen === 'cart') nav('menu');

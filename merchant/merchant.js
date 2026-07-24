@@ -23,7 +23,7 @@
     const session = getSession();
     return fetch(URL + path, { ...options, headers: { ...publicHeaders(), Authorization: `Bearer ${session?.access_token || KEY}`, ...(options.headers || {}) } });
   };
-  const back = () => history.length > 1 ? history.back() : location.assign('/');
+  const back = () => window.LeshenghuoModuleBridge.back('/');
   const market = String(q.get('market') || ((pathParts.length === 3 && pathParts[1] === 'merchant') ? pathParts[0] : 'la')).toLowerCase();
   const slug = String(q.get('merchant') || q.get('m') || ((pathParts.length === 3 && pathParts[1] === 'merchant') ? pathParts[2] : '')).toLowerCase();
   let merchant = null;

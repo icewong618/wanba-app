@@ -6,7 +6,7 @@
   const session=()=>JSON.parse(localStorage.getItem('wanba_session')||'null');
   const profile=()=>JSON.parse(localStorage.getItem('wanba_profile')||'{}');
   const api=(path,opt={})=>{const s=session();return fetch(URL+path,{...opt,headers:{apikey:KEY,Authorization:`Bearer ${s?.access_token||KEY}`,'Content-Type':'application/json',...(opt.headers||{})}})};
-  const back=()=>{if(window.LeshenghuoModuleBridge?.back?.('/'))return;if(history.length>1)history.back();else location.assign('/')};
+  const back=()=>{return window.LeshenghuoModuleBridge.back('/');};
   const top=t=>`<header class="top"><button onclick="Tickets.back()">‹</button><b>${esc(t)}</b><button class="close" onclick="Tickets.back()">×</button></header>`;
   const money=v=>Number(v||0)===0?'免费':`$${Number(v).toFixed(2)}`;
   const date=v=>new Intl.DateTimeFormat('zh-CN',{timeZone:'America/Los_Angeles',month:'long',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));

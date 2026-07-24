@@ -24,7 +24,7 @@
       }
     });
   };
-  const close = () => history.length > 1 ? history.back() : location.assign('/');
+  const close = () => window.LeshenghuoModuleBridge.back('/');
   const top = title => `<header class="top"><button onclick="MerchantAdmin.close()">‹</button><b>${esc(title)}</b><span class="top-actions"><button class="language" onclick="window.LeshenghuoI18n&&window.LeshenghuoI18n.openPicker()" aria-label="语言" title="语言">文</button><button onclick="MerchantAdmin.close()">×</button></span></header>`;
   const go = action => {
     if(!merchant) return;

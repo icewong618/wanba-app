@@ -8,7 +8,7 @@
   const isAuthed=()=>!!session()?.access_token;
   const api=(path,opt={})=>{const s=session();return fetch(URL+path,{...opt,headers:{apikey:KEY,Authorization:`Bearer ${s?.access_token||KEY}`,'Content-Type':'application/json',...(opt.headers||{})}})};
   const rpc=async(name,payload={})=>{const r=await api(`/rest/v1/rpc/${name}`,{method:'POST',body:JSON.stringify(payload)}),d=await r.json();if(!r.ok)throw new Error(d?.message||d?.hint||'请求失败');return d};
-  const back=()=>{if(window.LeshenghuoModuleBridge?.back?.('/'))return;if(history.length>1)history.back();else location.assign('/')};
+  const back=()=>{return window.LeshenghuoModuleBridge.back('/');};
   const top=t=>`<header class="top"><button aria-label="返回" onclick="Services.back()">‹</button><b>${esc(t)}</b><button class="close" aria-label="关闭" onclick="Services.back()">×</button></header>`;
   const money=v=>Number(v||0)>0?`$${Number(v).toFixed(2)}`:'面议';
   const fmt=v=>v?new Intl.DateTimeFormat('zh-CN',{timeZone:'America/Los_Angeles',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)):'';

@@ -7,7 +7,7 @@
   const session=()=>{try{return JSON.parse(localStorage.getItem('wanba_session')||'null');}catch(error){return null;}};
   const api=(path,options={})=>{const current=session();return fetch(SUPABASE_URL+path,{...options,headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${current?.access_token||SUPABASE_KEY}`,'Content-Type':'application/json',...(options.headers||{})}});};
   let merchant=null,rows=[],tables=[],timer=null;
-  const close=()=>history.length>1?history.back():location.assign(`/restaurant/manage/?merchant=${encodeURIComponent(query.get('merchant')||'')}`);
+  const close=()=>window.LeshenghuoModuleBridge.back(`/restaurant/manage/?merchant=${encodeURIComponent(query.get('merchant')||'')}`);
   const top=()=>`<header class="top"><button onclick="QueueManager.close()">‹</button><b>排队管理</b><button onclick="QueueManager.reload()">↻</button></header>`;
   const toast=message=>{document.querySelector('.toast')?.remove();const node=document.createElement('div');node.className='toast';node.textContent=message;document.body.append(node);setTimeout(()=>node.remove(),2500);};
   const time=value=>{try{return new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit'}).format(new Date(value));}catch(error){return '';}};
