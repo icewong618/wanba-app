@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.607';
+const APP_VERSION = '5.608';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3858,10 +3858,13 @@ function openShareSheet(context){
   if(!sheet || !shareContext) return;
   const people = shareFollowingPeople();
   const recent = people.length ? people.map(person => `<button class="share-recent-person" onclick="shareToFriend('${String(person.id).replace(/'/g,'')}','${String(person.name).replace(/'/g,'')}')"><span class="share-recent-avatar">${avatarCircleSizedHtml(person.name, person.id, 48)}</span>${escHtml(person.name)}</button>`).join('') : `<span style="font-size:12px;color:var(--ink-faint);padding:11px 4px;">关注好友后，可在这里快速私信分享。</span>`;
-  const reportTool = shareContext.type === 'post' ? `<button class="share-tool" onclick="openContentReport()"><span>${uiIcon('flag',21)}</span>举报内容</button>` : '';
+  const reportAction = shareContext.type === 'post' ? `<button class="share-report-inline" onclick="openContentReport()">举报笔记</button>` : '';
   const reduceTool = shareContext.type === 'post' && shareContext.category ? `<button class="share-tool" onclick="reduceFeedCategory('${String(shareContext.category).replace(/'/g,'')}')"><span>${uiIcon('eye',21)}</span>减少此类内容</button>` : '';
-  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reduceTool}${reportTool}</div>`;
+  sheet.innerHTML = `<div class="share-sheet-head">${reportAction}分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reduceTool}</div>`;
   const overlay = document.getElementById('shareOverlay');
+  if(overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
+  if(!overlay) return;
+  overlay.style.zIndex = '2147483647';
   overlay.classList.add('open');
   // Force one layout pass so mobile WebViews paint the sheet in this tap.
   void overlay.offsetHeight;
@@ -8203,6 +8206,7 @@ async function loadEngagement(){
   } catch(e){ console.warn('互动数据同步失败:', e.message); }
 }
 function closePost(){
+  closeCommentComposer();
   const overlay = document.getElementById('postOverlay');
   overlay.classList.remove('open', 'image-detail-open');
   document.getElementById('postModal')?.classList.remove('image-detail-layout');
@@ -10470,17 +10474,16 @@ function renderPostModal(){
       ${detailMain}
     </div>
     <div class="xhs-bottombar">
-      <input type="text" id="newCommentInput" placeholder="说点什么…" 
-        oninput="document.getElementById('xhsSend').style.display = this.value.trim() ? 'block' : 'none'"
-        onkeydown="if(event.key==='Enter'){addComment();}">
-      <button class="xhs-send" id="xhsSend" onclick="addComment()">发送</button>
+      <input type="text" id="newCommentInput" placeholder="说点什么…" readonly
+        onclick="openCommentComposer()" onfocus="this.blur()">
+      <button class="xhs-send" id="xhsSend" onclick="openCommentComposer()">发送</button>
       <button class="xhs-act ${p.liked?'liked':''}" id="xhsLike" onclick="toggleLike()">
         <span class="ico">${p.liked?'♥':'♡'}</span><span id="xhsLikeNum">${p.likes}</span>
       </button>
       <button class="xhs-act ${p.collected?'collected':''}" id="xhsCollect" onclick="toggleCollect()">
         <span class="ico">${p.collected?'★':'☆'}</span><span id="xhsFavNum">${p.favs||0}</span>
       </button>
-      <button class="xhs-act" onclick="document.getElementById('newCommentInput').focus()">
+      <button class="xhs-act" onclick="openCommentComposer()">
         <span class="ico">${uiIcon('message',20)}</span><span id="xhsCmtNum">${countComments(p)}</span>
       </button>
     </div>
@@ -10593,35 +10596,48 @@ function renderComment(c, isReply){
         <div class="comment-actions">
           <button onclick="toggleReplyInput(${c.id})">回复</button>
         </div>
-        <div class="reply-input" id="replyInput-${c.id}">
-          <input type="text" id="replyText-${c.id}" placeholder="回复 ${(c.name||'').replace(/"/g,'')}..." onkeydown="if(event.key==='Enter'){submitReply(${c.id})}">
-          <button class="send-btn small" onclick="submitReply(${c.id})">发送</button>
-        </div>
       </div>
       ${mine ? `<button onclick="deleteComment(${c.id})" title="删除这条评论" style="border:1px solid var(--line);background:#fff;color:var(--berry);cursor:pointer;font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;align-self:flex-start;">删除</button>` : ''}
     </div>
   `;
 }
-/* 展开/收起某条评论下方的回复输入框（同时只留一个展开，收起其余的） */
-function toggleReplyInput(id){
-  if(!session || !session.user){ showToast('请先登录后再回复'); openAuth(); return; }
-  document.querySelectorAll('.reply-input.open').forEach(el => {
-    if(el.id !== `replyInput-${id}`) el.classList.remove('open');
-  });
-  const box = document.getElementById(`replyInput-${id}`);
-  if(!box) return;
-  const opening = !box.classList.contains('open');
-  box.classList.toggle('open', opening);
-  if(opening){
-    const input = document.getElementById(`replyText-${id}`);
-    if(input) input.focus();
-  }
+/* 评论统一使用独立半屏编辑器，避免 WebView 键盘把笔记详情与首页层同时挤开。 */
+let commentComposerParentId = null;
+function openCommentComposer(parentId=null){
+  if(!session || !session.user){ showToast('请先登录后再评论'); openAuth(); return; }
+  const p = getPost();
+  if(!p) return;
+  const parent = parentId == null ? null : (p.comments || []).find(c => String(c.id) === String(parentId));
+  if(parentId != null && !parent){ showToast('找不到要回复的评论'); return; }
+  commentComposerParentId = parent ? parent.id : null;
+  const overlay = document.getElementById('commentComposerOverlay');
+  const sheet = document.getElementById('commentComposerSheet');
+  if(!overlay || !sheet) return;
+  if(overlay.parentElement !== document.body) document.body.appendChild(overlay);
+  const targetName = parent ? String(parent.name || '乐生活用户') : '';
+  sheet.innerHTML = `<div class="comment-composer-head"><span></span><b>${parent ? `回复 ${escHtml(targetName)}` : '写评论'}</b><button class="comment-composer-close" onclick="closeCommentComposer()" aria-label="关闭">×</button></div><textarea id="commentComposerText" class="comment-composer-text" maxlength="500" placeholder="${parent ? `回复 ${escHtml(targetName)}…` : '说点什么…'}"></textarea><button class="comment-composer-submit" onclick="submitCommentComposer()">发送</button>`;
+  document.body.classList.add('reply-composer-open');
+  overlay.classList.add('open');
+  void overlay.offsetHeight;
+  window.setTimeout(() => document.getElementById('commentComposerText')?.focus(), 90);
+}
+function closeCommentComposer(){
+  document.getElementById('commentComposerOverlay')?.classList.remove('open');
+  document.body.classList.remove('reply-composer-open');
+  commentComposerParentId = null;
+}
+function toggleReplyInput(id){ openCommentComposer(id); }
+async function submitCommentComposer(){
+  const input = document.getElementById('commentComposerText');
+  const text = String(input?.value || '').trim();
+  if(!text) return;
+  if(commentComposerParentId != null) await submitReply(commentComposerParentId, text);
+  else await addComment(text);
 }
 /* 回复某条评论/回复：真正写入数据库（parent_id + reply_to_user_id + reply_to_name） */
-async function submitReply(parentId){
+async function submitReply(parentId, textOverride=null){
   const input = document.getElementById(`replyText-${parentId}`);
-  if(!input) return;
-  const text = input.value.trim();
+  const text = String(textOverride == null ? input?.value : textOverride || '').trim();
   if(!text) return;
   if(!session || !session.user){ showToast('请先登录后再回复'); openAuth(); return; }
   const p = getPost();
@@ -10644,6 +10660,7 @@ async function submitReply(parentId){
       time: new Date().toLocaleString('zh-CN')
     });
     renderCommentsList(p);
+    closeCommentComposer();
     showToast('回复已发送');
   } catch(e){
     console.warn('回复保存失败:', e.message);
@@ -10666,9 +10683,9 @@ async function deleteComment(id){
     showToast('评论已删除');
   } catch(e){ showToast('删除失败：' + e.message); }
 }
-async function addComment(){
+async function addComment(textOverride=null){
   const input = document.getElementById('newCommentInput');
-  const text = input.value.trim();
+  const text = String(textOverride == null ? input?.value : textOverride || '').trim();
   if(!text) return;
   if(!session || !session.user){
     showToast('请先登录后再评论');
@@ -10689,9 +10706,10 @@ async function addComment(){
       time: new Date().toLocaleString('zh-CN')
     });
     renderCommentsList(p);
-    input.value = '';
+    if(input) input.value = '';
     const sendBtn = document.getElementById('xhsSend');
     if(sendBtn) sendBtn.style.display = 'none';
+    closeCommentComposer();
     showToast('评论已发送');
   } catch(e){
     console.warn('评论保存失败:', e.message);
@@ -13597,7 +13615,9 @@ function openContentReport(){
   document.getElementById('contentReportDetail').value = '';
   document.getElementById('contentReportTarget').textContent = `正在举报：${p.title || '未命名笔记'} · 作者 ${p.author || '乐生活用户'}`;
   closeShareSheet();
-  document.getElementById('contentReportOverlay')?.classList.add('open');
+  const overlay = document.getElementById('contentReportOverlay');
+  if(overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
+  overlay?.classList.add('open');
 }
 function closeContentReport(){ document.getElementById('contentReportOverlay')?.classList.remove('open'); contentReportPostId = null; }
 async function submitContentReport(){
@@ -15496,4 +15516,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - YouTube Only Video Update】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Post Detail Overlay and Reply Composer Fix】`);

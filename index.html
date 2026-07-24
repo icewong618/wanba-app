@@ -76,11 +76,11 @@ const version = '5.606';
 <script src="./shared/media-cache.js?v=5.435"></script>
 <script src="./shared/media-upload.js?v=5.436"></script>
 <script src="./shared/embedded-module-shell.js?v=5.440"></script>
-<script src="./shared/app-update-manager.js?v=5.607"></script>
+<script src="./shared/app-update-manager.js?v=5.608"></script>
 <script src="./shared/native-deep-links.js?v=5.442"></script>
-<script src="./shared/app-gesture-navigation.js?v=5.607"></script>
+<script src="./shared/app-gesture-navigation.js?v=5.608"></script>
 <script src="./shared/app-pull-refresh.js?v=5.444"></script>
-<script src="./shared/app-fixed-layout.js?v=5.607"></script>
+<script src="./shared/app-fixed-layout.js?v=5.608"></script>
 <script src="./shared/app-module-router.js?v=5.446"></script>
 <script src="./shared/auth-verification-limits.js?v=5.447"></script>
 <script src="./shared/auth-session.js?v=5.448"></script>
@@ -93,7 +93,7 @@ const version = '5.606';
 <script src="./shared/profile-storage.js?v=5.455"></script>
 <script src="./shared/profile-api.js?v=5.481"></script>
 <script src="./shared/engagement-api.js?v=5.486"></script>
-<script src="./shared/follow-api.js?v=5.607"></script>
+<script src="./shared/follow-api.js?v=5.608"></script>
 <script src="./shared/comment-threading.js?v=5.459"></script>
 <script src="./shared/post-detail-api.js?v=5.460"></script>
 <script src="./shared/post-api.js?v=5.573"></script>
@@ -116,7 +116,7 @@ const version = '5.606';
 <script src="./shared/merchant-membership-api.js?v=5.488"></script>
 <script src="./shared/merchant-public-api.js?v=5.489"></script>
 <script src="./shared/merchant-analytics-api.js?v=5.487"></script>
-<link rel="stylesheet" href="./shared/app-shell.css?v=5.607">
+<link rel="stylesheet" href="./shared/app-shell.css?v=5.608">
 <script src="/vendor/qrcode-generator-2.0.4.js"></script>
 <script>
   try {
@@ -586,6 +586,10 @@ const version = '5.606';
 
 <div class="share-overlay" id="shareOverlay" onclick="if(event.target.id==='shareOverlay')closeShareSheet()">
   <div class="share-sheet" id="shareSheet"></div>
+</div>
+
+<div class="comment-composer-overlay" id="commentComposerOverlay" onclick="if(event.target.id==='commentComposerOverlay')closeCommentComposer()">
+  <div class="comment-composer-sheet" id="commentComposerSheet"></div>
 </div>
 
 <div class="feedback-overlay" id="feedbackOverlay">
@@ -1184,6 +1188,6 @@ const version = '5.606';
   <div class="publish-progress-track"><div class="publish-progress-bar" id="publishProgressBar"></div></div>
 </div>
 
-<script src="./shared/app-main.js?v=5.607"></script>
+<script src="./shared/app-main.js?v=5.608"></script>
 </body>
 </html>
