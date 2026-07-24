@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.610';
+const APP_VERSION = '5.611';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -318,6 +318,19 @@ const APP_VERSION_MANIFEST = 'version.json';
 const SUPABASE_URL = 'https://ptxdxepmggmjcndgukjk.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_h3x-jnCW-N8Nx3P6t_D8rA_CS9dgkP-';
 console.info(`乐生活 当前版本：v${APP_VERSION}`);
+
+function syncBrandLogoLanguage(){
+  const language = window.LeshenghuoI18n?.getLanguage?.()
+    || localStorage.getItem('leshenghuo_language')
+    || 'zh-CN';
+  const english = String(language).toLowerCase().startsWith('en');
+  document.querySelectorAll('.brand-logo').forEach(logo => {
+    logo.src = english ? './assets/brand/lockup-en.png' : './assets/brand/lockup-cn.png';
+    logo.alt = english ? 'Scoop City' : '乐生活';
+  });
+}
+document.addEventListener('leshenghuo:languagechange', syncBrandLogoLanguage);
+document.addEventListener('DOMContentLoaded', syncBrandLogoLanguage, { once:true });
 
 const appUpdateManager = window.LeshenghuoAppUpdateManager?.create({
   version: APP_VERSION,
@@ -388,8 +401,8 @@ function appOverlayBack(){
   const menu = document.getElementById('homeMenuOverlay');
   if(menu?.classList.contains('settings-open')){ closeHomeSettings(); return true; }
   if(menu?.classList.contains('open')){ closeHomeMenu(); return true; }
+  if(appOverlayOpen('postOverlay')){ returnFromPost(); return true; }
   if(document.getElementById('internalModuleHost')){ closeInternalModule(); return true; }
-  if(appOverlayOpen('postOverlay')){ closePost(); return true; }
   return false;
 }
 function appCurrentRoute(){
@@ -1767,7 +1780,7 @@ function roundRect(ctx, x, y, w, h, r){
 function merchantNoteCardHtml(p, isOwnerPage){
   const media = postCardMediaHtml(p, 32);
   return `
-    <div class="merchant-real-card" onclick="${isOwnerPage ? '' : 'closeMerchantPublicPage();'}openPost(${JSON.stringify(p.id)})">
+    <div class="merchant-real-card" onclick="${isOwnerPage ? `openPost(${JSON.stringify(p.id)})` : `openPostFromMerchantPage(${JSON.stringify(p.id)})`}">
       <div class="thumb">${media}</div>
       <div class="body">
         <div class="title">${escHtml(p.title || '无标题')}</div>
@@ -6081,7 +6094,7 @@ function closeMerchantPublicPage(){
 function publicUserCardHtml(p){
   const media = postCardMediaHtml(p, 32);
   return `
-    <div class="user-content-item" onclick="closeUserPublicPage();openPost(${JSON.stringify(p.id)})">
+    <div class="user-content-item" onclick="openPostFromUserPage(${JSON.stringify(p.id)})">
       <div style="position:relative;aspect-ratio:3/4;background:var(--bg-alt);overflow:hidden;">${media}</div>
       <div class="user-content-item-info">
         <div class="user-content-item-title">${escHtml(p.title || '未命名笔记')}</div>
@@ -8128,6 +8141,26 @@ function playIcon(){
 }
 
 /* ---------------- post modal ---------------- */
+let postReturnRoute = null;
+
+function restorePostReturnRoute(route){
+  if(!route) return;
+  if(route.type === 'tab'){
+    if((currentTab || 'home') !== (route.tab || 'home')) switchTab(route.tab || 'home');
+    return;
+  }
+  if(route.type === 'search'){ openSearchPage(); return; }
+  if(route.type === 'merchant'){ openMerchantPublicPage(route.userId); return; }
+  if(route.type === 'user'){ openUserPublicPage(route.userId, route.name || ''); }
+}
+
+function returnFromPost(){
+  const route = postReturnRoute;
+  const hasAdminReturn = !!window.adminReportPostReturn;
+  closePost();
+  if(!hasAdminReturn) restorePostReturnRoute(route);
+}
+
 function postDetailLoadingHtml(message='正在打开这篇笔记…'){
   return `<div style="min-height:100%;display:flex;align-items:center;justify-content:center;padding:32px;background:#fff;"><div style="text-align:center;color:var(--ink-soft);font-size:14px;"><div style="width:28px;height:28px;margin:0 auto 12px;border:3px solid var(--sage-light);border-top-color:var(--sage-dark);border-radius:50%;animation:spin .8s linear infinite;"></div>${escHtml(message)}</div></div>`;
 }
@@ -8148,7 +8181,31 @@ async function loadSingleSharedPost(postId){
     return null;
   }
 }
-async function openPost(id){
+function openPostFromUserPage(id){
+  const overlay = document.getElementById('userPublicOverlay');
+  const route = {
+    type:'user',
+    userId:overlay?.dataset.userId || '',
+    name:overlay?.dataset.name || ''
+  };
+  closeUserPublicPage();
+  return openPost(id, route);
+}
+
+function openPostFromMerchantPage(id){
+  const overlay = document.getElementById('merchantPublicOverlay');
+  const route = { type:'merchant', userId:overlay?.dataset.userId || '' };
+  closeMerchantPublicPage();
+  return openPost(id, route);
+}
+
+function openPostFromSearch(id){
+  closeSearchPage();
+  return openPost(id, { type:'search' });
+}
+
+async function openPost(id, explicitReturnRoute=null){
+  if(!appOverlayOpen('postOverlay')) postReturnRoute = explicitReturnRoute || appCurrentRoute();
   appRememberRoute();
   activePostId = id;
   const overlay = document.getElementById('postOverlay');
@@ -8260,6 +8317,7 @@ function closePost(){
     switchTab('admin');
     setTimeout(() => switchAdminTab('reports'), 0);
   }
+  postReturnRoute = null;
 }
 function findPostById(id){
   return posts.find(p=>String(p.id)===String(id)) || ownProfilePosts.find(p=>String(p.id)===String(id));
@@ -10284,7 +10342,7 @@ function renderSearchResultsHtml(r){
   if(r.posts.length){
     html += `<div class="search-result-group-title">笔记 (${r.posts.length})</div>`;
     html += r.posts.map(p => `
-      <div class="search-result-post" onclick="closeSearchPage();openPost(${p.id});">
+      <div class="search-result-post" onclick="openPostFromSearch(${p.id})">
         ${p.image ? `<img src="${p.image}" alt="">` : ''}
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${p.title}</div>
@@ -10501,7 +10559,7 @@ function renderPostModal(){
 
   postModal.innerHTML = `
     <div class="xhs-topbar">
-      <button class="xhs-back" onclick="closePost()">‹</button>
+      <button class="xhs-back" onclick="returnFromPost()">‹</button>
       <span onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:inline-flex;">${avatarCircleHtml(p.author, p.user_id)}</span>
       <span class="xhs-author-name" onclick="openAuthorHome('${authorUserId}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;">${safeAuthor}${identityBadgeHtml(p.user_id)}</span>
       ${p.user_id && !isOwnPost ? `<button class="xhs-follow ${isFollowing(p.user_id)?'on':''}" id="followBtn" onclick="toggleFollowUser('${p.user_id}','${(p.author||'').replace(/'/g,'')}')">${isFollowing(p.user_id)?'已关注':'关注'}</button>` : ''}
@@ -10631,7 +10689,7 @@ function renderComment(c, isReply){
         <div class="comment-name" onclick="openUserPublicPage('${uid}','${safeName}')" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;cursor:pointer;">${authorNameHtml(c.name, c.user_id)} <span style="font-weight:400;color:var(--ink-faint);font-size:11px;">${c.time || ''}</span></div>
         <div class="comment-text">${replyPrefix}${c.text}</div>
         <div class="comment-actions">
-          <button onclick="toggleReplyInput(${c.id})">回复</button>
+          <button type="button" onclick="toggleReplyInput(${c.id},event)">回复</button>
         </div>
       </div>
       ${mine ? `<button onclick="deleteComment(${c.id})" title="删除这条评论" style="border:1px solid var(--line);background:#fff;color:var(--berry);cursor:pointer;font-size:11px;font-weight:800;padding:5px 7px;border-radius:999px;align-self:flex-start;">删除</button>` : ''}
@@ -10642,10 +10700,12 @@ function renderComment(c, isReply){
 let commentComposerParentId = null;
 function syncCommentComposerViewport(){
   const viewport = window.visualViewport;
-  const top = Math.max(0, Math.round(viewport?.offsetTop || 0));
-  const height = Math.max(280, Math.round(viewport?.height || window.innerHeight || 640));
-  document.documentElement.style.setProperty('--comment-composer-viewport-top', `${top}px`);
-  document.documentElement.style.setProperty('--comment-composer-viewport-height', `${height}px`);
+  const layoutHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+  const viewportTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  const visibleHeight = Math.max(280, Math.round(viewport?.height || layoutHeight || 640));
+  const keyboardInset = Math.max(0, Math.round(layoutHeight - visibleHeight - viewportTop));
+  document.documentElement.style.setProperty('--comment-composer-visible-height', `${visibleHeight}px`);
+  document.documentElement.style.setProperty('--comment-composer-keyboard-inset', `${keyboardInset}px`);
 }
 function bindCommentComposerViewport(){
   if(window.__leshenghuoCommentViewportBound) return;
@@ -10671,6 +10731,7 @@ function openCommentComposer(parentId=null){
   sheet.innerHTML = `<div class="comment-composer-head"><span></span><b>${parent ? `回复 ${escHtml(targetName)}` : '写评论'}</b><button class="comment-composer-close" onclick="closeCommentComposer()" aria-label="关闭">×</button></div><textarea id="commentComposerText" class="comment-composer-text" maxlength="500" placeholder="${parent ? `回复 ${escHtml(targetName)}…` : '说点什么…'}"></textarea><button class="comment-composer-submit" onclick="submitCommentComposer()">发送</button>`;
   bindCommentComposerViewport();
   syncCommentComposerViewport();
+  document.documentElement.classList.add('reply-composer-open');
   document.body.classList.add('reply-composer-open');
   overlay.classList.add('open');
   void overlay.offsetHeight;
@@ -10679,10 +10740,17 @@ function openCommentComposer(parentId=null){
 function closeCommentComposer(){
   document.getElementById('commentComposerText')?.blur();
   document.getElementById('commentComposerOverlay')?.classList.remove('open');
+  document.documentElement.classList.remove('reply-composer-open');
   document.body.classList.remove('reply-composer-open');
+  document.documentElement.style.removeProperty('--comment-composer-keyboard-inset');
+  document.documentElement.style.removeProperty('--comment-composer-visible-height');
   commentComposerParentId = null;
 }
-function toggleReplyInput(id){ openCommentComposer(id); }
+function toggleReplyInput(id,event){
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  openCommentComposer(id);
+}
 async function submitCommentComposer(){
   const input = document.getElementById('commentComposerText');
   const text = String(input?.value || '').trim();
@@ -10697,7 +10765,7 @@ async function submitReply(parentId, textOverride=null){
   if(!text) return;
   if(!session || !session.user){ showToast('请先登录后再回复'); openAuth(); return; }
   const p = getPost();
-  const parent = (p.comments || []).find(c => c.id === parentId);
+  const parent = (p.comments || []).find(c => String(c.id) === String(parentId));
   if(!parent){ showToast('找不到要回复的评论'); return; }
   const nick = myNick();
   try {
@@ -14884,6 +14952,7 @@ function clearTransientLayersForBottomNavigation(){
   closeContentReport();
   closeOwnerSheet();
   closeHomeMenu();
+  document.documentElement.classList.remove('reply-composer-open');
   document.body.classList.remove('reply-composer-open','home-menu-open');
   if(document.getElementById('postOverlay')?.classList.contains('open')) closePost();
 }
@@ -14899,12 +14968,33 @@ window.activateBottomTab=function(tab,event){
   event?.preventDefault?.();
   event?.stopPropagation?.();
   const now=Date.now();
-  if(tab===bottomNavActivatedTab && now-bottomNavActivatedAt<120) return;
+  const duplicateTouch = tab===bottomNavActivatedTab
+    && now-bottomNavActivatedAt<120
+    && (
+      (['home','profile','admin'].includes(tab)
+        && currentTab===tab
+        && !document.getElementById('internalModuleHost'))
+      || (['week','deals','message'].includes(tab)
+        && !!document.getElementById('internalModuleHost'))
+    );
+  if(duplicateTouch) return;
   bottomNavActivatedAt=now;
   bottomNavActivatedTab=tab;
   setBottomNavActive(tab);
   clearTransientLayersForBottomNavigation();
   window.switchTab(tab);
+  if(tab === 'home'){
+    // App WebViews may leave a just-closed iframe or overlay in the compositor
+    // for one frame. Verify the root page immediately so one tap is enough.
+    requestAnimationFrame(() => {
+      document.getElementById('internalModuleHost')?.remove();
+      const page = document.getElementById('page-home');
+      if(currentTab !== 'home' || !page?.classList.contains('active')){
+        window.switchTab('home');
+      }
+      setBottomNavActive('home');
+    });
+  }
 };
 
 // 修改 switchTab 函数以支持刷新和个人资料页面
@@ -15611,4 +15701,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Navigation, Feed Spacing and Reply Layer Fix】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Brand, Navigation and Reply Composer Fix】`);
