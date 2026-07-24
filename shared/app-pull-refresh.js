@@ -15,7 +15,7 @@
       element.classList.toggle('ready', state === 'ready');
       element.classList.toggle('loading', state === 'loading');
     };
-    const blocked = target => !!(target?.closest && target.closest('input,textarea,select,button,a,iframe,video,.image-carousel,.yt-wrap,.tiktok-wrap,.share-sheet,.overlay.open,.feedback-overlay.open,.content-report-overlay.open,.my-feedback-overlay.open,.beta-info-overlay.open,.policy-overlay.open'));
+    const blocked = target => !!(target?.closest && target.closest('input,textarea,select,button,a,iframe,video,.image-carousel,.yt-wrap,.share-sheet,.overlay.open,.feedback-overlay.open,.content-report-overlay.open,.my-feedback-overlay.open,.beta-info-overlay.open,.policy-overlay.open'));
     const atTop = target => {
       if((window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 3) return false;
       let node = target?.nodeType === 1 ? target : null;

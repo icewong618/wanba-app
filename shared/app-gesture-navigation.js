@@ -1,7 +1,9 @@
 /* In-App edge gesture history and navigation for 乐生活. */
 (() => {
   const create = ({ isEnabled = () => false, getCurrentRoute = () => ({ type:'tab', tab:'home' }), getCurrentTab = () => 'home', navigate = () => {}, onOverlayBack = () => false } = {}) => {
-    const edge = 38;
+    // Android reserves the first few pixels for its own back gesture. Start a
+    // little inward too, so the WebView gets a reliable fallback swipe.
+    const edge = 56;
     const minX = 58;
     const maxY = 48;
     let backStack = [];
@@ -63,7 +65,7 @@
         if(!isEnabled() || !event.touches || event.touches.length !== 1) return;
         const touch = event.touches[0];
         const width = window.innerWidth || document.documentElement.clientWidth || 390;
-        const fromLeft = forceBack || touch.clientX <= edge;
+        const fromLeft = forceBack || (touch.clientX >= 18 && touch.clientX <= edge);
         const fromRight = touch.clientX >= width - edge;
         if((!fromLeft && !fromRight) || (!forceBack && interactive(event.target))) return;
         startPoint = { x:touch.clientX, y:touch.clientY, dir:fromLeft ? 'back' : 'forward', active:true };
@@ -98,7 +100,7 @@
       const zone = document.createElement('div');
       zone.id = 'leshenghuoAppBackGestureZone';
       zone.setAttribute('aria-hidden', 'true');
-      zone.style.cssText = 'position:fixed;left:0;top:0;bottom:0;width:24px;z-index:2147483000;touch-action:none;background:transparent;';
+      zone.style.cssText = 'position:fixed;left:20px;top:0;bottom:0;width:32px;z-index:2147483000;touch-action:none;background:transparent;';
       zone.addEventListener('touchstart', event => start(event, true), { passive:true });
       zone.addEventListener('touchmove', move, { passive:false });
       zone.addEventListener('touchend', end, { passive:false });

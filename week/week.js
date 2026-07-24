@@ -117,5 +117,6 @@
       routeInAppShell('post',{id}) || location.assign(`/?post=${encodeURIComponent(id)}`);
     }
   };
+  window.LeshenghuoModulePullRefresh?.bind({ refresh: () => load(true) });
   load();
 })();

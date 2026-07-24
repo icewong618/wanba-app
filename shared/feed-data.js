@@ -33,7 +33,6 @@
     images: null,
     youtube: raw.youtube || '',
     youtube_vertical: false,
-    tiktok_url: null,
     likes: raw.likes || 0,
     liked: false,
     collected: false,

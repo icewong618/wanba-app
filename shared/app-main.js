@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.606';
+const APP_VERSION = '5.607';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -879,6 +879,14 @@ async function requestPasswordReset(){
   const email = document.getElementById('authEmail').value.trim().toLowerCase();
   const msg = document.getElementById('authMsg');
   if(!email || !email.includes('@')){ msg.textContent = '请先输入注册邮箱。'; return; }
+  const resetLimitKey = 'leshenghuo_password_reset_attempts_v1';
+  const now = Date.now();
+  let resetAttempts = {};
+  try { resetAttempts = JSON.parse(localStorage.getItem(resetLimitKey) || '{}'); } catch(e) {}
+  const attempts = Array.isArray(resetAttempts[email]) ? resetAttempts[email].filter(at => now - Number(at) < 15 * 60 * 1000) : [];
+  const sinceLatest = now - Number(attempts.at(-1) || 0);
+  if(attempts.length >= 3){ msg.textContent = '15 分钟内最多发送 3 次重置邮件，请稍后再试。'; return; }
+  if(attempts.length && sinceLatest < 60 * 1000){ msg.textContent = `请在 ${Math.ceil((60 * 1000 - sinceLatest) / 1000)} 秒后再发送。`; return; }
   msg.style.color = 'var(--berry)'; msg.textContent = '正在发送重置邮件…';
   try {
     // 使用站点根地址回跳，和 Supabase URL Configuration 中常见的 Site URL 保持一致。
@@ -893,6 +901,8 @@ async function requestPasswordReset(){
       if(raw.includes('redirect') || raw.includes('url')) throw new Error('回跳地址未获授权，请在 Supabase 的 URL Configuration 中加入 https://escoopcity.com/');
       throw new Error(detail.msg || detail.error_description || detail.message || `服务暂时不可用（${res.status}）`);
     }
+    resetAttempts[email] = [...attempts, now];
+    localStorage.setItem(resetLimitKey, JSON.stringify(resetAttempts));
     msg.style.color = 'var(--sage-dark)';
     msg.textContent = '重置邮件已发送，请点击邮件中的链接设置新密码。';
   } catch(e){
@@ -1633,12 +1643,8 @@ function postCoverImgHtml(p, alt, useThumbnail=false){
   return '';
 }
 function postCardMediaHtml(p, fallbackIconSize){
-  const tikTokInfo = getPostTikTokInfo(p);
   const img = postCoverImgHtml(p, p && p.title, true);
-  if(img) return `${img}${(p && (p.youtube || tikTokInfo)) ? `<div class="play-badge">${playIcon()}</div>` : ''}`;
-  if(tikTokInfo){
-    return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#111;color:#fff;font-weight:900;"><div style="text-align:center;"><div style="font-size:28px;margin-bottom:6px;">♪</div><div>TikTok</div></div></div><div class="play-badge">${playIcon()}</div>`;
-  }
+  if(img) return `${img}${(p && p.youtube) ? `<div class="play-badge">${playIcon()}</div>` : ''}`;
   return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);">${uiIcon('edit', fallbackIconSize || 40)}</div>`;
 }
 function youtubeVerticalMarker(){
@@ -1963,7 +1969,6 @@ function merchantSocialIcon(label){
   if(key.includes('小红书')) return '<span class="merchant-social-icon xhs">小</span>';
   if(key.includes('instagram')) return '<span class="merchant-social-icon instagram">◎</span>';
   if(key.includes('facebook')) return '<span class="merchant-social-icon facebook">f</span>';
-  if(key.includes('tiktok')) return '<span class="merchant-social-icon tiktok">♪</span>';
   if(key.includes('youtube')) return '<span class="merchant-social-icon youtube">▶</span>';
   if(key.includes('google')) return '<span class="merchant-social-icon google">G</span>';
   if(key.includes('yelp')) return '<span class="merchant-social-icon yelp">Y</span>';
@@ -3775,7 +3780,6 @@ function merchantSocialLinks(m){
     if(u.includes('instagram.com')) return 'Instagram';
     if(u.includes('xiaohongshu.com') || u.includes('xhslink.com')) return '小红书';
     if(u.includes('facebook.com') || u.includes('fb.com')) return 'Facebook';
-    if(u.includes('tiktok.com')) return 'TikTok';
     if(u.includes('yelp.com')) return 'Yelp';
     if(u.includes('google.com') || u.includes('goo.gl/maps') || u.includes('maps.app.goo.gl')) return 'Google';
     if(u.includes('youtube.com') || u.includes('youtu.be')) return 'YouTube';
@@ -3784,12 +3788,12 @@ function merchantSocialLinks(m){
   const source = m && m.external_links;
   if(source && typeof source === 'object' && !Array.isArray(source)){
     Object.entries(source).forEach(([label, url]) => {
-      if(url) links.push({ label: label || platformLabel(url), url });
+      if(url && !String(url).toLowerCase().includes('tiktok.com')) links.push({ label: label || platformLabel(url), url });
     });
   } else if(typeof source === 'string'){
-    source.split(/\n|,/).map(s => s.trim()).filter(Boolean).forEach(url => links.push({ label:platformLabel(url), url }));
+    source.split(/\n|,/).map(s => s.trim()).filter(url => url && !url.toLowerCase().includes('tiktok.com')).forEach(url => links.push({ label:platformLabel(url), url }));
   } else if(Array.isArray(source)){
-    source.map(s => String(s || '').trim()).filter(Boolean).forEach(url => links.push({ label:platformLabel(url), url }));
+    source.map(s => String(s || '').trim()).filter(url => url && !url.toLowerCase().includes('tiktok.com')).forEach(url => links.push({ label:platformLabel(url), url }));
   }
   if(m && m.website_url) links.unshift({ label:'官网', url:m.website_url });
   return links.slice(0, 5);
@@ -3857,7 +3861,10 @@ function openShareSheet(context){
   const reportTool = shareContext.type === 'post' ? `<button class="share-tool" onclick="openContentReport()"><span>${uiIcon('flag',21)}</span>举报内容</button>` : '';
   const reduceTool = shareContext.type === 'post' && shareContext.category ? `<button class="share-tool" onclick="reduceFeedCategory('${String(shareContext.category).replace(/'/g,'')}')"><span>${uiIcon('eye',21)}</span>减少此类内容</button>` : '';
   sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reduceTool}${reportTool}</div>`;
-  document.getElementById('shareOverlay').classList.add('open');
+  const overlay = document.getElementById('shareOverlay');
+  overlay.classList.add('open');
+  // Force one layout pass so mobile WebViews paint the sheet in this tap.
+  void overlay.offsetHeight;
 }
 function closeShareSheet(){ document.getElementById('shareOverlay')?.classList.remove('open'); }
 function openShareFriendPicker(){
@@ -3868,7 +3875,8 @@ function openShareFriendPicker(){
 function sharedCardMessage(context){
   const title = String(context?.title || '乐生活内容').replace(/\s+/g,' ').slice(0,80);
   const text = String(context?.text || '').replace(/\s+/g,' ').slice(0,120);
-  return `【乐生活分享】\n${title}${text ? `\n${text}` : ''}\n${context?.url || ''}`;
+  const image = String(context?.image || '').trim();
+  return `【乐生活分享】\n${title}${text ? `\n${text}` : ''}${image ? `\n【封面】${encodeURIComponent(image)}` : ''}\n${context?.url || ''}`;
 }
 async function shareToFriend(id, name){
   if(!(session && session.user)){ showToast('请先登录'); openAuth('login'); return; }
@@ -6119,8 +6127,9 @@ function closePublicProfileMenu(){ document.getElementById('publicProfileMenu')?
 function openPublicUserDm(userId, name){
   if(!(session && session.user)){ showToast('请先登录后再发私信'); openAuth(); return; }
   closePublicProfileMenu();
+  closeUserPublicPage();
   // 主页上的私信直接在当前页发起会话；避免独立消息模块在 App WebView 中被路由层吞掉。
-  openDmTo(userId, name);
+  requestAnimationFrame(() => openDmTo(userId, name));
 }
 async function openUserPublicPage(userId, fallbackName){
   if(!userId){ showToast('没有找到用户主页'); return; }
@@ -10364,8 +10373,7 @@ function renderPostModal(){
     return;
   }
   let media = '';
-  const tikTokInfo = getPostTikTokInfo(p);
-  const isImagePost = !p.youtube && !tikTokInfo && !!((Array.isArray(p.images) && p.images.length) || p.image);
+  const isImagePost = !p.youtube && !!((Array.isArray(p.images) && p.images.length) || p.image);
   const visibleContent = cleanPostContent(p.content);
   if(p.youtube){
     const ytVertical = getPostYoutubeVertical(p);
@@ -10373,9 +10381,6 @@ function renderPostModal(){
     media = `<div class="yt-wrap ${ytVertical ? 'vertical' : ''}">
       <iframe id="ytFrame-${safeYtId}" src="${youtubeEmbedUrl(safeYtId)}" title="YouTube video" allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen onload="primeYoutubeSound('${safeYtId}')"></iframe>
     </div>`;
-  } else if(tikTokInfo){
-    const src = tikTokInfo.id ? `https://www.tiktok.com/embed/v2/${tikTokInfo.id}` : tikTokInfo.url;
-    media = `<div class="tiktok-wrap"><iframe src="${aiEsc(src)}" title="TikTok video" allow="autoplay; encrypted-media; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
   } else if(p.images && p.images.length > 0){
     media = `
       <div class="image-carousel" id="carousel">
@@ -10449,7 +10454,7 @@ function renderPostModal(){
         </div>
         <div class="xhs-content-column">${detailContent}</div>
       </div>` : `
-      ${media ? `<div class="modal-media ${p.youtube || tikTokInfo ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
+      ${media ? `<div class="modal-media ${p.youtube ? 'video' : ''}">${media}${mediaWatermarkHtml(p.author)}${mediaTools}</div>` : ''}
       ${p.images && p.images.length > 1 ? `<div class="carousel-dots" id="carouselDots">${p.images.map((_,i) => `<span class="dot ${i===0?'on':''}"></span>`).join('')}</div>` : ''}
       ${detailContent}`;
 
@@ -10929,7 +10934,7 @@ function renderMerchantAiMaterialStep(){
       <div><b>视频 AI 创作暂未开放</b><span>入口保留，当前只能上传图片生成文案。</span></div>
     </div>
     <div class="ai-label">视频链接</div>
-    <input id="merchantAiVideoUrl" type="url" value="${aiEsc(merchantAiState.videoUrl || '')}" placeholder="粘贴 YouTube 或 TikTok 视频链接" oninput="syncMerchantAiMaterialDraft();updateMerchantAiVideoPreview()" style="width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;font-family:inherit;color:var(--ink);">
+    <input id="merchantAiVideoUrl" type="url" value="${aiEsc(merchantAiState.videoUrl || '')}" placeholder="粘贴 YouTube 视频链接" oninput="syncMerchantAiMaterialDraft();updateMerchantAiVideoPreview()" style="width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;font-family:inherit;color:var(--ink);">
     <div class="youtube-preview" id="merchantAiVideoPreview"></div>
     <div class="ai-label">选择语气</div>
     <div class="ai-tone-row">
@@ -10990,14 +10995,12 @@ function updateMerchantAiVideoPreview(){
   const info = extractVideoInfo(raw);
   box.classList.add('open');
   if(!info){
-    box.innerHTML = `<div class="youtube-preview-note">${uiIcon('alert',14)} 目前支持 YouTube 和 TikTok 视频链接。</div>`;
+    box.innerHTML = `<div class="youtube-preview-note">${uiIcon('alert',14)} 目前仅支持 YouTube 视频链接。</div>`;
     return;
   }
   if(info.provider === 'youtube'){
     const shortHint = isYoutubeVerticalSource(info.url) ? ' · 已按竖屏视频展示' : '';
     box.innerHTML = `<div class="youtube-preview-thumb">${youtubeThumbImgHtml(info.id, 'YouTube封面')}<div class="play-badge">${playIcon()}</div></div><div class="youtube-preview-note">${uiIcon('video',14)} 已识别 YouTube 视频${shortHint}。</div>`;
-  } else {
-    box.innerHTML = `<div class="youtube-preview-thumb" style="display:flex;align-items:center;justify-content:center;background:#111;color:#fff;"><div style="text-align:center;font-weight:900;"><div style="font-size:30px;margin-bottom:8px;">♪</div><div>TikTok 视频</div></div></div><div class="youtube-preview-note">${uiIcon('video',14)} 已识别 TikTok 视频。</div>`;
   }
 }
 function selectMerchantAiTone(tone){
@@ -11402,13 +11405,12 @@ async function publishMerchantAiPost(){
   const p = v.platforms['乐生活'];
   const videoInfo = extractVideoInfo(merchantAiState.videoUrl || '');
   if((merchantAiState.videoUrl || '').trim() && !videoInfo){
-    showToast('视频链接无法识别，目前支持 YouTube 和 TikTok');
+    showToast('视频链接无法识别，目前仅支持 YouTube');
     return;
   }
   const ytId = videoInfo && videoInfo.provider === 'youtube' ? videoInfo.id : null;
-  const tikTokInfo = videoInfo && videoInfo.provider === 'tiktok' ? videoInfo : null;
   const ytVertical = videoInfo && videoInfo.provider === 'youtube' && isYoutubeVerticalSource(videoInfo.url);
-  const content = p.body + '\n\n' + p.tags.join(' ') + (tikTokInfo ? `\n\n${tiktokMarker(tikTokInfo.url)}` : '') + (ytVertical ? `\n\n${youtubeVerticalMarker()}` : '');
+  const content = p.body + '\n\n' + p.tags.join(' ') + (ytVertical ? `\n\n${youtubeVerticalMarker()}` : '');
   const title = p.title.slice(0,20);
   // 有上传图片时始终作为笔记封面；YouTube 仅在没有自定义封面时才回退显示视频缩略图。
   const image = merchantAiState.images[0] || (ytId ? null : 'https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=60');
@@ -11420,7 +11422,7 @@ async function publishMerchantAiPost(){
     id: nextPostId++, category:cat, title, excerpt: content.slice(0,40) + (content.length > 40 ? '…' : ''),
     user_id: session.user.id, content, image, images, tags: postTags,
     location: (currentMerchant && currentMerchant.address) || null,
-    youtube:ytId, youtube_vertical: ytVertical, tiktok_url: tikTokInfo ? tikTokInfo.url : null, author:authorName, time:'刚刚', likes:0, liked:false, event:null, comments:[]
+    youtube:ytId, youtube_vertical: ytVertical, author:authorName, time:'刚刚', likes:0, liked:false, event:null, comments:[]
   };
   posts.unshift(localPost);
   merchantAiState.publishedPostId = localPost.id;
@@ -11670,7 +11672,6 @@ function composePreviewMediaHtml(){
   if(videoInfo?.provider === 'youtube'){
     return `<div style="position:relative;aspect-ratio:16/9;background:#161816;overflow:hidden;border-radius:12px;"><img src="${escAttr(youtubeThumbUrl(videoInfo.id))}" alt="视频预览" style="width:100%;height:100%;object-fit:cover;"><span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.62);color:#fff;display:grid;place-items:center;font-size:22px;">▶</span></div>`;
   }
-  if(videoInfo?.provider === 'tiktok') return `<div style="aspect-ratio:9/12;background:#151515;color:#fff;border-radius:12px;display:grid;place-items:center;font-weight:800;">TikTok 视频预览</div>`;
   const image = uploadedImages[coverImageIndex] || textCardCover?.dataUrl || createTextCoverDataUrl((document.getElementById('fTitle')?.value || '').trim(), (document.getElementById('fContent')?.value || '').trim(), selectedCat, textCoverDraftTheme || 'garden');
   return image ? `<img src="${escAttr(image)}" alt="笔记封面" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;display:block;background:var(--bg-alt);">` : `<div style="aspect-ratio:3/4;border-radius:12px;background:var(--bg-alt);display:grid;place-items:center;color:var(--ink-faint);">封面预览</div>`;
 }
@@ -12249,10 +12250,6 @@ function renderImageGrid(){
             style="width:100%;padding:11px;border-radius:10px;border:none;background:#FF0000;color:#fff;font-weight:600;font-size:13px;cursor:pointer;">
             ▶️ 授权并上传到我的 YouTube
           </button>
-          <button type="button" onclick="authorizeTikTokUpload()" id="ttUploadBtn"
-            style="width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #111;background:#111;color:#fff;font-weight:600;font-size:13px;cursor:pointer;">
-            ♪ 授权并上传到 TikTok
-          </button>
           <div id="ytProgressWrap" style="display:none;margin-top:8px;">
             <div style="height:8px;background:var(--bg-alt);border-radius:999px;overflow:hidden;">
               <div id="ytProgressBar" style="height:100%;width:0%;background:#FF0000;transition:width .2s;"></div>
@@ -12277,10 +12274,6 @@ function renderImageGrid(){
 const GOOGLE_CLIENT_ID = '799459882539-r6ahgpdqsdvtp16u1cdl185m8jvpteu0.apps.googleusercontent.com';
 let ytTokenClient = null;
 let ytAccessToken = null;
-
-function authorizeTikTokUpload(){
-  showToast('TikTok 直接上传需要先完成开发者应用审核；当前请先上传到 TikTok 后粘贴链接');
-}
 
 function ensureYtTokenClient(){
   if(ytTokenClient) return true;
@@ -12548,6 +12541,7 @@ function openMemberActivityTargetById(id){
 }
 function initMessagePage(){
   window._msgCat = null;
+  document.getElementById('msgDetail')?.classList.remove('dm-thread-detail');
   document.getElementById('msgHome').style.display = 'block';
   document.getElementById('msgDetail').style.display = 'none';
   loadDms().then(() => { renderDmList(); updateNavMsgDot(); });
@@ -12703,7 +12697,11 @@ function sharedMessageParts(text){
   const lines = String(text || '').split('\n');
   if(lines[0] !== '【乐生活分享】' || lines.length < 3) return null;
   const url = lines[lines.length - 1] || '';
-  return { title:lines[1] || '乐生活内容', text:lines.slice(2, -1).join(' ') || '', url };
+  const body = lines.slice(2, -1);
+  const coverLineIndex = body.findIndex(line => line.startsWith('【封面】'));
+  const image = coverLineIndex >= 0 ? decodeURIComponent(body[coverLineIndex].slice(4)) : '';
+  if(coverLineIndex >= 0) body.splice(coverLineIndex, 1);
+  return { title:lines[1] || '乐生活内容', text:body.join(' ') || '', url, image };
 }
 function openSharedMessage(url){
   try {
@@ -12716,7 +12714,7 @@ function openSharedMessage(url){
 function renderDmMessage(m){
   const shared = sharedMessageParts(m.text);
   if(!shared) return escHtml(m.text || '');
-  return `<button onclick="openSharedMessage(decodeURIComponent('${encodeURIComponent(shared.url)}'))" style="display:block;width:100%;border:0;background:#fff;padding:9px;border-radius:10px;text-align:left;cursor:pointer;color:var(--ink);"><div style="font-size:10px;color:var(--berry-dark);font-weight:900;margin-bottom:4px;">乐生活笔记</div><div style="font-size:13px;font-weight:900;line-height:1.4;">${escHtml(shared.title)}</div>${shared.text ? `<div style="font-size:11px;color:var(--ink-soft);line-height:1.45;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escHtml(shared.text)}</div>` : ''}<div style="font-size:10px;color:var(--sage-dark);font-weight:800;margin-top:6px;">点击查看笔记</div></button>`;
+  return `<button onclick="openSharedMessage(decodeURIComponent('${encodeURIComponent(shared.url)}'))" style="display:block;width:100%;border:0;background:#fff;padding:9px;border-radius:10px;text-align:left;cursor:pointer;color:var(--ink);">${shared.image ? `<img src="${escAttr(shared.image)}" alt="" style="width:100%;height:92px;object-fit:cover;border-radius:7px;margin-bottom:8px;display:block;">` : ''}<div style="font-size:10px;color:var(--berry-dark);font-weight:900;margin-bottom:4px;">乐生活笔记</div><div style="font-size:13px;font-weight:900;line-height:1.4;">${escHtml(shared.title)}</div>${shared.text ? `<div style="font-size:11px;color:var(--ink-soft);line-height:1.45;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escHtml(shared.text)}</div>` : ''}<div style="font-size:10px;color:var(--sage-dark);font-weight:800;margin-top:6px;">点击查看笔记</div></button>`;
 }
 function openThread(otherId, otherName){
   setReadTs('dm');
@@ -12724,22 +12722,24 @@ function openThread(otherId, otherName){
   const detail = document.getElementById('msgDetail');
   home.style.display = 'none';
   detail.style.display = 'block';
+  detail.classList.add('dm-thread-detail');
   const me = session.user.id;
   const msgs = dmRows.filter(m => m.from_id === otherId || m.to_id === otherId);
   detail.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);">
+    <div class="dm-thread-shell">
+    <div class="dm-thread-head" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);">
       <button onclick="initMessagePage()" style="border:none;background:none;font-size:22px;cursor:pointer;padding:0;">‹</button>
       <b>${otherName}</b>
     </div>
-    <div id="threadList" style="padding:16px;display:flex;flex-direction:column;gap:10px;max-height:50vh;overflow-y:auto;">
+    <div id="threadList" class="dm-thread-list" style="padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;">
       ${msgs.map(m => `
         <div style="align-self:${m.from_id===me?'flex-end':'flex-start'};max-width:75%;background:${m.from_id===me?'var(--sage-light)':'var(--bg-alt)'};padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.5;">${renderDmMessage(m)}</div>
       `).join('')}
     </div>
-    <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);">
+    <div class="dm-thread-composer" style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);">
       <input type="text" id="threadInput" placeholder="回复 ${otherName}…" style="flex:1;padding:10px 14px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-family:inherit;">
       <button onclick="sendDm('${otherId}','${(otherName||'').replace(/'/g,'')}')" style="background:var(--berry);color:#fff;border:none;border-radius:999px;padding:10px 18px;font-weight:600;cursor:pointer;">发送</button>
-    </div>`;
+    </div></div>`;
   const tl = document.getElementById('threadList');
   if(tl) tl.scrollTop = tl.scrollHeight;
   updateNavMsgDot();
@@ -12959,41 +12959,10 @@ function extractYoutubeId(url){
   }
   return null;
 }
-function extractTikTokInfo(url){
-  if(!url) return null;
-  const raw = String(url).trim();
-  try {
-    const parsed = new URL(raw);
-    const host = parsed.hostname.replace(/^www\./, '').replace(/^m\./, '').replace(/^vm\./, '');
-    if(!host.endsWith('tiktok.com')) return null;
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    const videoIndex = parts.indexOf('video');
-    const videoId = videoIndex >= 0 ? (parts[videoIndex + 1] || '').replace(/\D/g, '') : '';
-    return {
-      provider: 'tiktok',
-      id: videoId || '',
-      url: raw
-    };
-  } catch(e){
-    const match = raw.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
-    if(match) return { provider:'tiktok', id:match[1], url:raw };
-  }
-  return null;
-}
 function extractVideoInfo(url){
   const youtubeId = extractYoutubeId(url);
   if(youtubeId) return { provider:'youtube', id:youtubeId, url:String(url || '').trim() };
-  return extractTikTokInfo(url);
-}
-function tiktokMarker(url){
-  return `[[tiktok:${String(url || '').trim()}]]`;
-}
-function getPostTikTokInfo(p){
-  if(!p) return null;
-  if(p.tiktok_url) return extractTikTokInfo(p.tiktok_url);
-  const content = String(p.content || '');
-  const match = content.match(/\[\[tiktok:([^\]]+)\]\]/);
-  return match ? extractTikTokInfo(match[1]) : null;
+  return null;
 }
 function cleanPostContent(content){
   return String(content || '')
@@ -13014,19 +12983,7 @@ function updateYoutubePreview(){
   const info = extractVideoInfo(raw);
   box.classList.add('open');
   if(!info){
-    box.innerHTML = `<div class="youtube-preview-note">${uiIcon('alert',14)} 目前支持 YouTube 和 TikTok 视频链接。</div>`;
-    return;
-  }
-  if(info.provider === 'tiktok'){
-    box.innerHTML = `
-      <div class="youtube-preview-thumb" style="display:flex;align-items:center;justify-content:center;background:#111;color:#fff;">
-        <div style="text-align:center;font-weight:900;">
-          <div style="font-size:30px;margin-bottom:8px;">♪</div>
-          <div>TikTok 视频</div>
-        </div>
-      </div>
-      <div class="youtube-preview-note">${uiIcon('video',14)} 已识别 TikTok 链接，发布后会在笔记详情页嵌入播放。</div>
-    `;
+    box.innerHTML = `<div class="youtube-preview-note">${uiIcon('alert',14)} 目前仅支持 YouTube 视频链接。</div>`;
     return;
   }
   box.innerHTML = `
@@ -13091,8 +13048,7 @@ function editPost(id){
   openCompose();
   document.getElementById('fTitle').value = p.title || '';
   document.getElementById('fContent').value = cleanPostContent(p.content || '');
-  const tikTokInfo = getPostTikTokInfo(p);
-  document.getElementById('fYoutube').value = p.youtube ? ('https://youtu.be/' + p.youtube) : (tikTokInfo ? tikTokInfo.url : '');
+  document.getElementById('fYoutube').value = p.youtube ? ('https://youtu.be/' + p.youtube) : '';
   updateYoutubePreview();
   document.getElementById('fLocation').value = p.location || ''; delete document.getElementById('fLocation').dataset.locationCanonical;
   document.getElementById('titleCount').textContent = (p.title || '').length;
@@ -13106,6 +13062,10 @@ function editPost(id){
   document.getElementById('fDeadline').value = eventOn ? (p.event.deadline || '') : '';
   document.getElementById('fActivityStartDate').value = p.event?.start_date || '';
   document.getElementById('fActivityEndDate').value = p.event?.end_date || '';
+  postPublishMode = isPendingScheduledPost(p) ? 'scheduled' : 'now';
+  const scheduleInput = document.getElementById('fScheduledAt');
+  if(scheduleInput) scheduleInput.value = isPendingScheduledPost(p) ? laDateTimeLocalValue(new Date(p.scheduled_at)) : '';
+  updateSchedulePublishUi();
   // 高亮对应分类按钮
   document.querySelectorAll('.cat-pick').forEach(b => {
     b.classList.toggle('sel', b.dataset.c === p.category);
@@ -13183,9 +13143,8 @@ async function submitPost(){
 
   const videoInfo = extractVideoInfo(videoUrl);
   const ytId = videoInfo && videoInfo.provider === 'youtube' ? videoInfo.id : null;
-  const tiktokInfo = videoInfo && videoInfo.provider === 'tiktok' ? videoInfo : null;
   if(videoUrl && !videoInfo){
-    showToast('目前支持 YouTube 和 TikTok 视频链接');
+    showToast('目前仅支持 YouTube 视频链接');
     updateYoutubePreview();
     return;
   }
@@ -13230,7 +13189,6 @@ async function submitPost(){
   setPublishProgress('正在发布笔记…', 52);
   const ytVertical = videoInfo && videoInfo.provider === 'youtube' && isYoutubeVerticalSource(videoInfo.url);
   const contentToSave = content
-    + (tiktokInfo ? `\n\n${tiktokMarker(tiktokInfo.url)}` : '')
     + (ytVertical ? `\n\n${youtubeVerticalMarker()}` : '');
   const excerpt = content.slice(0,40)+(content.length>40?'…':'');
   // 最终发布时按当前已选版式重新生成，避免预览主题没有被带到发布封面。
@@ -13288,14 +13246,14 @@ async function submitPost(){
       : '我';
 
   if(editingPostId !== null){
-    if(isScheduledPost){ showToast('已发布笔记暂不支持改为定时发布，请新建一篇内容'); hidePublishProgress(); return; }
     /* ---- 编辑模式：更新已有帖子 ---- */
     const p = findPostById(editingPostId);
     if(p){
       p.title = title; p.content = contentToSave; p.excerpt = excerpt;
       p.category = cat; p.subcategory = subcategory; p.community_meta = communityMeta; p.youtube = ytId; p.youtube_vertical = ytVertical; p.event = event; p.tags = tagsArr;
-      p.tiktok_url = tiktokInfo ? tiktokInfo.url : null;
       p.location = location || null;
+      p.visibility = isScheduledPost ? 'scheduled' : 'public';
+      p.scheduled_at = scheduledAt;
       if(hasPostMedia){ p.image = image; p.images = images; p.image_thumbnail = imageThumbnail; p.image_thumbnails = imageThumbnails; }
       syncPostCopies(p);
     }
@@ -13308,7 +13266,7 @@ async function submitPost(){
     if(location) upsertLocation(location);
     try {
       setPublishProgress('正在同步更新…', 84);
-      const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, community_meta:communityMeta, youtube:ytId, event, tags: tagsArr, location: location || null };
+      const fields = { title, content: contentToSave, excerpt, category:cat, subcategory, community_meta:communityMeta, youtube:ytId, youtube_vertical:ytVertical, event, tags: tagsArr, location: location || null, visibility:isScheduledPost ? 'scheduled' : 'public', scheduled_at:scheduledAt };
       if(hasPostMedia){ fields.image = image; fields.images = images; fields.image_thumbnail = imageThumbnail; fields.image_thumbnails = imageThumbnails; }
       const savedPost = await supabaseUpdatePost(idToUpdate, fields);
       if(hasPostMedia && !savedPost?.image){
@@ -13325,7 +13283,7 @@ async function submitPost(){
         if(currentTab === 'profile') initProfilePage();
       }
       console.log('✓ 数据库已同步更新 id=', idToUpdate);
-      setPublishProgress('发布完成', 100);
+      setPublishProgress(isScheduledPost ? '定时已更新' : '发布完成', 100);
       hidePublishProgress();
     } catch(e){
       console.warn('⚠️ 数据库更新失败:', e.message);
@@ -13341,7 +13299,7 @@ async function submitPost(){
     user_id: session.user.id,
     content: contentToSave, image, images, image_thumbnail:imageThumbnail, image_thumbnails:imageThumbnails, tags: tagsArr, location: location || null, subcategory, community_meta:communityMeta,
     youtube: ytId, youtube_vertical: ytVertical, author: authorName, time:'刚刚', likes:0, liked:false,
-    tiktok_url: tiktokInfo ? tiktokInfo.url : null, event, comments:[], visibility: isScheduledPost ? 'scheduled' : 'public', scheduled_at: scheduledAt
+    event, comments:[], visibility: isScheduledPost ? 'scheduled' : 'public', scheduled_at: scheduledAt
   };
   if(!isScheduledPost) posts.unshift(localPost);
 
@@ -14062,7 +14020,6 @@ function compactFeedPost(raw){
     images: null,
     youtube: raw.youtube || '',
     youtube_vertical: false,
-    tiktok_url: null,
     likes: raw.likes || 0,
     liked: false,
     collected: false,
@@ -15539,4 +15496,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Settings Recovery and Navigation】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - YouTube Only Video Update】`);
