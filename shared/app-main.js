@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.599';
+const APP_VERSION = '5.600';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14428,6 +14428,112 @@ async function openHomeStorageSpace(){
   try{const estimate=await navigator.storage?.estimate?.();if(estimate){usageText=`约 ${(Number(estimate.usage||0)/1024/1024).toFixed(1)} MB`;quotaText=estimate.quota?` / ${(Number(estimate.quota)/1024/1024/1024).toFixed(1)} GB 可用空间` : '';}}catch(error){}
   openHomeFeature('存储空间',`<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('bag',26)}</div><h3>本机缓存</h3><p>当前已使用：${escHtml(usageText)}${escHtml(quotaText)}</p><p>图片和已浏览内容会缓存在当前设备以提升打开速度。云端笔记、订单、资料和已完成交易不会受影响。</p><button class="home-feature-primary" type="button" onclick="clearHomeLocalCache()">清理本机缓存</button></section>`);
 }
+let homeAccountSettingsCache = null;
+function homeDefaultAccountSettings(){
+  return { notifications:{comments:true,follows:true,likes:true,orders:true}, preferences:{categories:[]}, privacy:{discoverable:true,show_region:true} };
+}
+function homeMergeAccountSettings(base, patch){
+  return {
+    ...base,
+    ...patch,
+    notifications:{...(base.notifications||{}),...(patch.notifications||{})},
+    preferences:{...(base.preferences||{}),...(patch.preferences||{})},
+    privacy:{...(base.privacy||{}),...(patch.privacy||{})}
+  };
+}
+async function loadHomeAccountSettings(force=false){
+  if(!homeFeatureRequireAuth()) return homeDefaultAccountSettings();
+  if(homeAccountSettingsCache && !force) return homeAccountSettingsCache;
+  const url=`${SUPABASE_URL}/rest/v1/user_account_settings?user_id=eq.${encodeURIComponent(session.user.id)}&select=settings&limit=1`;
+  const res=await authedFetch(url,{headers:{apikey:SUPABASE_ANON_KEY}});
+  if(!res.ok) throw new Error('设置读取失败');
+  const rows=await res.json();
+  homeAccountSettingsCache=homeMergeAccountSettings(homeDefaultAccountSettings(), rows?.[0]?.settings||{});
+  return homeAccountSettingsCache;
+}
+async function saveHomeAccountSettings(patch){
+  if(!homeFeatureRequireAuth()) return null;
+  const current=await loadHomeAccountSettings();
+  const settings=homeMergeAccountSettings(current,patch);
+  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_account_settings?on_conflict=user_id`,{method:'POST',headers:{apikey:SUPABASE_ANON_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({user_id:session.user.id,settings,updated_at:new Date().toISOString()})});
+  if(!res.ok) throw new Error('设置保存失败');
+  homeAccountSettingsCache=settings;
+  return settings;
+}
+function homeSettingToggle(label, description, checked, handler, key){
+  return `<label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid var(--line,#ebe6d9);cursor:pointer"><span><b style="display:block;font-size:15px">${escHtml(label)}</b><small style="display:block;margin-top:4px;color:var(--muted,#8a8577);line-height:1.45">${escHtml(description)}</small></span><input type="checkbox" ${checked?'checked':''} onchange="${handler}('${key}',this.checked)" style="width:21px;height:21px;accent-color:#5d896a;flex:0 0 auto"></label>`;
+}
+async function openHomeNotificationSettings(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('通知设置','<div class="home-feature-empty">正在读取通知偏好...</div>');
+  try{
+    const settings=await loadHomeAccountSettings(); const n=settings.notifications||{};
+    openHomeFeature('通知设置',`<section class="home-feature-card"><h3>站内通知</h3>${homeSettingToggle('评论和 @','有人评论或提及你时通知',n.comments!==false,'updateHomeNotificationSetting','comments')}${homeSettingToggle('新增关注','有新关注者时通知',n.follows!==false,'updateHomeNotificationSetting','follows')}${homeSettingToggle('赞和收藏','收到赞或收藏时通知',n.likes!==false,'updateHomeNotificationSetting','likes')}${homeSettingToggle('订单动态','订单、预约、票务和商家交易状态变化时通知',n.orders!==false,'updateHomeNotificationSetting','orders')}</section><p class="home-feature-note">此处保存站内通知偏好；系统推送权限会在你主动开启提醒时申请。</p>`);
+  }catch(error){openHomeFeature('通知设置','<div class="home-feature-empty">暂时无法读取通知偏好，请稍后重试。</div>');}
+}
+window.updateHomeNotificationSetting=async function(key,checked){
+  try{await saveHomeAccountSettings({notifications:{[key]:checked}});showToast('通知偏好已保存');}catch(error){showToast(error.message||'保存失败');}
+};
+async function openHomePreferences(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('内容偏好','<div class="home-feature-empty">正在读取内容偏好...</div>');
+  try{
+    const settings=await loadHomeAccountSettings(); const selected=Array.isArray(settings.preferences?.categories)?settings.preferences.categories:[];
+    const choices=['美食','玩乐','好物','生活','社区','亲子遛娃','活动展览','省钱优惠','影视'];
+    const buttons=choices.map(name=>`<button type="button" onclick="toggleHomeContentPreference('${name}')" style="border:1px solid ${selected.includes(name)?'#5d896a':'#ded7c5'};background:${selected.includes(name)?'#e1eddf':'#fff'};color:${selected.includes(name)?'#356746':'#504b40'};padding:10px 13px;border-radius:18px">${name}${selected.includes(name)?' ✓':''}</button>`).join('');
+    openHomeFeature('内容偏好',`<section class="home-feature-card"><h3>想多看什么</h3><p>用于调整“推荐”内容，不影响你仍然可以浏览的全部内容。</p><div style="display:flex;flex-wrap:wrap;gap:9px">${buttons}</div></section>`);
+  }catch(error){openHomeFeature('内容偏好','<div class="home-feature-empty">暂时无法读取内容偏好，请稍后重试。</div>');}
+}
+window.toggleHomeContentPreference=async function(name){
+  try{
+    const settings=await loadHomeAccountSettings(); const current=Array.isArray(settings.preferences?.categories)?settings.preferences.categories:[];
+    const categories=current.includes(name)?current.filter(item=>item!==name):[...current,name];
+    await saveHomeAccountSettings({preferences:{categories}}); await openHomePreferences(); showToast('内容偏好已保存');
+  }catch(error){showToast(error.message||'保存失败');}
+};
+async function openHomePrivacySettings(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('隐私设置','<div class="home-feature-empty">正在读取展示偏好...</div>');
+  try{
+    const settings=await loadHomeAccountSettings(); const p=settings.privacy||{};
+    openHomeFeature('隐私设置',`<section class="home-feature-card"><h3>展示偏好</h3>${homeSettingToggle('允许被搜索','允许其他用户通过昵称或乐生活 ID 找到你',p.discoverable!==false,'updateHomePrivacySetting','discoverable')}${homeSettingToggle('展示所属地区','在个人主页展示你选择的大区，不显示精确地址',p.show_region!==false,'updateHomePrivacySetting','show_region')}</section><section class="home-feature-terms"><p>相机、位置、相册和通讯录只会在你主动使用扫码、地图、上传或添加好友等功能时请求授权。</p></section>`);
+  }catch(error){openHomeFeature('隐私设置','<div class="home-feature-empty">暂时无法读取展示偏好，请稍后重试。</div>');}
+}
+window.updateHomePrivacySetting=async function(key,checked){
+  try{await saveHomeAccountSettings({privacy:{[key]:checked}});showToast('展示偏好已保存');}catch(error){showToast(error.message||'保存失败');}
+};
+async function fetchHomeAddresses(){
+  if(!homeFeatureRequireAuth()) return [];
+  const url=`${SUPABASE_URL}/rest/v1/user_delivery_addresses?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=is_default.desc,updated_at.desc`;
+  const res=await authedFetch(url,{headers:{apikey:SUPABASE_ANON_KEY}});
+  if(!res.ok) throw new Error('地址读取失败');
+  return res.json();
+}
+async function openHomeAddresses(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('收货地址','<div class="home-feature-empty">正在读取常用地址...</div>');
+  try{
+    const addresses=await fetchHomeAddresses();
+    const list=addresses.length?addresses.map(item=>`<section class="home-feature-card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:12px"><div><h3 style="margin:0">${escHtml(item.label||'常用地址')}${item.is_default?' <small style="color:#5d896a">默认</small>':''}</h3><p style="margin:8px 0 2px">${escHtml(item.recipient_name)} · ${escHtml(item.phone)}</p><p style="margin:2px 0">${escHtml([item.address_line1,item.address_line2,item.city,item.state_region,item.postal_code].filter(Boolean).join(', '))}</p></div><button type="button" onclick="removeHomeAddress(${Number(item.id)})" style="align-self:flex-start;border:0;background:transparent;color:#b34848;font-size:14px">删除</button></div></section>`).join(''):'<div class="home-feature-empty">还没有保存常用收货地址。</div>';
+    openHomeFeature('收货地址',`${list}<button class="home-feature-primary" type="button" style="margin-top:12px" onclick="openHomeAddressForm()">添加收货地址</button><p class="home-feature-note">地址保存到当前账户，可在不同设备的零售与配送订单中复用。</p>`);
+  }catch(error){openHomeFeature('收货地址','<div class="home-feature-empty">暂时无法读取收货地址，请稍后重试。</div>');}
+}
+window.openHomeAddressForm=function(){
+  openHomeFeature('添加收货地址',`<section class="home-feature-card"><form onsubmit="saveHomeAddress(event)"><label>地址名称<input name="label" value="常用地址" required></label><label>收件人姓名<input name="recipient_name" required></label><label>联系电话<input name="phone" inputmode="tel" required></label><label>街道地址<input name="address_line1" required></label><label>门牌、单元（选填）<input name="address_line2"></label><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label>城市<input name="city"></label><label>州 / 地区<input name="state_region"></label></div><label>邮编<input name="postal_code" inputmode="numeric"></label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="is_default">设为默认收货地址</label><button class="home-feature-primary" type="submit">保存地址</button></form></section>`);
+};
+window.saveHomeAddress=async function(event){
+  event.preventDefault(); if(!homeFeatureRequireAuth()) return;
+  const fields=Object.fromEntries(new FormData(event.currentTarget).entries());
+  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_delivery_addresses`,{method:'POST',headers:{apikey:SUPABASE_ANON_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({...fields,user_id:session.user.id,is_default:Boolean(event.currentTarget.is_default.checked)})});
+  if(!res.ok){showToast('地址保存失败，请稍后重试');return;}
+  showToast('收货地址已保存'); openHomeAddresses();
+};
+window.removeHomeAddress=async function(id){
+  if(!confirm('确认删除这条收货地址吗？')) return;
+  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_delivery_addresses?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:{apikey:SUPABASE_ANON_KEY}});
+  if(!res.ok){showToast('删除失败，请稍后重试');return;}
+  showToast('收货地址已删除');openHomeAddresses();
+};
 function ensureHomeMenu(){
   let overlay=document.getElementById('homeMenuOverlay');
   if(overlay) return overlay;
@@ -14456,11 +14562,11 @@ window.handleHomeMenuAction=function(action){
   if(action==='community'){ closeHomeMenu(); return openHomeCommunity(); }
   if(action==='security'){ closeHomeMenu(); return openHomeFeature('账号与安全',`<section class="home-feature-card"><h3>账号与安全</h3><p>${escHtml(session?.user?.email||'当前账户')}</p><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openAuth('reset')">重置密码</button><p class="home-feature-note">密码重置会发送至当前账号邮箱。</p></section>`); }
   if(action==='general'){ closeHomeMenu(); return openHomeFeature('通用设置','<section class="home-feature-card"><h3>通用设置</h3><p>显示模式、字体大小和自动播放等选项会逐步开放。当前会优先跟随设备的语言与系统外观设置。</p></section>'); }
-  if(action==='notifications'){ closeHomeMenu(); return openHomeFeature('通知设置','<section class="home-feature-card"><h3>通知设置</h3><p>在 App 中可按需开启本地提醒；浏览网页不会自动请求通知权限。</p><button class="home-feature-primary" type="button" onclick="requestAppPermission(\'local-notification\')">开启本地提醒</button></section>'); }
-  if(action==='privacy'){ closeHomeMenu(); return openHomeFeature('隐私设置','<section class="home-feature-terms"><h3>隐私设置</h3><p>乐生活仅在你使用相应功能时请求相机、位置、相册或通讯录权限。公开笔记、昵称和头像会依照你的发布及资料设置展示。</p><p>需要导出个人数据或提交隐私请求时，可在“我的反馈”中说明需求。</p></section>'); }
-  if(action==='address'){ closeHomeMenu(); return openHomeFeature('收货地址','<section class="home-feature-card"><h3>收货地址</h3><p>零售配送和邮资服务接入后，可在这里安全管理常用收货地址。当前请在具体订单内填写地址。</p></section>'); }
+  if(action==='notifications'){ closeHomeMenu(); return openHomeNotificationSettings(); }
+  if(action==='privacy'){ closeHomeMenu(); return openHomePrivacySettings(); }
+  if(action==='address'){ closeHomeMenu(); return openHomeAddresses(); }
   if(action==='switchAccount'){ closeHomeMenu(); return window.openLogin?.(); }
-  if(action==='preferences'){ closeHomeMenu(); return window.switchTab?.('home'); }
+  if(action==='preferences'){ closeHomeMenu(); return openHomePreferences(); }
   if(action==='cache'){ closeHomeMenu(); return openHomeStorageSpace(); }
   if(action==='scan'){ closeHomeMenu(); return openHomeScanner(); }
   if(action==='help'){ closeHomeMenu(); return openHomeHelp(); }
