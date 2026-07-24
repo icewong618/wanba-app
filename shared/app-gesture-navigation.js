@@ -59,16 +59,16 @@
     const bind = () => {
       if(window.__leshenghuoEdgeGesturesBound) return;
       window.__leshenghuoEdgeGesturesBound = true;
-      document.addEventListener('touchstart', event => {
+      const start = (event, forceBack = false) => {
         if(!isEnabled() || !event.touches || event.touches.length !== 1) return;
         const touch = event.touches[0];
         const width = window.innerWidth || document.documentElement.clientWidth || 390;
-        const fromLeft = touch.clientX <= edge;
+        const fromLeft = forceBack || touch.clientX <= edge;
         const fromRight = touch.clientX >= width - edge;
-        if((!fromLeft && !fromRight) || interactive(event.target)) return;
+        if((!fromLeft && !fromRight) || (!forceBack && interactive(event.target))) return;
         startPoint = { x:touch.clientX, y:touch.clientY, dir:fromLeft ? 'back' : 'forward', active:true };
-      }, { passive:true, capture:true });
-      document.addEventListener('touchmove', event => {
+      };
+      const move = event => {
         if(!startPoint?.active || !event.touches || event.touches.length !== 1) return;
         const touch = event.touches[0];
         const dx = touch.clientX - startPoint.x;
@@ -77,8 +77,8 @@
         const leftSwipe = startPoint.dir === 'forward' && dx < -minX;
         if(dy > maxY) { startPoint.active = false; return; }
         if(rightSwipe || leftSwipe) event.preventDefault();
-      }, { passive:false, capture:true });
-      document.addEventListener('touchend', event => {
+      };
+      const end = event => {
         if(!startPoint?.active) { startPoint = null; return; }
         const touch = event.changedTouches?.[0] || {};
         const dx = (touch.clientX || 0) - startPoint.x;
@@ -86,8 +86,24 @@
         const handled = dy <= maxY && ((startPoint.dir === 'back' && dx > minX && back()) || (startPoint.dir === 'forward' && dx < -minX && forward()));
         if(handled) event.preventDefault();
         startPoint = null;
-      }, { passive:false, capture:true });
+      };
+      document.addEventListener('touchstart', event => start(event), { passive:true, capture:true });
+      document.addEventListener('touchmove', move, { passive:false, capture:true });
+      document.addEventListener('touchend', end, { passive:false, capture:true });
       document.addEventListener('touchcancel', () => { startPoint = null; }, { passive:true });
+
+      // Native WebViews can hand events to a full-screen layer before the
+      // document sees them. This transparent left edge is an explicit target
+      // for the return gesture and stays above every feature overlay.
+      const zone = document.createElement('div');
+      zone.id = 'leshenghuoAppBackGestureZone';
+      zone.setAttribute('aria-hidden', 'true');
+      zone.style.cssText = 'position:fixed;left:0;top:0;bottom:0;width:24px;z-index:2147483000;touch-action:none;background:transparent;';
+      zone.addEventListener('touchstart', event => start(event, true), { passive:true });
+      zone.addEventListener('touchmove', move, { passive:false });
+      zone.addEventListener('touchend', end, { passive:false });
+      zone.addEventListener('touchcancel', () => { startPoint = null; }, { passive:true });
+      document.body?.appendChild(zone);
     };
     return { remember, back, forward, bind, routeTabFromLocation, isRestoring:() => restoring };
   };

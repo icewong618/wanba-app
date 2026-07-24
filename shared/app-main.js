@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.605';
+const APP_VERSION = '5.606';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -385,6 +385,7 @@ function appOverlayBack(){
   const menu = document.getElementById('homeMenuOverlay');
   if(menu?.classList.contains('settings-open')){ closeHomeSettings(); return true; }
   if(menu?.classList.contains('open')){ closeHomeMenu(); return true; }
+  if(document.getElementById('internalModuleHost')){ closeInternalModule(); return true; }
   return false;
 }
 function appCurrentRoute(){
@@ -395,7 +396,7 @@ function appCurrentRoute(){
   return { type:'tab', tab:currentTab || 'home' };
 }
 const appGestureNavigation = window.LeshenghuoAppGestureNavigation?.create({
-  isEnabled: isEmbeddedAppEntry,
+  isEnabled: () => isEmbeddedAppEntry() || document.documentElement.classList.contains('app-webview-entry'),
   getCurrentRoute: appCurrentRoute,
   getCurrentTab: () => currentTab || 'home',
   onOverlayBack: appOverlayBack,
