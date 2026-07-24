@@ -103,6 +103,19 @@ try {
   } else {
     console.log('PASS Android App uses an explicit native page scroller');
   }
+
+  const moduleShell = read('shared/embedded-module-shell.js');
+  const moduleBridge = read('shared/module-bridge.js');
+  const baseStyles = read('shared/styles/base.css');
+  if(!moduleShell.includes('immersive-module-open') || !baseStyles.includes('.immersive-module-open .bottom-nav')){
+    fail('embedded business modules do not hide the root bottom navigation');
+  } else if(!/internal-module-host\{[^}]*z-index\s*:\s*1[3-9]\d{3}/.test(baseStyles)){
+    fail('embedded business modules can be covered by the root bottom navigation');
+  } else if(!moduleBridge.includes("get('embedded_entry') === '1'") || !moduleShell.includes("set('embedded_entry', '1')")){
+    fail('embedded module back navigation cannot return to its previous internal page');
+  } else {
+    console.log('PASS embedded business modules own navigation and return flow');
+  }
 } catch(error) {
   fail(error.stack || error.message);
 }

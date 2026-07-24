@@ -16,6 +16,11 @@
   };
   const back = (fallback = '/') => {
     if(isEmbedded()){
+      const isEntry = new URLSearchParams(window.location.search).get('embedded_entry') === '1';
+      if(!isEntry && window.history.length > 1){
+        window.history.back();
+        return true;
+      }
       window.parent.postMessage({ type:'leshenghuo-navigation-back' }, window.location.origin);
       return true;
     }

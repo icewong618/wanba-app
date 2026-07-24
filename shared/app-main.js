@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.615';
+const APP_VERSION = '5.616';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -2497,6 +2497,7 @@ function closeMerchantEmbeddedOrder(){
   const sheet=document.getElementById('merchantEmbeddedOrder');
   if(!sheet) return;
   sheet.remove();
+  window.LeshenghuoSyncImmersiveModuleState?.();
 }
 function closeEmbeddedExperience(){
   closeMerchantEmbeddedOrder();
@@ -2505,14 +2506,21 @@ function closeEmbeddedExperience(){
 window.closeEmbeddedExperience = closeEmbeddedExperience;
 function openMerchantEmbeddedOrder(url){
   closeMerchantEmbeddedOrder();
+  const target = new URL(url, window.location.origin);
+  target.searchParams.set('embedded_entry','1');
   const sheet=document.createElement('section');
   sheet.id='merchantEmbeddedOrder';
   sheet.className='merchant-fullscreen-sheet open';
-  sheet.innerHTML=`<iframe src="${escAttr(url)}" title="外卖点单" style="width:100%;height:100%;border:0;background:#fff;" allow="payment"></iframe>`;
+  sheet.innerHTML=`<iframe src="${escAttr(target.href)}" title="商家功能页面" style="width:100%;height:100%;border:0;background:#fff;" allow="payment"></iframe>`;
   document.body.appendChild(sheet);
+  window.LeshenghuoSyncImmersiveModuleState?.();
 }
 window.addEventListener('message',event=>{
   if(event.origin !== window.location.origin) return;
+  if(event?.data?.type === 'leshenghuo-navigation-back' && document.getElementById('merchantEmbeddedOrder')){
+    closeMerchantEmbeddedOrder();
+    return;
+  }
   if(['leshenghuo-close-takeout','leshenghuo-close-rental','leshenghuo-close-auto','leshenghuo-module-close'].includes(event?.data?.type)){
     closeMerchantEmbeddedOrder();
     if(event.data.type === 'leshenghuo-module-close'){
@@ -15653,4 +15661,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Android Scroll Recovery】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Immersive Merchant Modules】`);
