@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.604';
+const APP_VERSION = '5.605';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -380,6 +380,13 @@ function hideLaunchScreen(){ return appUpdateManager?.hideLaunch(); }
 function notifyAppReady(){ return appUpdateManager?.notifyReady(); }
 
 function appOverlayOpen(id){ return !!document.getElementById(id)?.classList.contains('open'); }
+function appOverlayBack(){
+  if(appOverlayOpen('homeFeatureOverlay')){ closeHomeFeature(); return true; }
+  const menu = document.getElementById('homeMenuOverlay');
+  if(menu?.classList.contains('settings-open')){ closeHomeSettings(); return true; }
+  if(menu?.classList.contains('open')){ closeHomeMenu(); return true; }
+  return false;
+}
 function appCurrentRoute(){
   if(appOverlayOpen('searchOverlay')) return { type:'search' };
   if(appOverlayOpen('postOverlay') && activePostId != null) return { type:'post', id:activePostId };
@@ -391,6 +398,7 @@ const appGestureNavigation = window.LeshenghuoAppGestureNavigation?.create({
   isEnabled: isEmbeddedAppEntry,
   getCurrentRoute: appCurrentRoute,
   getCurrentTab: () => currentTab || 'home',
+  onOverlayBack: appOverlayBack,
   navigate: (route, done) => {
     closeSearchPage(); closePost(); closeMerchantPublicPage(); closeUserPublicPage();
     setTimeout(() => {
@@ -7989,7 +7997,11 @@ function renderFeed(){
   if(!el) return;
   renderFeedModes();
   let list;
-  const publicPosts = posts.filter(p => (p.visibility || 'public') === 'public');
+  const hiddenUsers = new Set([
+    ...(Array.isArray(homeAccountSettingsCache?.privacy?.hide) ? homeAccountSettingsCache.privacy.hide : []),
+    ...(Array.isArray(homeAccountSettingsCache?.privacy?.blacklist) ? homeAccountSettingsCache.privacy.blacklist : [])
+  ].map(String));
+  const publicPosts = posts.filter(p => (p.visibility || 'public') === 'public' && !hiddenUsers.has(String(p.user_id || '')));
   if(currentTag){
     list = publicPosts.filter(p => postMatchesQuickLink(p, currentTag));
   } else {
@@ -14474,7 +14486,7 @@ function homeDefaultAccountSettings(){
   return {
     notifications:{ likes:true, follows:true, comments:true, mentions:true, shares:true, direct_messages:true, followed_updates:true, livestream:true, content_recommendations:true, user_recommendations:true, other:true, merchant_orders:true, app_banner:true },
     preferences:{ categories:[], topics:[] },
-    privacy:{ discoverable:true, show_region:true, recommend_me:false, recommend_to_others:false, one_tap_protection:false, dm_scope:'default', comment_scope:'all', mention_scope:'all', chat_marker:true, online_status:'mutual', follow_list:'public', favorites:'private' },
+    privacy:{ discoverable:true, show_region:true, recommend_me:false, recommend_to_others:false, one_tap_protection:false, dm_scope:'default', comment_scope:'all', mention_scope:'all', chat_marker:true, online_status:'mutual', follow_list:'public', favorites:'private', hide_from:[], hide:[], blacklist:[] },
     general:{ font_size:'medium', theme:'system', auto_refresh:true, browsing_history:true },
     security:{ phone:'', identity_status:'not_started', deletion_requested_at:'' }
   };
@@ -14572,7 +14584,8 @@ async function openHomePrivacySettings(){
   try{
     const settings=await loadHomeAccountSettings(); const p=settings.privacy||{};
     const simpleOptions={default:'默认',all:'全部',mutual:'互相关注',followers:'我关注的人',private:'不公开',off:'关闭',on:'开启'};
-    openHomeFeature('隐私设置',`<div class="home-setting-section-title">发现与推荐</div><section class="home-feature-card home-setting-card">${homeSettingToggle('找到我的方式','允许其他用户通过昵称或乐生活 ID 找到你',p.discoverable!==false,'updateHomePrivacySetting','discoverable')}${homeSettingToggle('推荐可能认识的人给我','使用公开资料推荐可能认识的人',p.recommend_me===true,'updateHomePrivacySetting','recommend_me')}${homeSettingToggle('把我推荐给可能认识的人','允许系统将你作为推荐用户展示',p.recommend_to_others===true,'updateHomePrivacySetting','recommend_to_others')}${homeSettingToggle('展示所属地区','仅显示你选择的大区，不显示精确地址',p.show_region!==false,'updateHomePrivacySetting','show_region')}</section><div class="home-setting-section-title">屏蔽与黑名单</div><section class="home-feature-card home-setting-card">${homeSettingChoice('不让他（她）看','管理无法查看你公开主页的用户', '', {none:'暂无屏蔽用户'},'openHomePrivacyPlaceholder','hide_from')}${homeSettingChoice('不看他（她）','管理你不想看到内容的用户', '', {none:'暂无屏蔽用户'},'openHomePrivacyPlaceholder','hide')}${homeSettingChoice('黑名单','管理被限制互动的用户', '', {none:'暂无黑名单用户'},'openHomePrivacyPlaceholder','blacklist')}</section><div class="home-setting-section-title">互动权限</div><section class="home-feature-card home-setting-card">${homeSettingToggle('一键防护','快速收紧私信、评论和 @ 权限',p.one_tap_protection===true,'updateHomePrivacySetting','one_tap_protection')}${homeSettingChoice('谁可以私信我','设置站内私信的接收范围',p.dm_scope,simpleOptions,'openHomePrivacyChoice','dm_scope')}${homeSettingChoice('谁可以评论和回复','设置笔记评论范围',p.comment_scope,simpleOptions,'openHomePrivacyChoice','comment_scope')}${homeSettingChoice('谁可以 @ 我','设置提及范围',p.mention_scope,simpleOptions,'openHomePrivacyChoice','mention_scope')}${homeSettingToggle('聊天标识','在私信中显示已读等状态',p.chat_marker!==false,'updateHomePrivacySetting','chat_marker')}</section><div class="home-setting-section-title">内容与状态权限</div><section class="home-feature-card home-setting-card">${homeSettingChoice('在线状态','谁可以看到你的在线状态',p.online_status,{all:'全部','mutual':'互相关注的人',private:'不公开'},'openHomePrivacyChoice','online_status')}${homeSettingChoice('关注与粉丝列表','设置关注与粉丝列表可见范围',p.follow_list,{public:'全部公开',mutual:'互相关注可见',private:'不公开'},'openHomePrivacyChoice','follow_list')}${homeSettingChoice('我的收藏','设置收藏内容可见范围',p.favorites,{public:'公开',private:'不公开'},'openHomePrivacyChoice','favorites')}</section><section class="home-feature-terms"><p>相机、位置、相册和通讯录只会在你主动使用扫码、地图、上传或添加好友等功能时请求授权。</p></section>`);
+    const privacyCount = key => Array.isArray(p[key]) ? p[key].length : 0;
+    openHomeFeature('隐私设置',`<div class="home-setting-section-title">发现与推荐</div><section class="home-feature-card home-setting-card">${homeSettingToggle('找到我的方式','允许其他用户通过昵称或乐生活 ID 找到你',p.discoverable!==false,'updateHomePrivacySetting','discoverable')}${homeSettingToggle('推荐可能认识的人给我','使用公开资料推荐可能认识的人',p.recommend_me===true,'updateHomePrivacySetting','recommend_me')}${homeSettingToggle('把我推荐给可能认识的人','允许系统将你作为推荐用户展示',p.recommend_to_others===true,'updateHomePrivacySetting','recommend_to_others')}${homeSettingToggle('展示所属地区','仅显示你选择的大区，不显示精确地址',p.show_region!==false,'updateHomePrivacySetting','show_region')}</section><div class="home-setting-section-title">屏蔽与黑名单</div><section class="home-feature-card home-setting-card">${homeSettingChoice('不让他（她）看','管理无法查看你公开主页的用户', privacyCount('hide_from') ? `${privacyCount('hide_from')} 人` : '', {},'openHomePrivacyPeople','hide_from')}${homeSettingChoice('不看他（她）','管理你不想看到内容的用户', privacyCount('hide') ? `${privacyCount('hide')} 人` : '', {},'openHomePrivacyPeople','hide')}${homeSettingChoice('黑名单','管理被限制互动的用户', privacyCount('blacklist') ? `${privacyCount('blacklist')} 人` : '', {},'openHomePrivacyPeople','blacklist')}</section><div class="home-setting-section-title">互动权限</div><section class="home-feature-card home-setting-card">${homeSettingToggle('一键防护','快速收紧私信、评论和 @ 权限',p.one_tap_protection===true,'updateHomePrivacySetting','one_tap_protection')}${homeSettingChoice('谁可以私信我','设置站内私信的接收范围',p.dm_scope,simpleOptions,'openHomePrivacyChoice','dm_scope')}${homeSettingChoice('谁可以评论和回复','设置笔记评论范围',p.comment_scope,simpleOptions,'openHomePrivacyChoice','comment_scope')}${homeSettingChoice('谁可以 @ 我','设置提及范围',p.mention_scope,simpleOptions,'openHomePrivacyChoice','mention_scope')}${homeSettingToggle('聊天标识','在私信中显示已读等状态',p.chat_marker!==false,'updateHomePrivacySetting','chat_marker')}</section><div class="home-setting-section-title">内容与状态权限</div><section class="home-feature-card home-setting-card">${homeSettingChoice('在线状态','谁可以看到你的在线状态',p.online_status,{all:'全部',mutual:'互相关注的人',private:'不公开'},'openHomePrivacyChoice','online_status')}${homeSettingChoice('关注与粉丝列表','设置关注与粉丝列表可见范围',p.follow_list,{public:'全部公开',mutual:'互相关注可见',private:'不公开'},'openHomePrivacyChoice','follow_list')}${homeSettingChoice('我的收藏','设置收藏内容可见范围',p.favorites,{public:'公开',private:'不公开'},'openHomePrivacyChoice','favorites')}</section><section class="home-feature-terms"><p>相机、位置、相册和通讯录只会在你主动使用扫码、地图、上传或添加好友等功能时请求授权。</p></section>`);
   }catch(error){openHomeFeature('隐私设置','<div class="home-feature-empty">暂时无法读取展示偏好，请稍后重试。</div>');}
 }
 window.updateHomePrivacySetting=async function(key,checked){
@@ -14587,7 +14600,39 @@ window.openHomePrivacyChoice=function(key){
   }).catch(()=>showToast('设置暂时无法读取'));
 };
 window.saveHomePrivacyChoice=async function(key,value){try{await saveHomeAccountSettings({privacy:{[key]:value}});showToast('隐私设置已保存');homeFeatureBackAction=returnToHomeSettings;openHomePrivacySettings();}catch(error){showToast('保存失败，请稍后重试');}};
-window.openHomePrivacyPlaceholder=function(){showToast('屏蔽名单将在有被屏蔽用户时显示在这里');};
+window.openHomePrivacyPeople=async function(kind){
+  if(!homeFeatureRequireAuth()) return;
+  const labels={hide_from:'不让他（她）看',hide:'不看他（她）',blacklist:'黑名单'};
+  const notes={hide_from:'加入后会保存为你的主页可见控制名单；完整的服务端访问限制会随隐私策略一起执行。',hide:'加入后，首页推荐会隐藏此人的公开笔记。',blacklist:'加入后，首页会隐藏此人的内容，并作为后续私信与互动限制名单。'};
+  homeFeatureBackAction=returnToHomeFeature(openHomePrivacySettings);
+  const render=async () => {
+    const settings=await loadHomeAccountSettings(true);
+    const ids=Array.isArray(settings.privacy?.[kind])?settings.privacy[kind].map(String):[];
+    let rows=[];
+    if(ids.length){
+      const response=await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${ids.map(id=>encodeURIComponent(id)).join(',')})&select=user_id,name,avatar,bio`,{headers:{apikey:SUPABASE_KEY}});
+      if(response.ok) rows=await response.json();
+    }
+    const list=ids.map(id=>rows.find(row=>String(row.user_id)===id)||{user_id:id,name:'乐生活用户'});
+    openHomeFeature(labels[kind]||'隐私名单',`<p class="home-feature-intro">${notes[kind]||''}</p><div class="home-friend-search"><input id="homePrivacyKeyword" maxlength="48" placeholder="输入昵称或乐生活 ID" onkeydown="if(event.key==='Enter')searchHomePrivacyPeople('${kind}')"><button type="button" onclick="searchHomePrivacyPeople('${kind}')">添加</button></div><div id="homePrivacyResults" class="home-feature-list"></div><div class="home-setting-section-title">当前名单</div><div class="home-feature-list">${list.length?list.map(row=>`<article class="home-friend-row"><button class="home-friend-main" type="button" onclick="openUserPublicPage('${String(row.user_id).replace(/'/g,'')}','${String(row.name||'').replace(/'/g,'')}')"><span class="home-friend-avatar">${row.avatar?`<img src="${escAttr(row.avatar)}" alt="">`:escHtml(initials(row.name||'用'))}</span><span><b>${escHtml(row.name||'乐生活用户')}</b><small>ID: ${escHtml(uidToNumericId(String(row.user_id))||'')}</small></span></button><button class="home-friend-follow" type="button" onclick="removeHomePrivacyPerson('${kind}','${String(row.user_id).replace(/'/g,'')}')">移除</button></article>`).join(''):'<div class="home-feature-empty">当前没有用户。</div>'}</div>`);
+  };
+  try{await render();}catch(error){openHomeFeature(labels[kind]||'隐私名单','<div class="home-feature-empty">暂时无法读取名单，请稍后重试。</div>');}
+};
+window.searchHomePrivacyPeople=async function(kind){
+  const keyword=String(document.getElementById('homePrivacyKeyword')?.value||'').trim();
+  const target=document.getElementById('homePrivacyResults');
+  if(!keyword||!target) return;
+  target.innerHTML='<div class="home-feature-empty">正在查找用户...</div>';
+  try{
+    const safe=encodeURIComponent(keyword.replace(/[(),]/g,''));
+    const response=await authedFetch(`${SUPABASE_URL}/rest/v1/profiles?select=user_id,name,avatar,bio&or=(name.ilike.*${safe}*)&limit=20`,{headers:{apikey:SUPABASE_KEY}});
+    if(!response.ok) throw new Error('搜索失败');
+    const rows=(await response.json()).filter(row=>String(row.user_id)!==String(session?.user?.id)).sort((a,b)=>homeFriendScore(b,keyword)-homeFriendScore(a,keyword));
+    target.innerHTML=rows.length?rows.map(row=>`<article class="home-friend-row"><button class="home-friend-main" type="button" onclick="openUserPublicPage('${String(row.user_id).replace(/'/g,'')}','${String(row.name||'').replace(/'/g,'')}')"><span class="home-friend-avatar">${row.avatar?`<img src="${escAttr(row.avatar)}" alt="">`:escHtml(initials(row.name||'用'))}</span><span><b>${escHtml(row.name||'乐生活用户')}</b><small>ID: ${escHtml(uidToNumericId(String(row.user_id))||'')}</small></span></button><button class="home-friend-follow" type="button" onclick="addHomePrivacyPerson('${kind}','${String(row.user_id).replace(/'/g,'')}')">加入</button></article>`).join(''):'<div class="home-feature-empty">没有找到相符的用户。</div>';
+  }catch(error){target.innerHTML='<div class="home-feature-empty">搜索暂时不可用，请稍后重试。</div>';}
+};
+window.addHomePrivacyPerson=async function(kind,userId){try{const settings=await loadHomeAccountSettings();const current=Array.isArray(settings.privacy?.[kind])?settings.privacy[kind].map(String):[];if(!current.includes(String(userId)))await saveHomeAccountSettings({privacy:{[kind]:[...current,String(userId)]}});showToast('已加入名单');openHomePrivacyPeople(kind);}catch(error){showToast('保存失败，请稍后重试');}};
+window.removeHomePrivacyPerson=async function(kind,userId){try{const settings=await loadHomeAccountSettings();const current=Array.isArray(settings.privacy?.[kind])?settings.privacy[kind].map(String):[];await saveHomeAccountSettings({privacy:{[kind]:current.filter(id=>id!==String(userId))}});showToast('已移除');openHomePrivacyPeople(kind);}catch(error){showToast('保存失败，请稍后重试');}};
 async function openHomeGeneralSettings(){
   if(!homeFeatureRequireAuth()) return;
   openHomeFeature('通用设置','<div class="home-feature-empty">正在读取通用设置...</div>');

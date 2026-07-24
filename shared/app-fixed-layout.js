@@ -8,23 +8,15 @@
         root.classList.toggle('app-webview-entry', embedded);
         root.classList.toggle('embedded-app-entry', embedded);
         // One source of truth for the distance below the fixed home header.
-        // Keeping this constant prevents repeated resume/orientation measurements
-        // from gradually creating a visible blank band above the first cards.
-        const fixedGap = 6;
+        // The header is fixed, so the feed needs exactly its visible bottom edge
+        // plus a small breathing gap. Never measure the already shifted feed.
+        const fixedGap = 4;
         const topHeader = document.querySelector('header.top:not(.is-hidden)');
-        const homeTop = topHeader ? Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap : 138;
-        root.style.setProperty('--home-fixed-top', `${homeTop}px`);
-        const homeFeed = document.querySelector('#page-home .feed');
-        const homePage = document.getElementById('page-home');
-        if(homeFeed && homePage && topHeader){
-          // Derive the feed offset from the page origin, rather than its current
-          // margin. Re-measuring the already shifted feed caused the top gap to
-          // grow after repeated App resume and orientation events.
-          const headerBottom = topHeader.getBoundingClientRect().bottom;
-          const pageTop = homePage.getBoundingClientRect().top;
-          const feedOffset = Math.max(0, Math.ceil(headerBottom + fixedGap - pageTop));
-          homeFeed.style.setProperty('margin-top', `${feedOffset}px`, 'important');
-        }
+        const headerBottom = topHeader ? Math.ceil(topHeader.getBoundingClientRect().bottom) : 134;
+        root.style.setProperty('--home-fixed-top', `${Math.max(fixedGap, headerBottom + fixedGap)}px`);
+        // A prior release wrote an inline margin here. Remove it so all entries
+        // use the CSS variable above and resume/orientation cannot leave a gap.
+        document.querySelector('#page-home .feed')?.style.removeProperty('margin-top');
         const weekHeader = document.querySelector('#page-week.active .page-header');
         root.style.setProperty('--week-fixed-top', weekHeader ? `${Math.ceil(weekHeader.getBoundingClientRect().height) + 10}px` : '60px');
         const messageHeader = document.querySelector('#page-message.active .page-header');

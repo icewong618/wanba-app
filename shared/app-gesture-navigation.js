@@ -1,8 +1,8 @@
 /* In-App edge gesture history and navigation for 乐生活. */
 (() => {
-  const create = ({ isEnabled = () => false, getCurrentRoute = () => ({ type:'tab', tab:'home' }), getCurrentTab = () => 'home', navigate = () => {} } = {}) => {
-    const edge = 28;
-    const minX = 74;
+  const create = ({ isEnabled = () => false, getCurrentRoute = () => ({ type:'tab', tab:'home' }), getCurrentTab = () => 'home', navigate = () => {}, onOverlayBack = () => false } = {}) => {
+    const edge = 38;
+    const minX = 58;
     const maxY = 48;
     let backStack = [];
     let forwardStack = [];
@@ -29,6 +29,7 @@
     };
     const back = () => {
       if(!isEnabled()) return false;
+      if(onOverlayBack()) return true;
       const current = getCurrentRoute();
       const previous = backStack.pop();
       if(previous){
@@ -51,7 +52,10 @@
       restore(next);
       return true;
     };
-    const interactive = el => !!(el && el.closest && el.closest('input, textarea, select, button, iframe, video, .post-image-wrap, .xhs-video-wrap, .merchant-product-thumb, .avatar-crop-frame, .cover-crop-sheet'));
+    // A return gesture often starts over a back button or a card at the left
+    // edge. Inputs and active media stay protected, but ordinary buttons no
+    // longer disable the gesture.
+    const interactive = el => !!(el && el.closest && el.closest('input, textarea, select, iframe, video, .avatar-crop-frame, .cover-crop-sheet'));
     const bind = () => {
       if(window.__leshenghuoEdgeGesturesBound) return;
       window.__leshenghuoEdgeGesturesBound = true;
@@ -63,7 +67,7 @@
         const fromRight = touch.clientX >= width - edge;
         if((!fromLeft && !fromRight) || interactive(event.target)) return;
         startPoint = { x:touch.clientX, y:touch.clientY, dir:fromLeft ? 'back' : 'forward', active:true };
-      }, { passive:true });
+      }, { passive:true, capture:true });
       document.addEventListener('touchmove', event => {
         if(!startPoint?.active || !event.touches || event.touches.length !== 1) return;
         const touch = event.touches[0];
@@ -73,7 +77,7 @@
         const leftSwipe = startPoint.dir === 'forward' && dx < -minX;
         if(dy > maxY) { startPoint.active = false; return; }
         if(rightSwipe || leftSwipe) event.preventDefault();
-      }, { passive:false });
+      }, { passive:false, capture:true });
       document.addEventListener('touchend', event => {
         if(!startPoint?.active) { startPoint = null; return; }
         const touch = event.changedTouches?.[0] || {};
@@ -82,7 +86,7 @@
         const handled = dy <= maxY && ((startPoint.dir === 'back' && dx > minX && back()) || (startPoint.dir === 'forward' && dx < -minX && forward()));
         if(handled) event.preventDefault();
         startPoint = null;
-      }, { passive:false });
+      }, { passive:false, capture:true });
       document.addEventListener('touchcancel', () => { startPoint = null; }, { passive:true });
     };
     return { remember, back, forward, bind, routeTabFromLocation, isRestoring:() => restoring };
