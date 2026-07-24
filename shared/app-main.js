@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.600';
+const APP_VERSION = '5.601';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14537,20 +14537,21 @@ window.removeHomeAddress=async function(id){
 function ensureHomeMenu(){
   let overlay=document.getElementById('homeMenuOverlay');
   if(overlay) return overlay;
-  const row=(label,icon,action,detail='')=>`<button class="home-menu-action" type="button" onclick="handleHomeMenuAction('${action}')">${menuGlyph(icon)}<span>${label}</span>${detail?`<small>${detail}</small>`:''}</button>`;
-  const setting=(label,icon,action='comingSoon')=>`<button class="home-settings-row" type="button" onclick="handleHomeMenuAction('${action}')">${menuGlyph(icon)}<span>${label}</span><i class="home-settings-chevron">›</i></button>`;
+  const row=(label,icon,action,detail='')=>`<button class="home-menu-action" type="button" onclick="handleHomeMenuAction('${action}',event)">${menuGlyph(icon)}<span>${label}</span>${detail?`<small>${detail}</small>`:''}</button>`;
+  const setting=(label,icon,action='comingSoon')=>`<button class="home-settings-row" type="button" onclick="handleHomeMenuAction('${action}',event)">${menuGlyph(icon)}<span>${label}</span><i class="home-settings-chevron">›</i></button>`;
   overlay=document.createElement('div');
   overlay.id='homeMenuOverlay'; overlay.className='home-menu-overlay';
-  overlay.innerHTML=`<aside class="home-menu-panel" role="dialog" aria-modal="true" aria-label="主页菜单" onclick="event.stopPropagation()"><div class="home-menu-head"><b>乐生活</b><button class="home-menu-close" type="button" onclick="closeHomeMenu()" aria-label="关闭">×</button></div><section class="home-menu-group">${row('添加好友','user','friends')}${row('创作中心','pen','creator')}${row('我的草稿','pen','drafts')}</section><section class="home-menu-group">${row('浏览记录','clock','history')}${row('订单','bag','orders')}${row('购物车','cart','cart')}${row('钱包','wallet','wallet')}</section><section class="home-menu-group">${row('社区公约','shield','community')}</section><div class="home-menu-bottom"><button type="button" onclick="handleHomeMenuAction('scan')">${menuGlyph('scan')}<span>扫一扫</span></button><button type="button" onclick="handleHomeMenuAction('help')">${menuGlyph('help')}<span>帮助与客服</span></button><button type="button" onclick="openHomeSettings()">${menuGlyph('settings')}<span>设置</span></button></div></aside><section class="home-settings-panel" role="dialog" aria-modal="true" aria-label="设置"><header class="home-settings-header"><button class="home-settings-back" type="button" onclick="closeHomeSettings()" aria-label="返回">‹</button><h2>设置</h2><span></span></header><div class="home-settings-card">${setting('账号与安全','user','security')}${setting('通用设置','settings','general')}${setting('通知设置','help','notifications')}${setting('多语言和翻译','pen','language')}${setting('隐私设置','shield','privacy')}</div><div class="home-settings-card">${setting('存储空间','bag','cache')}${setting('内容偏好调节','pen','preferences')}${setting('收货地址','user','address')}${setting('添加小组件','bag')}${setting('未成年人模式','shield')}</div><div class="home-settings-card">${setting('新功能体验','pen')}</div><div class="home-settings-card">${setting('帮助与客服','help','help')}${setting('关于乐生活','help','community')}</div><div class="home-settings-card">${setting('切换账号','user','switchAccount')}</div></section>`;
+  overlay.innerHTML=`<aside class="home-menu-panel" role="dialog" aria-modal="true" aria-label="主页菜单" onclick="event.stopPropagation()"><div class="home-menu-head"><b>乐生活</b><button class="home-menu-close" type="button" onclick="closeHomeMenu()" aria-label="关闭">×</button></div><section class="home-menu-group">${row('添加好友','user','friends')}${row('创作中心','pen','creator')}${row('我的草稿','pen','drafts')}</section><section class="home-menu-group">${row('浏览记录','clock','history')}${row('订单','bag','orders')}${row('购物车','cart','cart')}${row('钱包','wallet','wallet')}</section><section class="home-menu-group">${row('社区公约','shield','community')}</section><div class="home-menu-bottom"><button type="button" onclick="handleHomeMenuAction('scan',event)">${menuGlyph('scan')}<span>扫一扫</span></button><button type="button" onclick="handleHomeMenuAction('help',event)">${menuGlyph('help')}<span>帮助与客服</span></button><button type="button" onclick="openHomeSettings(event)">${menuGlyph('settings')}<span>设置</span></button></div></aside><section class="home-settings-panel" role="dialog" aria-modal="true" aria-label="设置"><header class="home-settings-header"><button class="home-settings-back" type="button" onclick="closeHomeSettings()" aria-label="返回">‹</button><h2>设置</h2><span></span></header><div class="home-settings-card">${setting('账号与安全','user','security')}${setting('通用设置','settings','general')}${setting('通知设置','help','notifications')}${setting('多语言和翻译','pen','language')}${setting('隐私设置','shield','privacy')}</div><div class="home-settings-card">${setting('存储空间','bag','cache')}${setting('内容偏好调节','pen','preferences')}${setting('收货地址','user','address')}${setting('添加小组件','bag')}${setting('未成年人模式','shield')}</div><div class="home-settings-card">${setting('新功能体验','pen')}</div><div class="home-settings-card">${setting('帮助与客服','help','help')}${setting('关于乐生活','help','community')}</div><div class="home-settings-card">${setting('切换账号','user','switchAccount')}</div></section>`;
   overlay.addEventListener('click',()=>closeHomeMenu());
   document.body.appendChild(overlay);
   return overlay;
 }
 window.openHomeMenu=function(event){ event?.preventDefault?.(); event?.stopPropagation?.(); const overlay=ensureHomeMenu(); overlay.classList.remove('settings-open'); overlay.classList.add('open'); document.body.classList.add('home-menu-open'); };
 window.closeHomeMenu=function(){ const overlay=document.getElementById('homeMenuOverlay'); overlay?.classList.remove('open','settings-open'); document.body.classList.remove('home-menu-open'); };
-window.openHomeSettings=function(){ const overlay=ensureHomeMenu(); overlay.classList.add('settings-open'); };
+window.openHomeSettings=function(event){ event?.preventDefault?.(); event?.stopPropagation?.(); const overlay=ensureHomeMenu(); overlay.classList.add('settings-open'); };
 window.closeHomeSettings=function(){ document.getElementById('homeMenuOverlay')?.classList.remove('settings-open'); };
-window.handleHomeMenuAction=function(action){
+window.handleHomeMenuAction=function(action,event){
+  event?.preventDefault?.(); event?.stopPropagation?.(); event?.stopImmediatePropagation?.();
   if(action==='language'){ closeHomeMenu(); return window.LeshenghuoI18n?.openPicker?.(); }
   if(action==='drafts'){ closeHomeMenu(); return window.openComposeDrafts?.(); }
   if(action==='creator'){ closeHomeMenu(); return openHomeCreatorCenter(); }
