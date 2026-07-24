@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.612';
+const APP_VERSION = '5.613';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -393,6 +393,16 @@ function hideLaunchScreen(){ return appUpdateManager?.hideLaunch(); }
 function notifyAppReady(){ return appUpdateManager?.notifyReady(); }
 
 function appOverlayOpen(id){ return !!document.getElementById(id)?.classList.contains('open'); }
+function clearStaleAppScrollLocks(){
+  const root = document.documentElement;
+  const body = document.body;
+  if(!appOverlayOpen('commentComposerOverlay')){
+    root.classList.remove('reply-composer-open');
+    body.classList.remove('reply-composer-open');
+  }
+  if(!appOverlayOpen('searchOverlay')) body.classList.remove('search-page-open');
+  if(!document.getElementById('homeMenuOverlay')?.classList.contains('open')) body.classList.remove('home-menu-open');
+}
 function closeTransientNavigationLayer(){
   if(appOverlayOpen('commentComposerOverlay')){ closeCommentComposer(); return true; }
   if(appOverlayOpen('shareOverlay')){ closeShareSheet(); return true; }
@@ -415,6 +425,7 @@ function appCurrentRoute(){
   return { type:'tab', tab:currentTab || 'home' };
 }
 function renderAppRoute(route){
+  clearStaleAppScrollLocks();
   closeSearchPage();
   closePost();
   closeMerchantPublicPage();
@@ -14954,6 +14965,7 @@ window.activateBottomTab=function(tab,event){
 // Root-page renderer. Route history is owned exclusively by appNavigation.
 window.switchTab = function(tab){
   if(!appNavigation?.isRestoring()) appNavigation?.enter({ type:'tab', tab });
+  clearStaleAppScrollLocks();
   clearTransientLayersForBottomNavigation();
   closeInternalModule();
   currentTab = tab;
@@ -15638,4 +15650,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Unified Navigation Controller】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Android Scroll Recovery】`);

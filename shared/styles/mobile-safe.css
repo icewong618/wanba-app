@@ -28,7 +28,7 @@
     overflow-x:hidden;
     overscroll-behavior-x:none;
     -webkit-text-size-adjust:100%;
-    touch-action:manipulation;
+    touch-action:pan-y pinch-zoom;
   }
   body{
     margin:0;
@@ -40,6 +40,7 @@
     min-height:100%;
     overflow-x:hidden;
     overscroll-behavior-x:none;
+    touch-action:pan-y pinch-zoom;
   }
   button,a,input,textarea,select,[onclick]{touch-action:manipulation;}
 
@@ -162,6 +163,7 @@
     display:none;animation:fadeIn .3s ease;
     max-width:var(--container-w);margin:0 auto;padding-bottom:var(--app-bottom-clearance);
     overflow-x:hidden;
+    touch-action:pan-y pinch-zoom;
   }
   html,body{overscroll-behavior-y:none;}
   #page-home.active{min-height:calc(100dvh - var(--app-bottom-nav-height));overscroll-behavior-y:contain;}

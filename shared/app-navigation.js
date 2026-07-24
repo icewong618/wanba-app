@@ -121,6 +121,15 @@
         if(event.target?.closest?.('input,textarea,select,iframe,video,[contenteditable="true"],.avatar-crop-frame,.cover-crop-sheet')) return;
         gesture = { x:touch.clientX, y:touch.clientY, direction:fromLeft ? 'back' : 'forward' };
       }, { passive:true, capture:true });
+      document.addEventListener('touchmove', event => {
+        if(!gesture || event.touches?.length !== 1) return;
+        const touch = event.touches[0];
+        const dx = Math.abs(touch.clientX - gesture.x);
+        const dy = Math.abs(touch.clientY - gesture.y);
+        // Vertical scrolling always wins. Stop tracking immediately so Android
+        // WebView never treats a page scroll as a pending back gesture.
+        if(dy > 10 && dy > dx) gesture = null;
+      }, { passive:true, capture:true });
       document.addEventListener('touchend', event => {
         if(!gesture) return;
         const touch = event.changedTouches?.[0];
