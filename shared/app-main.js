@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.602';
+const APP_VERSION = '5.603';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14246,6 +14246,22 @@ function ensureHomeFeatureOverlay(){
   document.body.appendChild(overlay);
   return overlay;
 }
+let homeFeatureBackAction = null;
+function returnToHomeSettings(){
+  const menu = ensureHomeMenu();
+  menu.classList.add('open','settings-open');
+  document.body.classList.add('home-menu-open');
+}
+function openHomeFeatureFromSettings(openFeature){
+  homeFeatureBackAction = returnToHomeSettings;
+  openFeature();
+}
+function returnToHomeFeature(openFeature){
+  return () => {
+    homeFeatureBackAction = returnToHomeSettings;
+    openFeature();
+  };
+}
 function openHomeFeature(title, html){
   const overlay = ensureHomeFeatureOverlay();
   document.getElementById('homeFeatureTitle').textContent = title;
@@ -14257,6 +14273,9 @@ function closeHomeFeature(){
   window._homeScanTimer = null;
   if(window._homeScanStream){ window._homeScanStream.getTracks().forEach(track => track.stop()); window._homeScanStream = null; }
   document.getElementById('homeFeatureOverlay')?.classList.remove('open');
+  const backAction = homeFeatureBackAction;
+  homeFeatureBackAction = null;
+  if(typeof backAction === 'function') setTimeout(backAction, 0);
 }
 function homeFeatureRequireAuth(){
   if(session && session.user) return true;
@@ -14475,7 +14494,7 @@ async function loadHomeAccountSettings(force=false){
   if(!homeFeatureRequireAuth()) return homeDefaultAccountSettings();
   if(homeAccountSettingsCache && !force) return homeAccountSettingsCache;
   const url=`${SUPABASE_URL}/rest/v1/user_account_settings?user_id=eq.${encodeURIComponent(session.user.id)}&select=settings&limit=1`;
-  const res=await authedFetch(url,{headers:{apikey:SUPABASE_ANON_KEY}});
+  const res=await authedFetch(url,{headers:{apikey:SUPABASE_KEY}});
   if(!res.ok) throw new Error('设置读取失败');
   const rows=await res.json();
   homeAccountSettingsCache=homeMergeAccountSettings(homeDefaultAccountSettings(), rows?.[0]?.settings||{});
@@ -14485,7 +14504,7 @@ async function saveHomeAccountSettings(patch){
   if(!homeFeatureRequireAuth()) return null;
   const current=await loadHomeAccountSettings();
   const settings=homeMergeAccountSettings(current,patch);
-  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_account_settings?on_conflict=user_id`,{method:'POST',headers:{apikey:SUPABASE_ANON_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({user_id:session.user.id,settings,updated_at:new Date().toISOString()})});
+  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_account_settings?on_conflict=user_id`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({user_id:session.user.id,settings,updated_at:new Date().toISOString()})});
   if(!res.ok) throw new Error('设置保存失败');
   homeAccountSettingsCache=settings;
   applyHomeAccountDisplayPreferences(settings);
@@ -14560,13 +14579,14 @@ window.updateHomePrivacySetting=async function(key,checked){
   try{await saveHomeAccountSettings({privacy:{[key]:checked}});showToast('展示偏好已保存');}catch(error){showToast(error.message||'保存失败');}
 };
 window.openHomePrivacyChoice=function(key){
+  homeFeatureBackAction = returnToHomeFeature(openHomePrivacySettings);
   loadHomeAccountSettings().then(settings=>{
     const value=settings.privacy?.[key]||'default';
     const options=key==='online_status'?{all:'全部',mutual:'互相关注的人',private:'不公开'}:key==='follow_list'?{public:'全部公开',mutual:'互相关注可见',private:'不公开'}:key==='favorites'?{public:'公开',private:'不公开'}:{default:'默认',all:'全部',mutual:'互相关注',followers:'我关注的人',private:'不公开'};
     homeSettingSelect('选择隐私范围',key,value,options,'saveHomePrivacyChoice');
   }).catch(()=>showToast('设置暂时无法读取'));
 };
-window.saveHomePrivacyChoice=async function(key,value){try{await saveHomeAccountSettings({privacy:{[key]:value}});showToast('隐私设置已保存');openHomePrivacySettings();}catch(error){showToast('保存失败，请稍后重试');}};
+window.saveHomePrivacyChoice=async function(key,value){try{await saveHomeAccountSettings({privacy:{[key]:value}});showToast('隐私设置已保存');homeFeatureBackAction=returnToHomeSettings;openHomePrivacySettings();}catch(error){showToast('保存失败，请稍后重试');}};
 window.openHomePrivacyPlaceholder=function(){showToast('屏蔽名单将在有被屏蔽用户时显示在这里');};
 async function openHomeGeneralSettings(){
   if(!homeFeatureRequireAuth()) return;
@@ -14577,13 +14597,14 @@ async function openHomeGeneralSettings(){
   }catch(error){openHomeFeature('通用设置','<div class="home-feature-empty">暂时无法读取通用设置，请稍后重试。</div>');}
 }
 window.openHomeGeneralChoice=function(key){
+  homeFeatureBackAction = returnToHomeFeature(openHomeGeneralSettings);
   loadHomeAccountSettings().then(settings=>{
     const value=settings.general?.[key]||'medium';
     const options=key==='theme'?{light:'白色',dark:'暗色',system:'随系统'}:{small:'小',medium:'标准',large:'大'};
     homeSettingSelect(key==='theme'?'显示模式':'字体大小',key,value,options,'saveHomeGeneralChoice');
   }).catch(()=>showToast('设置暂时无法读取'));
 };
-window.saveHomeGeneralChoice=async function(key,value){try{await saveHomeAccountSettings({general:{[key]:value}});showToast('通用设置已保存');openHomeGeneralSettings();}catch(error){showToast('保存失败，请稍后重试');}};
+window.saveHomeGeneralChoice=async function(key,value){try{await saveHomeAccountSettings({general:{[key]:value}});showToast('通用设置已保存');homeFeatureBackAction=returnToHomeSettings;openHomeGeneralSettings();}catch(error){showToast('保存失败，请稍后重试');}};
 window.updateHomeGeneralSetting=async function(key,checked){try{await saveHomeAccountSettings({general:{[key]:checked}});showToast('通用设置已保存');}catch(error){showToast('保存失败，请稍后重试');}};
 async function openHomeSecuritySettings(){
   if(!homeFeatureRequireAuth()) return;
@@ -14596,27 +14617,30 @@ async function openHomeSecuritySettings(){
   }catch(error){openHomeFeature('账号与安全','<div class="home-feature-empty">暂时无法读取账号与安全信息，请稍后重试。</div>');}
 }
 window.openHomePhoneForm=function(){
+  homeFeatureBackAction = returnToHomeFeature(openHomeSecuritySettings);
   loadHomeAccountSettings().then(settings=>openHomeFeature('绑定手机号',`<section class="home-feature-card"><h3>绑定手机号</h3><p>手机号会保存为账户联系号码，用于订单联系与后续验证。短信验证码服务尚未接入时，不会将它标记为已验证。</p><form onsubmit="saveHomePhone(event)"><label class="home-form-label">手机号码<input name="phone" inputmode="tel" maxlength="32" required placeholder="例如 +1 626 000 0000" value="${escAttr(settings.security?.phone||'')}"></label><button class="home-feature-primary" type="submit">保存手机号</button></form></section>`)).catch(()=>showToast('设置暂时无法读取'));
 };
-window.saveHomePhone=async function(event){event.preventDefault();const phone=String(new FormData(event.currentTarget).get('phone')||'').trim();if(phone.length<7){showToast('请输入有效的手机号码');return;}try{await saveHomeAccountSettings({security:{phone}});showToast('手机号已保存');openHomeSecuritySettings();}catch(error){showToast('手机号保存失败');}};
-window.openHomePasswordChange=function(){closeHomeFeature();openAuth('reset');showToast('请设置新的登录密码');};
+window.saveHomePhone=async function(event){event.preventDefault();const phone=String(new FormData(event.currentTarget).get('phone')||'').trim();if(phone.length<7){showToast('请输入有效的手机号码');return;}try{await saveHomeAccountSettings({security:{phone}});showToast('手机号已保存');homeFeatureBackAction=returnToHomeSettings;openHomeSecuritySettings();}catch(error){showToast('手机号保存失败');}};
+window.openHomePasswordChange=function(){homeFeatureBackAction=null;closeHomeFeature();openAuth('reset');showToast('请设置新的登录密码');};
 window.openHomeProviderInfo=function(provider){
+  homeFeatureBackAction = returnToHomeFeature(openHomeSecuritySettings);
   const label=provider==='apple'?'Apple':'Google';
   const linked=(session?.user?.app_metadata?.providers||[]).includes(provider);
   openHomeFeature(`${label} 账号`, `<section class="home-feature-card"><h3>${linked?'已连接':'尚未连接'} ${label}</h3><p>${linked?`当前账户已通过 ${label} 登录连接。`:`${label} 登录将在对应 OAuth 服务完成配置后开放连接。当前仍可用邮箱和密码登录。`}</p></section>`);
 };
 window.openHomeIdentityVerification=function(){
+  homeFeatureBackAction = returnToHomeFeature(openHomeSecuritySettings);
   openHomeFeature('身份认证', `<section class="home-feature-card"><h3>身份认证</h3><p>用于钟点工、专业服务等需要确认真人身份的功能。证件审核服务尚未开放上传，本次可先提交认证意向；开放后会在消息中心通知你补充资料。</p><button class="home-feature-primary" type="button" onclick="submitHomeIdentityVerification()">提交认证申请</button></section>`);
 };
-window.submitHomeIdentityVerification=async function(){try{await saveHomeAccountSettings({security:{identity_status:'submitted'}});showToast('认证申请已提交');openHomeSecuritySettings();}catch(error){showToast('提交失败，请稍后重试');}};
-window.openHomeAccountRecovery=function(){openHomeFeature('账号找回', `<section class="home-feature-card"><h3>找回登录信息</h3><p>当前账户邮箱：${escHtml(session?.user?.email||'未登录')}</p><button class="home-feature-primary" type="button" onclick="openHomeRecoveryAuth()">发送密码重置邮件</button><p class="home-feature-note">系统会将重置链接发送到当前账户邮箱。</p></section>`);};
-window.openHomeRecoveryAuth=function(){const email=session?.user?.email||'';closeHomeFeature();openAuth();const input=document.getElementById('authEmail');if(input)input.value=email;setTimeout(()=>requestPasswordReset(),80);};
-window.openHomeDeletionRequest=function(){openHomeFeature('注销账号', `<section class="home-feature-card"><h3>申请注销账号</h3><p>账号注销会停止公开展示账户资料。已完成订单、支付、退款与法律要求保留的记录不会立即删除。</p><button class="home-feature-danger" type="button" onclick="submitHomeDeletionRequest()">提交注销申请</button></section>`);};
-window.submitHomeDeletionRequest=async function(){if(!confirm('确认提交注销申请吗？'))return;try{await saveHomeAccountSettings({security:{deletion_requested_at:new Date().toISOString()}});showToast('注销申请已提交');openHomeSecuritySettings();}catch(error){showToast('提交失败，请稍后重试');}};
+window.submitHomeIdentityVerification=async function(){try{await saveHomeAccountSettings({security:{identity_status:'submitted'}});showToast('认证申请已提交');homeFeatureBackAction=returnToHomeSettings;openHomeSecuritySettings();}catch(error){showToast('提交失败，请稍后重试');}};
+window.openHomeAccountRecovery=function(){homeFeatureBackAction = returnToHomeFeature(openHomeSecuritySettings);openHomeFeature('账号找回', `<section class="home-feature-card"><h3>找回登录信息</h3><p>当前账户邮箱：${escHtml(session?.user?.email||'未登录')}</p><button class="home-feature-primary" type="button" onclick="openHomeRecoveryAuth()">发送密码重置邮件</button><p class="home-feature-note">系统会将重置链接发送到当前账户邮箱。</p></section>`);};
+window.openHomeRecoveryAuth=function(){const email=session?.user?.email||'';homeFeatureBackAction=null;closeHomeFeature();openAuth();const input=document.getElementById('authEmail');if(input)input.value=email;setTimeout(()=>requestPasswordReset(),80);};
+window.openHomeDeletionRequest=function(){homeFeatureBackAction = returnToHomeFeature(openHomeSecuritySettings);openHomeFeature('注销账号', `<section class="home-feature-card"><h3>申请注销账号</h3><p>账号注销会停止公开展示账户资料。已完成订单、支付、退款与法律要求保留的记录不会立即删除。</p><button class="home-feature-danger" type="button" onclick="submitHomeDeletionRequest()">提交注销申请</button></section>`);};
+window.submitHomeDeletionRequest=async function(){if(!confirm('确认提交注销申请吗？'))return;try{await saveHomeAccountSettings({security:{deletion_requested_at:new Date().toISOString()}});showToast('注销申请已提交');homeFeatureBackAction=returnToHomeSettings;openHomeSecuritySettings();}catch(error){showToast('提交失败，请稍后重试');}};
 async function fetchHomeAddresses(){
   if(!homeFeatureRequireAuth()) return [];
   const url=`${SUPABASE_URL}/rest/v1/user_delivery_addresses?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=is_default.desc,updated_at.desc`;
-  const res=await authedFetch(url,{headers:{apikey:SUPABASE_ANON_KEY}});
+  const res=await authedFetch(url,{headers:{apikey:SUPABASE_KEY}});
   if(!res.ok) throw new Error('地址读取失败');
   return res.json();
 }
@@ -14630,18 +14654,19 @@ async function openHomeAddresses(){
   }catch(error){openHomeFeature('收货地址','<div class="home-feature-empty">暂时无法读取收货地址，请稍后重试。</div>');}
 }
 window.openHomeAddressForm=function(){
+  homeFeatureBackAction = returnToHomeFeature(openHomeAddresses);
   openHomeFeature('添加收货地址',`<section class="home-feature-card"><form onsubmit="saveHomeAddress(event)"><label>地址名称<input name="label" value="常用地址" required></label><label>收件人姓名<input name="recipient_name" required></label><label>联系电话<input name="phone" inputmode="tel" required></label><label>街道地址<input name="address_line1" required></label><label>门牌、单元（选填）<input name="address_line2"></label><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label>城市<input name="city"></label><label>州 / 地区<input name="state_region"></label></div><label>邮编<input name="postal_code" inputmode="numeric"></label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="is_default">设为默认收货地址</label><button class="home-feature-primary" type="submit">保存地址</button></form></section>`);
 };
 window.saveHomeAddress=async function(event){
   event.preventDefault(); if(!homeFeatureRequireAuth()) return;
   const fields=Object.fromEntries(new FormData(event.currentTarget).entries());
-  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_delivery_addresses`,{method:'POST',headers:{apikey:SUPABASE_ANON_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({...fields,user_id:session.user.id,is_default:Boolean(event.currentTarget.is_default.checked)})});
+  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_delivery_addresses`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({...fields,user_id:session.user.id,is_default:Boolean(event.currentTarget.is_default.checked)})});
   if(!res.ok){showToast('地址保存失败，请稍后重试');return;}
-  showToast('收货地址已保存'); openHomeAddresses();
+  showToast('收货地址已保存'); homeFeatureBackAction=returnToHomeSettings; openHomeAddresses();
 };
 window.removeHomeAddress=async function(id){
   if(!confirm('确认删除这条收货地址吗？')) return;
-  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_delivery_addresses?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:{apikey:SUPABASE_ANON_KEY}});
+  const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_delivery_addresses?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:{apikey:SUPABASE_KEY}});
   if(!res.ok){showToast('删除失败，请稍后重试');return;}
   showToast('收货地址已删除');openHomeAddresses();
 };
@@ -14672,14 +14697,14 @@ window.handleHomeMenuAction=function(action,event){
   if(action==='cart'){ closeHomeMenu(); return openHomeCart(); }
   if(action==='wallet'){ closeHomeMenu(); return openHomeWallet(); }
   if(action==='community'){ closeHomeMenu(); return openHomeCommunity(); }
-  if(action==='security'){ closeHomeMenu(); return openHomeSecuritySettings(); }
-  if(action==='general'){ closeHomeMenu(); return openHomeGeneralSettings(); }
-  if(action==='notifications'){ closeHomeMenu(); return openHomeNotificationSettings(); }
-  if(action==='privacy'){ closeHomeMenu(); return openHomePrivacySettings(); }
-  if(action==='address'){ closeHomeMenu(); return openHomeAddresses(); }
+  if(action==='security'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeSecuritySettings); }
+  if(action==='general'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeGeneralSettings); }
+  if(action==='notifications'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeNotificationSettings); }
+  if(action==='privacy'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomePrivacySettings); }
+  if(action==='address'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeAddresses); }
   if(action==='switchAccount'){ closeHomeMenu(); return window.openLogin?.(); }
-  if(action==='preferences'){ closeHomeMenu(); return openHomePreferences(); }
-  if(action==='cache'){ closeHomeMenu(); return openHomeStorageSpace(); }
+  if(action==='preferences'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomePreferences); }
+  if(action==='cache'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeStorageSpace); }
   if(action==='scan'){ closeHomeMenu(); return openHomeScanner(); }
   if(action==='help'){ closeHomeMenu(); return openHomeHelp(); }
   showToast('该功能正在逐步开放');
@@ -15463,4 +15488,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Account Center Settings】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Settings Recovery and Navigation】`);
