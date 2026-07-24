@@ -233,7 +233,9 @@
       state.paymentEnvironment=payload.payment_environment==='live'?'live':'test';
       syncPaymentEnvironmentUI();
       state.stripe=window.Stripe(payload.publishable_key);
-      state.stripeElements=state.stripe.elements({clientSecret:payload.client_secret});
+      const elementOptions={clientSecret:payload.client_secret};
+      if(payload.customer_session_client_secret) elementOptions.customerSessionClientSecret=payload.customer_session_client_secret;
+      state.stripeElements=state.stripe.elements(elementOptions);
       state.stripeElements.create('payment',{
         layout:{type:'accordion',visibleAccordionItemsCount:4},
         // Keep dynamic payment methods enabled server-side. Wallets are ordered

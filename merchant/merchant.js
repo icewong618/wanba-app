@@ -40,7 +40,38 @@
   const readCart = () => {
     try { return list(JSON.parse(localStorage.getItem(cartKey()) || '[]')).filter(line => line && line.id && Number(line.quantity) > 0); } catch (error) { return []; }
   };
-  const saveCart = () => localStorage.setItem(cartKey(), JSON.stringify(cart));
+  const syncCartToAccount = async () => {
+    const session = getSession();
+    if (!(session?.access_token && session?.user?.id && merchant?.user_id)) return;
+    const base = `/rest/v1/user_cart_items?user_id=eq.${encodeURIComponent(session.user.id)}&merchant_user_id=eq.${encodeURIComponent(merchant.user_id)}&source_type=eq.retail`;
+    try {
+      await authRequest(base, { method:'DELETE' });
+      if (!cart.length) return;
+      const rows = cart.map(line => ({
+        user_id: session.user.id,
+        merchant_user_id: merchant.user_id,
+        source_type: 'retail',
+        product_key: String(line.id),
+        quantity: Math.max(1, Math.min(99, Number(line.quantity || 1))),
+        item_snapshot: { id:String(line.id), name:line.name || '商品', price:money(line.price), image:line.image || '' },
+        updated_at: new Date().toISOString(),
+      }));
+      await authRequest('/rest/v1/user_cart_items', { method:'POST', headers:{ 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' }, body:JSON.stringify(rows) });
+    } catch (error) { console.warn('购物车账户同步失败:', error); }
+  };
+  const saveCart = () => { localStorage.setItem(cartKey(), JSON.stringify(cart)); void syncCartToAccount(); };
+  const restoreCartFromAccount = async () => {
+    const session=getSession();
+    if(!(session?.access_token&&session?.user?.id&&merchant?.user_id)) return;
+    try{
+      const response=await authRequest(`/rest/v1/user_cart_items?user_id=eq.${encodeURIComponent(session.user.id)}&merchant_user_id=eq.${encodeURIComponent(merchant.user_id)}&source_type=eq.retail&select=product_key,quantity,item_snapshot&order=updated_at.asc`,{method:'GET'});
+      if(!response.ok) return;
+      const remote=await response.json(); if(!Array.isArray(remote)||!remote.length) return;
+      const current=new Map(cart.map(line=>[String(line.id),line]));
+      remote.forEach(row=>{ const snapshot=row.item_snapshot||{}; const key=String(row.product_key||snapshot.id||''); if(!key||current.has(key))return; current.set(key,{id:key,name:snapshot.name||'商品',price:money(snapshot.price),image:snapshot.image||'',quantity:Math.max(1,Math.min(99,Number(row.quantity||1)))}); });
+      cart=[...current.values()]; localStorage.setItem(cartKey(),JSON.stringify(cart));
+    }catch(error){ console.warn('账户购物车读取失败:',error); }
+  };
   const cartCount = () => cart.reduce((total, line) => total + Number(line.quantity || 0), 0);
   const cartTotal = () => cart.reduce((total, line) => total + (Number(line.price || 0) * Number(line.quantity || 0)), 0);
   const isRetail = () => String(merchant?.category || '').includes('零售') || String(merchant?.subcategory || '').includes('零售');
@@ -73,6 +104,7 @@
         inventoryState = new Map(list(inventoryRows).map(row => [String(row.product_id), row]));
       }
       cart = readCart();
+      await restoreCartFromAccount();
       render();
     } catch (error) {
       app.innerHTML = '<div class="empty">没有找到这家认证商家，请确认链接是否正确。</div>';

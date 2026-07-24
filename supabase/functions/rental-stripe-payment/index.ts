@@ -74,10 +74,37 @@ Deno.serve(async (req) => {
       ? account.stripe_connected_account_id
       : null;
     const fee = connectedAccount ? Math.floor(amount * Number(account?.platform_fee_bps || 0) / 10000) : 0;
+    // A saved payment method is scoped to its Stripe Customer. Platform customers
+    // cannot be reused inside a merchant's Connect direct charge, so only attach
+    // the platform customer when this payment is processed on the platform.
+    let customerId = "";
+    if (!connectedAccount) {
+      const { data: storedCustomer } = await admin
+        .from("user_payment_customers")
+        .select("provider_customer_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      customerId = storedCustomer?.provider_customer_id || "";
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: { supabase_user_id: user.id },
+        });
+        const { error: customerError } = await admin.from("user_payment_customers").upsert({
+          user_id: user.id,
+          provider: "stripe",
+          provider_customer_id: customer.id,
+          updated_at: new Date().toISOString(),
+        });
+        if (customerError) throw customerError;
+        customerId = customer.id;
+      }
+    }
     const intent = await stripe.paymentIntents.create({
       amount,
       currency: "usd",
       automatic_payment_methods: { enabled: true },
+      customer: customerId || undefined,
       application_fee_amount: fee || undefined,
       metadata: {
         booking_id: booking.id,
@@ -90,6 +117,21 @@ Deno.serve(async (req) => {
       ...(connectedAccount ? { stripeAccount: connectedAccount } : {}),
       idempotencyKey: `rental-booking-${booking.id}`,
     });
+
+    const customerSession = customerId ? await stripe.customerSessions.create({
+      customer: customerId,
+      components: {
+        payment_element: {
+          enabled: true,
+          features: {
+            payment_method_redisplay: "enabled",
+            payment_method_save: "enabled",
+            payment_method_save_usage: "off_session",
+            payment_method_remove: "enabled",
+          },
+        },
+      },
+    }) : null;
 
     await admin.from("merchant_rental_payment_attempts").insert({
       booking_id: booking.id,
@@ -116,6 +158,7 @@ Deno.serve(async (req) => {
       payment_intent_id: intent.id,
       publishable_key: publishableKey,
       payment_environment: paymentEnvironment,
+      customer_session_client_secret: customerSession?.client_secret || null,
     });
   } catch (error) {
     console.error("rental-stripe-payment", error);

@@ -40,9 +40,23 @@ Deno.serve(async (req) => {
     if(environment==="live"&&!connected) return json({ error:"This merchant must complete Stripe Connect before accepting live ticket payments." },409);
     const fee=connected?Math.floor(amount*Math.max(0,Number(account?.platform_fee_bps||0))/10000):0;
     const stripe=new Stripe(stripeSecret,{httpClient:Stripe.createFetchHttpClient()});
-    const intent=await stripe.paymentIntents.create({amount,currency:String(order.currency||"usd").toLowerCase(),automatic_payment_methods:{enabled:true},application_fee_amount:fee||undefined,metadata:{ticket_order_id:order.id,ticket_order_code:order.order_code,merchant_user_id:order.merchant_user_id,payment_environment:environment,payment_mode:connected?"connected_account":`platform_${environment}`}}, {...(connected?{stripeAccount:connected}:{}),idempotencyKey:`ticket-order-${order.id}`});
+    // Saved payment methods belong to the platform Customer. Do not attach that
+    // customer to a Connect direct charge because connected accounts are isolated.
+    let customerId="";
+    if(!connected){
+      const {data:storedCustomer}=await admin.from("user_payment_customers").select("provider_customer_id").eq("user_id",auth.user.id).maybeSingle();
+      customerId=storedCustomer?.provider_customer_id||"";
+      if(!customerId){
+        const customer=await stripe.customers.create({email:auth.user.email||undefined,metadata:{supabase_user_id:auth.user.id}});
+        const {error:customerError}=await admin.from("user_payment_customers").upsert({user_id:auth.user.id,provider:"stripe",provider_customer_id:customer.id,updated_at:new Date().toISOString()});
+        if(customerError)throw customerError;
+        customerId=customer.id;
+      }
+    }
+    const intent=await stripe.paymentIntents.create({amount,currency:String(order.currency||"usd").toLowerCase(),automatic_payment_methods:{enabled:true},customer:customerId||undefined,application_fee_amount:fee||undefined,metadata:{ticket_order_id:order.id,ticket_order_code:order.order_code,merchant_user_id:order.merchant_user_id,payment_environment:environment,payment_mode:connected?"connected_account":`platform_${environment}`}}, {...(connected?{stripeAccount:connected}:{}),idempotencyKey:`ticket-order-${order.id}`});
+    const customerSession=customerId?await stripe.customerSessions.create({customer:customerId,components:{payment_element:{enabled:true,features:{payment_method_redisplay:"enabled",payment_method_save:"enabled",payment_method_save_usage:"off_session",payment_method_remove:"enabled"}}}}):null;
     await admin.from("merchant_ticket_payment_attempts").upsert({order_id:order.id,merchant_user_id:order.merchant_user_id,user_id:auth.user.id,provider:"stripe",provider_payment_id:intent.id,status:intent.status==="succeeded"?"succeeded":"requires_action",amount:Number(order.total_amount),currency:String(order.currency||"usd"),metadata:{stripe_account_id:connected,payment_environment:environment}}, {onConflict:"provider_payment_id"});
     await admin.from("merchant_ticket_orders").update({payment_provider:"stripe",payment_provider_reference:intent.id,payment_status:intent.status==="succeeded"?"processing":"processing",updated_at:new Date().toISOString()}).eq("id",order.id);
-    return json({client_secret:intent.client_secret,payment_intent_id:intent.id,publishable_key:publishableKey,payment_environment:environment});
+    return json({client_secret:intent.client_secret,payment_intent_id:intent.id,publishable_key:publishableKey,payment_environment:environment,customer_session_client_secret:customerSession?.client_secret||null});
   }catch(error){console.error("ticket-stripe-payment",error);return json({ error:"Unable to create payment" },500)}
 });

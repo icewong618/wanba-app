@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.598';
+const APP_VERSION = '5.599';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14327,11 +14327,37 @@ async function openHomeCart(){
     const state=typeof merchantOrderState==='function'?merchantOrderState():null;
     const restaurantLines=state&&state.merchant?merchantOrderCartRows():[];
     if(restaurantLines.length&&state.merchant?.user_id) groups.set(String(state.merchant.user_id),{merchantId:String(state.merchant.user_id),lines:restaurantLines,source:'restaurant',merchant:state.merchant});
-    const ids=[...groups.keys()].filter(Boolean);
+    const cloudRows=[];
+    if(session?.user?.id){
+      const cloudResponse=await authedFetch(`${SUPABASE_URL}/rest/v1/user_cart_items?user_id=eq.${encodeURIComponent(session.user.id)}&select=merchant_user_id,source_type,product_key,quantity,item_snapshot,updated_at&order=updated_at.desc`,{method:'GET'});
+      if(cloudResponse.ok) cloudRows.push(...(await cloudResponse.json()));
+      cloudRows.forEach(row=>{
+        const merchantId=String(row.merchant_user_id||''); if(!merchantId) return;
+        const key=`${merchantId}:${row.source_type||'retail'}`;
+        const existing=groups.get(key)||groups.get(merchantId);
+        const snapshot=row.item_snapshot&&typeof row.item_snapshot==='object'?row.item_snapshot:{};
+        const line={id:String(row.product_key||snapshot.id||''),name:snapshot.name||'商品',price:snapshot.price,image:snapshot.image||'',quantity:Number(row.quantity||0)};
+        if(!line.id||!line.quantity) return;
+        if(existing){
+          existing.source=row.source_type||existing.source||'retail';
+          if(!existing.lines.some(item=>String(item.id)===line.id)) existing.lines.push(line);
+          groups.delete(merchantId); groups.set(key,existing);
+        }else groups.set(key,{merchantId,lines:[line],source:row.source_type||'retail'});
+      });
+    }
+    const ids=[...groups.values()].map(group=>group.merchantId).filter(Boolean);
     if(ids.length){const response=await authedFetch(`${SUPABASE_URL}/rest/v1/merchants?user_id=in.(${ids.map(encodeURIComponent).join(',')})&select=user_id,business_name,logo,slug`,{method:'GET'});if(response.ok){(await response.json()).forEach(row=>{const group=groups.get(String(row.user_id));if(group)group.merchant=Object.assign({},group.merchant||{},row);});}}
     const rows=[...groups.values()].filter(group=>group.lines.length);
-    openHomeFeature('购物车',rows.length?rows.map(group=>{const total=group.lines.reduce((sum,row)=>sum+merchantOrderPriceNumber(row.price)*Number(row.quantity||0),0),merchant=group.merchant||{};return `<section class="home-feature-card"><div class="home-cart-merchant"><b>${escHtml(merchant.business_name||'商家')}</b><small>${group.source==='restaurant'?'餐饮点餐':'零售商品'} · ${group.lines.reduce((n,row)=>n+Number(row.quantity||0),0)} 件未结算</small></div>${group.lines.slice(0,8).map(row=>`<div class="home-cart-line"><span>${escHtml(row.name||'商品')} × ${Number(row.quantity||0)}</span><b>${merchantOrderMoney(merchantOrderPriceNumber(row.price)*Number(row.quantity||0))}</b></div>`).join('')}${group.lines.length>8?'<div class="home-feature-note">其余商品请回到商家继续查看。</div>':''}<div class="home-cart-line home-cart-total"><b>合计</b><b>${merchantOrderMoney(total)}</b></div><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openMerchantPublicPage('${String(group.merchantId).replace(/'/g,'')}')">回到商家结算</button></section>`;}).join(''):'<div class="home-feature-empty">购物车暂时为空。餐饮、零售等未完成下单的商品会按商家显示在这里。</div>');
+    openHomeFeature('购物车',rows.length?rows.map(group=>{const total=group.lines.reduce((sum,row)=>sum+merchantOrderPriceNumber(row.price)*Number(row.quantity||0),0),merchant=group.merchant||{};return `<section class="home-feature-card"><div class="home-cart-merchant"><b>${escHtml(merchant.business_name||'商家')}</b><small>${group.source==='restaurant'?'餐饮点餐':'零售商品'} · ${group.lines.reduce((n,row)=>n+Number(row.quantity||0),0)} 件未结算</small></div>${group.lines.slice(0,8).map(row=>`<div class="home-cart-line"><span>${escHtml(row.name||'商品')} × ${Number(row.quantity||0)}</span><b>${merchantOrderMoney(merchantOrderPriceNumber(row.price)*Number(row.quantity||0))}</b></div>`).join('')}${group.lines.length>8?'<div class="home-feature-note">其余商品请回到商家继续查看。</div>':''}<div class="home-cart-line home-cart-total"><b>合计</b><b>${merchantOrderMoney(total)}</b></div><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openMerchantPublicPage('${String(group.merchantId).replace(/'/g,'')}')">回到商家结算</button><button class="home-feature-secondary" type="button" onclick="clearHomeCartGroup('${escAttr(String(group.merchantId))}','${escAttr(group.source||'retail')}')">清空此商家购物车</button></section>`;}).join(''):'<div class="home-feature-empty">购物车暂时为空。餐饮、零售等未完成下单的商品会按商家显示在这里。</div>');
   }catch(error){console.warn('购物车读取失败:',error.message);openHomeFeature('购物车','<div class="home-feature-empty">购物车暂时无法读取，请稍后重试。</div>');}
+}
+async function clearHomeCartGroup(merchantUserId, sourceType){
+  if(!confirm('确认清空这家商家的未结算商品吗？')) return;
+  try{
+    if(session?.user?.id){const response=await authedFetch(`${SUPABASE_URL}/rest/v1/user_cart_items?user_id=eq.${encodeURIComponent(session.user.id)}&merchant_user_id=eq.${encodeURIComponent(merchantUserId)}&source_type=eq.${encodeURIComponent(sourceType||'retail')}`,{method:'DELETE'});if(!response.ok)throw new Error(await response.text());}
+    if(sourceType==='retail') localStorage.removeItem(`scoop_merchant_cart_${merchantUserId}`);
+    showToast('已清空此商家购物车');openHomeCart();
+  }catch(error){showToast('购物车清理失败，请稍后重试');}
 }
 async function homeWalletRequest(payload){
   const response=await authedFetch(`${SUPABASE_URL}/functions/v1/stripe-wallet`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -14396,6 +14422,12 @@ async function clearHomeLocalCache(){
     showToast('已清理本机缓存');
   }catch(error){showToast('缓存清理失败，请稍后再试');}
 }
+async function openHomeStorageSpace(){
+  openHomeFeature('存储空间','<div class="home-feature-empty">正在统计本机缓存...</div>');
+  let usageText='暂无法读取',quotaText='';
+  try{const estimate=await navigator.storage?.estimate?.();if(estimate){usageText=`约 ${(Number(estimate.usage||0)/1024/1024).toFixed(1)} MB`;quotaText=estimate.quota?` / ${(Number(estimate.quota)/1024/1024/1024).toFixed(1)} GB 可用空间` : '';}}catch(error){}
+  openHomeFeature('存储空间',`<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('bag',26)}</div><h3>本机缓存</h3><p>当前已使用：${escHtml(usageText)}${escHtml(quotaText)}</p><p>图片和已浏览内容会缓存在当前设备以提升打开速度。云端笔记、订单、资料和已完成交易不会受影响。</p><button class="home-feature-primary" type="button" onclick="clearHomeLocalCache()">清理本机缓存</button></section>`);
+}
 function ensureHomeMenu(){
   let overlay=document.getElementById('homeMenuOverlay');
   if(overlay) return overlay;
@@ -14429,7 +14461,7 @@ window.handleHomeMenuAction=function(action){
   if(action==='address'){ closeHomeMenu(); return openHomeFeature('收货地址','<section class="home-feature-card"><h3>收货地址</h3><p>零售配送和邮资服务接入后，可在这里安全管理常用收货地址。当前请在具体订单内填写地址。</p></section>'); }
   if(action==='switchAccount'){ closeHomeMenu(); return window.openLogin?.(); }
   if(action==='preferences'){ closeHomeMenu(); return window.switchTab?.('home'); }
-  if(action==='cache'){ closeHomeMenu(); return openHomeFeature('存储空间','<section class="home-feature-card"><h3>本机缓存</h3><p>缓存用于加快图片和已浏览内容的加载，不影响云端笔记、订单或资料。清理后首次打开图片可能稍慢。</p><button class="home-feature-primary" type="button" onclick="clearHomeLocalCache()">清理本机缓存</button></section>'); }
+  if(action==='cache'){ closeHomeMenu(); return openHomeStorageSpace(); }
   if(action==='scan'){ closeHomeMenu(); return openHomeScanner(); }
   if(action==='help'){ closeHomeMenu(); return openHomeHelp(); }
   showToast('该功能正在逐步开放');
