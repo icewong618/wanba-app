@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.603';
+const APP_VERSION = '5.604';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -14531,7 +14531,7 @@ function homeSettingSelect(title, key, value, options, saver){
   openHomeFeature(title, `<section class="home-feature-card"><h3>${escHtml(title)}</h3><div class="home-select-list">${list}</div></section>`);
 }
 function homeSettingToggle(label, description, checked, handler, key){
-  return `<label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid var(--line,#ebe6d9);cursor:pointer"><span><b style="display:block;font-size:15px">${escHtml(label)}</b><small style="display:block;margin-top:4px;color:var(--muted,#8a8577);line-height:1.45">${escHtml(description)}</small></span><input type="checkbox" ${checked?'checked':''} onchange="${handler}('${key}',this.checked)" style="width:21px;height:21px;accent-color:#5d896a;flex:0 0 auto"></label>`;
+  return `<label class="home-setting-toggle"><span><b>${escHtml(label)}</b><small>${escHtml(description)}</small></span><input type="checkbox" ${checked?'checked':''} onchange="${handler}('${key}',this.checked)"><i aria-hidden="true"></i></label>`;
 }
 async function openHomeNotificationSettings(){
   if(!homeFeatureRequireAuth()) return;
@@ -14702,7 +14702,12 @@ window.handleHomeMenuAction=function(action,event){
   if(action==='notifications'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeNotificationSettings); }
   if(action==='privacy'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomePrivacySettings); }
   if(action==='address'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeAddresses); }
-  if(action==='switchAccount'){ closeHomeMenu(); return window.openLogin?.(); }
+  if(action==='switchAccount'){
+    closeHomeMenu();
+    if(typeof switchAccount==='function') return switchAccount();
+    if(typeof window.switchAccount==='function') return window.switchAccount();
+    return window.openLogin?.();
+  }
   if(action==='preferences'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomePreferences); }
   if(action==='cache'){ closeHomeMenu(); return openHomeFeatureFromSettings(openHomeStorageSpace); }
   if(action==='scan'){ closeHomeMenu(); return openHomeScanner(); }

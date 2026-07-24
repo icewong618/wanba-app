@@ -7,7 +7,10 @@
         const embedded = !!isEmbedded();
         root.classList.toggle('app-webview-entry', embedded);
         root.classList.toggle('embedded-app-entry', embedded);
-        const fixedGap = 3;
+        // One source of truth for the distance below the fixed home header.
+        // Keeping this constant prevents repeated resume/orientation measurements
+        // from gradually creating a visible blank band above the first cards.
+        const fixedGap = 6;
         const topHeader = document.querySelector('header.top:not(.is-hidden)');
         const homeTop = topHeader ? Math.ceil(topHeader.getBoundingClientRect().height) + fixedGap : 138;
         root.style.setProperty('--home-fixed-top', `${homeTop}px`);
@@ -19,8 +22,7 @@
           // grow after repeated App resume and orientation events.
           const headerBottom = topHeader.getBoundingClientRect().bottom;
           const pageTop = homePage.getBoundingClientRect().top;
-          const safeGap = embedded ? 8 : 10;
-          const feedOffset = Math.max(0, Math.ceil(headerBottom + safeGap - pageTop));
+          const feedOffset = Math.max(0, Math.ceil(headerBottom + fixedGap - pageTop));
           homeFeed.style.setProperty('margin-top', `${feedOffset}px`, 'important');
         }
         const weekHeader = document.querySelector('#page-week.active .page-header');
