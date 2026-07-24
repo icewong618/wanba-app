@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.601';
+const APP_VERSION = '5.602';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -582,6 +582,9 @@ function updateAuthUI(){
     if(outBtn) outBtn.style.display = 'flex';
     // 关键：切换到该账号自己的资料档案
     loadUserProfile();
+    // Hydrate saved display and privacy preferences once the session is usable.
+    // A failure here must never block the signed-in home screen.
+    loadHomeAccountSettings?.(true).then(applyHomeAccountDisplayPreferences).catch(() => {});
     checkDealAdmin();
     checkFeedbackReplyNotices();
   } else {
@@ -7110,6 +7113,9 @@ async function loadMerchantAnalytics(){
 /* 记录一次真实浏览（仅登录用户，游客暂不记录）。每次打开笔记详情调用一次 */
 function recordPostView(postId){
   if(!(session && session.user)) return;
+  // The preference is cached locally after settings are loaded. Keep the default on
+  // until the account preference is available so opening a note never blocks.
+  if(homeAccountSettingsCache?.general?.browsing_history === false) return;
   authedFetch(`${SUPABASE_URL}/rest/v1/post_views`, {
     method: 'POST',
     body: JSON.stringify({ post_id: postId, user_id: session.user.id })
@@ -8365,12 +8371,11 @@ function switchProfileTab(tab){
   if(tab === 'memberships') loadUserMembershipCards(true);
 }
 async function showProfileBrowsingHistory(){
+  return openUnifiedBrowsingHistory();
+}
+async function openUnifiedBrowsingHistory(){
   if(!(session && session.user)){ showToast('登录后可查看浏览记录'); openAuth(); return; }
-  const historyList = document.getElementById('browsingHistoryList');
-  const modal = document.getElementById('browsingModal');
-  if(!historyList || !modal) return;
-  modal.style.display = 'flex';
-  historyList.innerHTML = '<div class="deals-empty-panel">正在读取浏览记录...</div>';
+  openHomeFeature('浏览记录', '<div class="home-feature-empty">正在读取浏览记录...</div>');
   try {
     const response = await authedFetch(`${SUPABASE_URL}/rest/v1/post_views?user_id=eq.${encodeURIComponent(session.user.id)}&select=post_id,created_at&order=created_at.desc&limit=240`, { method:'GET' });
     if(!response.ok) throw new Error(await response.text());
@@ -8389,15 +8394,17 @@ async function showProfileBrowsingHistory(){
       const post = localById.get(String(id));
       return post ? Object.assign({}, post, { viewedAt:latestByPost.get(String(id)) }) : null;
     }).filter(Boolean);
-    historyList.innerHTML = browsingHistory.length ? browsingHistory.map(item => `
-      <div class="history-item" onclick="closeBrowsingHistory();openPost(${JSON.stringify(item.id)})">
-        <div class="history-item-thumb">${item.image ? `<img src="${escAttr(item.image)}" alt="">` : '<div style="background:var(--bg-alt);width:100%;height:100%;"></div>'}</div>
-        <div class="history-item-info"><div class="history-item-title">${escHtml(item.title || '未命名笔记')}</div><div class="history-item-time">${new Date(item.viewedAt).toLocaleString('zh-CN')}</div></div>
-      </div>
-    `).join('') : '<div class="deals-empty-panel">还没有浏览记录。打开一篇笔记后会在这里留下记录。</div>';
+    const items = browsingHistory.length ? browsingHistory.map(item => `
+      <button class="home-history-row" type="button" onclick="closeHomeFeature();openPost(${JSON.stringify(item.id)})">
+        <span class="home-history-thumb">${item.image ? `<img src="${escAttr(item.image)}" alt="">` : '<span></span>'}</span>
+        <span class="home-history-info"><b>${escHtml(item.title || '未命名笔记')}</b><small>${escHtml(item.author || '乐生活用户')} · ${new Date(item.viewedAt).toLocaleString('zh-CN')}</small></span>
+        <i>›</i>
+      </button>
+    `).join('') : '<div class="home-feature-empty">还没有浏览记录。打开一篇笔记后会在这里留下记录。</div>';
+    openHomeFeature('浏览记录', `<div class="home-history-list">${items}</div>`);
   } catch(error){
     console.warn('浏览记录读取失败:', error.message);
-    historyList.innerHTML = '<div class="deals-empty-panel">浏览记录暂时无法读取，请稍后重试。</div>';
+    openHomeFeature('浏览记录', '<div class="home-feature-empty">浏览记录暂时无法读取，请稍后重试。</div>');
   }
 }
 function closeBrowsingHistory(){
@@ -14233,6 +14240,9 @@ function ensureHomeFeatureOverlay(){
   overlay.id = 'homeFeatureOverlay';
   overlay.className = 'home-feature-overlay';
   overlay.innerHTML = '<section class="home-feature-panel" role="dialog" aria-modal="true"><header class="home-feature-header"><button type="button" aria-label="返回" onclick="closeHomeFeature()">‹</button><h2 id="homeFeatureTitle"></h2><span></span></header><main id="homeFeatureBody" class="home-feature-body"></main></section>';
+  // Keep taps inside this full-screen layer from leaking through to the root App navigation.
+  overlay.addEventListener('click', event => event.stopPropagation());
+  overlay.addEventListener('touchend', event => event.stopPropagation(), { passive:true });
   document.body.appendChild(overlay);
   return overlay;
 }
@@ -14420,17 +14430,35 @@ async function clearHomeLocalCache(){
     await clearWebRuntimeCaches();
     Object.keys(localStorage).filter(key=>key.startsWith('leshenghuo_media_')||key.startsWith('wanba_posts_')).forEach(key=>localStorage.removeItem(key));
     showToast('已清理本机缓存');
+    openHomeStorageSpace();
   }catch(error){showToast('缓存清理失败，请稍后再试');}
 }
 async function openHomeStorageSpace(){
   openHomeFeature('存储空间','<div class="home-feature-empty">正在统计本机缓存...</div>');
-  let usageText='暂无法读取',quotaText='';
-  try{const estimate=await navigator.storage?.estimate?.();if(estimate){usageText=`约 ${(Number(estimate.usage||0)/1024/1024).toFixed(1)} MB`;quotaText=estimate.quota?` / ${(Number(estimate.quota)/1024/1024/1024).toFixed(1)} GB 可用空间` : '';}}catch(error){}
-  openHomeFeature('存储空间',`<section class="home-feature-card"><div class="home-feature-icon">${uiIcon('bag',26)}</div><h3>本机缓存</h3><p>当前已使用：${escHtml(usageText)}${escHtml(quotaText)}</p><p>图片和已浏览内容会缓存在当前设备以提升打开速度。云端笔记、订单、资料和已完成交易不会受影响。</p><button class="home-feature-primary" type="button" onclick="clearHomeLocalCache()">清理本机缓存</button></section>`);
+  let usage=0, quota=0;
+  try{const estimate=await navigator.storage?.estimate?.(); usage=Number(estimate?.usage||0); quota=Number(estimate?.quota||0);}catch(error){}
+  const bytesLabel=value => value >= 1024*1024*1024 ? `${(value/1024/1024/1024).toFixed(2)} GB` : `${(value/1024/1024).toFixed(1)} MB`;
+  const localBytes=keys => keys.reduce((total,key)=>total+new Blob([localStorage.getItem(key)||'']).size,0);
+  const keys=Object.keys(localStorage);
+  const cacheBytes=localBytes(keys.filter(key=>key.startsWith('leshenghuo_media_')||key.startsWith('wanba_posts_')||key.startsWith('scoop_')));
+  const draftBytes=localBytes(keys.filter(key=>key.includes('draft')));
+  const percent=quota ? Math.min(100,Math.round(usage/quota*100)) : 0;
+  openHomeFeature('存储空间',`<section class="home-storage-summary"><div class="home-storage-meter"><i style="width:${percent}%"></i></div><div class="home-storage-legend"><span>● 乐生活本机数据</span><span>● 设备已用空间</span><span>● 可用空间</span></div><b>${bytesLabel(usage)}</b><small>${quota?`设备可用配额约 ${bytesLabel(quota)}`:'浏览器未提供可用空间数据'}</small></section><section class="home-storage-list"><div><span><b>缓存</b><small>${bytesLabel(cacheBytes)} · 图片与已浏览内容</small></span><button type="button" onclick="clearHomeLocalCache()">清理</button></div><div><span><b>我的下载</b><small>0 KB · 已保存到设备的内容由系统相册或文件管理</small></span><button type="button" onclick="showToast('当前设备没有乐生活离线下载')">管理</button></div><div><span><b>笔记草稿</b><small>${bytesLabel(draftBytes)} · 仅保存在本机，删除 App 或清理草稿后无法恢复</small></span><button type="button" onclick="clearHomeDrafts()">管理</button></div><div><span><b>聊天文件</b><small>0 KB · 当前没有独立缓存的聊天附件</small></span><button type="button" onclick="showToast('当前没有可清理的聊天文件')">管理</button></div></section><section class="home-storage-fixed"><b>不可清理内容</b><p>账户、云端笔记、订单和已完成交易保存在服务器，清理本机缓存不会影响它们。</p></section>`);
 }
+window.clearHomeDrafts=function(){
+  if(!confirm('清理本机笔记草稿吗？清理后无法恢复。')) return;
+  Object.keys(localStorage).filter(key=>key.toLowerCase().includes('draft')).forEach(key=>localStorage.removeItem(key));
+  showToast('本机草稿已清理'); openHomeStorageSpace();
+};
 let homeAccountSettingsCache = null;
 function homeDefaultAccountSettings(){
-  return { notifications:{comments:true,follows:true,likes:true,orders:true}, preferences:{categories:[]}, privacy:{discoverable:true,show_region:true} };
+  return {
+    notifications:{ likes:true, follows:true, comments:true, mentions:true, shares:true, direct_messages:true, followed_updates:true, livestream:true, content_recommendations:true, user_recommendations:true, other:true, merchant_orders:true, app_banner:true },
+    preferences:{ categories:[], topics:[] },
+    privacy:{ discoverable:true, show_region:true, recommend_me:false, recommend_to_others:false, one_tap_protection:false, dm_scope:'default', comment_scope:'all', mention_scope:'all', chat_marker:true, online_status:'mutual', follow_list:'public', favorites:'private' },
+    general:{ font_size:'medium', theme:'system', auto_refresh:true, browsing_history:true },
+    security:{ phone:'', identity_status:'not_started', deletion_requested_at:'' }
+  };
 }
 function homeMergeAccountSettings(base, patch){
   return {
@@ -14438,7 +14466,9 @@ function homeMergeAccountSettings(base, patch){
     ...patch,
     notifications:{...(base.notifications||{}),...(patch.notifications||{})},
     preferences:{...(base.preferences||{}),...(patch.preferences||{})},
-    privacy:{...(base.privacy||{}),...(patch.privacy||{})}
+    privacy:{...(base.privacy||{}),...(patch.privacy||{})},
+    general:{...(base.general||{}),...(patch.general||{})},
+    security:{...(base.security||{}),...(patch.security||{})}
   };
 }
 async function loadHomeAccountSettings(force=false){
@@ -14458,7 +14488,28 @@ async function saveHomeAccountSettings(patch){
   const res=await authedFetch(`${SUPABASE_URL}/rest/v1/user_account_settings?on_conflict=user_id`,{method:'POST',headers:{apikey:SUPABASE_ANON_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({user_id:session.user.id,settings,updated_at:new Date().toISOString()})});
   if(!res.ok) throw new Error('设置保存失败');
   homeAccountSettingsCache=settings;
+  applyHomeAccountDisplayPreferences(settings);
   return settings;
+}
+function applyHomeAccountDisplayPreferences(settings){
+  const general=settings?.general||{};
+  document.documentElement.dataset.accountTheme=['light','dark'].includes(general.theme)?general.theme:'system';
+  document.documentElement.dataset.accountFontSize=['small','medium','large'].includes(general.font_size)?general.font_size:'medium';
+}
+function homeSettingChoice(label, detail, value, options, handler, key){
+  // Older setting rows pass the action directly as the fourth argument. Keep both
+  // call styles working while the account center is gradually expanded.
+  if(typeof options === 'string'){
+    key = handler;
+    handler = options;
+    options = {};
+  }
+  options = options && typeof options === 'object' ? options : {};
+  return `<button class="home-setting-choice" type="button" onclick="${handler}('${key}')"><span><b>${escHtml(label)}</b><small>${escHtml(detail)}</small></span><em>${escHtml(options[value]||value||'默认')}</em><i>›</i></button>`;
+}
+function homeSettingSelect(title, key, value, options, saver){
+  const list=Object.entries(options).map(([id,label])=>`<button class="home-select-option ${id===value?'selected':''}" type="button" onclick="${saver}('${key}','${id}')">${escHtml(label)}${id===value?' ✓':''}</button>`).join('');
+  openHomeFeature(title, `<section class="home-feature-card"><h3>${escHtml(title)}</h3><div class="home-select-list">${list}</div></section>`);
 }
 function homeSettingToggle(label, description, checked, handler, key){
   return `<label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid var(--line,#ebe6d9);cursor:pointer"><span><b style="display:block;font-size:15px">${escHtml(label)}</b><small style="display:block;margin-top:4px;color:var(--muted,#8a8577);line-height:1.45">${escHtml(description)}</small></span><input type="checkbox" ${checked?'checked':''} onchange="${handler}('${key}',this.checked)" style="width:21px;height:21px;accent-color:#5d896a;flex:0 0 auto"></label>`;
@@ -14468,7 +14519,7 @@ async function openHomeNotificationSettings(){
   openHomeFeature('通知设置','<div class="home-feature-empty">正在读取通知偏好...</div>');
   try{
     const settings=await loadHomeAccountSettings(); const n=settings.notifications||{};
-    openHomeFeature('通知设置',`<section class="home-feature-card"><h3>站内通知</h3>${homeSettingToggle('评论和 @','有人评论或提及你时通知',n.comments!==false,'updateHomeNotificationSetting','comments')}${homeSettingToggle('新增关注','有新关注者时通知',n.follows!==false,'updateHomeNotificationSetting','follows')}${homeSettingToggle('赞和收藏','收到赞或收藏时通知',n.likes!==false,'updateHomeNotificationSetting','likes')}${homeSettingToggle('订单动态','订单、预约、票务和商家交易状态变化时通知',n.orders!==false,'updateHomeNotificationSetting','orders')}</section><p class="home-feature-note">此处保存站内通知偏好；系统推送权限会在你主动开启提醒时申请。</p>`);
+    openHomeFeature('通知设置',`<div class="home-setting-section-title">互动通知</div><section class="home-feature-card home-setting-card">${homeSettingToggle('赞和收藏','有人赞或收藏你的笔记',n.likes!==false,'updateHomeNotificationSetting','likes')}${homeSettingToggle('新增关注','有用户关注你',n.follows!==false,'updateHomeNotificationSetting','follows')}${homeSettingToggle('评论','有人评论你的笔记',n.comments!==false,'updateHomeNotificationSetting','comments')}${homeSettingToggle('@ 提及','有人在内容中提及你',n.mentions!==false,'updateHomeNotificationSetting','mentions')}${homeSettingToggle('分享','有人分享你的笔记',n.shares!==false,'updateHomeNotificationSetting','shares')}</section><div class="home-setting-section-title">私信通知</div><section class="home-feature-card home-setting-card">${homeSettingToggle('私信','接收新的站内私信提示',n.direct_messages!==false,'updateHomeNotificationSetting','direct_messages')}</section><div class="home-setting-section-title">社区内容通知</div><section class="home-feature-card home-setting-card">${homeSettingToggle('关注者更新','关注用户发布新内容时通知',n.followed_updates!==false,'updateHomeNotificationSetting','followed_updates')}${homeSettingToggle('开播提醒','关注的创作者开始直播时通知',n.livestream!==false,'updateHomeNotificationSetting','livestream')}${homeSettingToggle('内容推荐','接收与你兴趣相关的推荐',n.content_recommendations!==false,'updateHomeNotificationSetting','content_recommendations')}${homeSettingToggle('用户推荐','接收可能认识的用户推荐',n.user_recommendations!==false,'updateHomeNotificationSetting','user_recommendations')}${homeSettingToggle('其他通知','系统、安全与服务提醒',n.other!==false,'updateHomeNotificationSetting','other')}</section><div class="home-setting-section-title">购物与服务</div><section class="home-feature-card home-setting-card">${homeSettingToggle('购物及售后通知','订单、物流、预约、票务与售后状态',n.merchant_orders!==false,'updateHomeNotificationSetting','merchant_orders')}${homeSettingToggle('App 内通知横幅','在使用乐生活时显示顶部横幅',n.app_banner!==false,'updateHomeNotificationSetting','app_banner')}</section><p class="home-feature-note">此处保存站内通知偏好。设备系统推送权限会在你主动开启推送功能时申请。</p>`);
   }catch(error){openHomeFeature('通知设置','<div class="home-feature-empty">暂时无法读取通知偏好，请稍后重试。</div>');}
 }
 window.updateHomeNotificationSetting=async function(key,checked){
@@ -14479,9 +14530,14 @@ async function openHomePreferences(){
   openHomeFeature('内容偏好','<div class="home-feature-empty">正在读取内容偏好...</div>');
   try{
     const settings=await loadHomeAccountSettings(); const selected=Array.isArray(settings.preferences?.categories)?settings.preferences.categories:[];
-    const choices=['美食','玩乐','好物','生活','社区','亲子遛娃','活动展览','省钱优惠','影视'];
-    const buttons=choices.map(name=>`<button type="button" onclick="toggleHomeContentPreference('${name}')" style="border:1px solid ${selected.includes(name)?'#5d896a':'#ded7c5'};background:${selected.includes(name)?'#e1eddf':'#fff'};color:${selected.includes(name)?'#356746':'#504b40'};padding:10px 13px;border-radius:18px">${name}${selected.includes(name)?' ✓':''}</button>`).join('');
-    openHomeFeature('内容偏好',`<section class="home-feature-card"><h3>想多看什么</h3><p>用于调整“推荐”内容，不影响你仍然可以浏览的全部内容。</p><div style="display:flex;flex-wrap:wrap;gap:9px">${buttons}</div></section>`);
+    const groups={
+      '吃喝':['探店','中餐','奶茶','咖啡','烘焙甜品','家常菜','美食攻略'],
+      '玩乐':['旅行攻略','展览演出','电影影视','运动健身','桌游电玩','摄影','动漫二次元'],
+      '生活':['亲子遛娃','租房买房','宠物','家政服务','交友社群','本地资讯'],
+      '好物与省钱':['数码','美妆穿搭','家居用品','二手交易','超市优惠','本周活动']
+    };
+    const sections=Object.entries(groups).map(([title,choices])=>`<section class="home-feature-card home-preference-card"><h3>${title}</h3><div class="home-preference-chips">${choices.map(name=>`<button type="button" class="${selected.includes(name)?'selected':''}" onclick="toggleHomeContentPreference('${name}')">${name}${selected.includes(name)?' ✓':''}</button>`).join('')}</div></section>`).join('');
+    openHomeFeature('内容偏好',`<p class="home-feature-intro">选择更细的兴趣标签，用于调整“推荐”内容。不会隐藏其他公开内容。</p>${sections}`);
   }catch(error){openHomeFeature('内容偏好','<div class="home-feature-empty">暂时无法读取内容偏好，请稍后重试。</div>');}
 }
 window.toggleHomeContentPreference=async function(name){
@@ -14496,12 +14552,67 @@ async function openHomePrivacySettings(){
   openHomeFeature('隐私设置','<div class="home-feature-empty">正在读取展示偏好...</div>');
   try{
     const settings=await loadHomeAccountSettings(); const p=settings.privacy||{};
-    openHomeFeature('隐私设置',`<section class="home-feature-card"><h3>展示偏好</h3>${homeSettingToggle('允许被搜索','允许其他用户通过昵称或乐生活 ID 找到你',p.discoverable!==false,'updateHomePrivacySetting','discoverable')}${homeSettingToggle('展示所属地区','在个人主页展示你选择的大区，不显示精确地址',p.show_region!==false,'updateHomePrivacySetting','show_region')}</section><section class="home-feature-terms"><p>相机、位置、相册和通讯录只会在你主动使用扫码、地图、上传或添加好友等功能时请求授权。</p></section>`);
+    const simpleOptions={default:'默认',all:'全部',mutual:'互相关注',followers:'我关注的人',private:'不公开',off:'关闭',on:'开启'};
+    openHomeFeature('隐私设置',`<div class="home-setting-section-title">发现与推荐</div><section class="home-feature-card home-setting-card">${homeSettingToggle('找到我的方式','允许其他用户通过昵称或乐生活 ID 找到你',p.discoverable!==false,'updateHomePrivacySetting','discoverable')}${homeSettingToggle('推荐可能认识的人给我','使用公开资料推荐可能认识的人',p.recommend_me===true,'updateHomePrivacySetting','recommend_me')}${homeSettingToggle('把我推荐给可能认识的人','允许系统将你作为推荐用户展示',p.recommend_to_others===true,'updateHomePrivacySetting','recommend_to_others')}${homeSettingToggle('展示所属地区','仅显示你选择的大区，不显示精确地址',p.show_region!==false,'updateHomePrivacySetting','show_region')}</section><div class="home-setting-section-title">屏蔽与黑名单</div><section class="home-feature-card home-setting-card">${homeSettingChoice('不让他（她）看','管理无法查看你公开主页的用户', '', {none:'暂无屏蔽用户'},'openHomePrivacyPlaceholder','hide_from')}${homeSettingChoice('不看他（她）','管理你不想看到内容的用户', '', {none:'暂无屏蔽用户'},'openHomePrivacyPlaceholder','hide')}${homeSettingChoice('黑名单','管理被限制互动的用户', '', {none:'暂无黑名单用户'},'openHomePrivacyPlaceholder','blacklist')}</section><div class="home-setting-section-title">互动权限</div><section class="home-feature-card home-setting-card">${homeSettingToggle('一键防护','快速收紧私信、评论和 @ 权限',p.one_tap_protection===true,'updateHomePrivacySetting','one_tap_protection')}${homeSettingChoice('谁可以私信我','设置站内私信的接收范围',p.dm_scope,simpleOptions,'openHomePrivacyChoice','dm_scope')}${homeSettingChoice('谁可以评论和回复','设置笔记评论范围',p.comment_scope,simpleOptions,'openHomePrivacyChoice','comment_scope')}${homeSettingChoice('谁可以 @ 我','设置提及范围',p.mention_scope,simpleOptions,'openHomePrivacyChoice','mention_scope')}${homeSettingToggle('聊天标识','在私信中显示已读等状态',p.chat_marker!==false,'updateHomePrivacySetting','chat_marker')}</section><div class="home-setting-section-title">内容与状态权限</div><section class="home-feature-card home-setting-card">${homeSettingChoice('在线状态','谁可以看到你的在线状态',p.online_status,{all:'全部','mutual':'互相关注的人',private:'不公开'},'openHomePrivacyChoice','online_status')}${homeSettingChoice('关注与粉丝列表','设置关注与粉丝列表可见范围',p.follow_list,{public:'全部公开',mutual:'互相关注可见',private:'不公开'},'openHomePrivacyChoice','follow_list')}${homeSettingChoice('我的收藏','设置收藏内容可见范围',p.favorites,{public:'公开',private:'不公开'},'openHomePrivacyChoice','favorites')}</section><section class="home-feature-terms"><p>相机、位置、相册和通讯录只会在你主动使用扫码、地图、上传或添加好友等功能时请求授权。</p></section>`);
   }catch(error){openHomeFeature('隐私设置','<div class="home-feature-empty">暂时无法读取展示偏好，请稍后重试。</div>');}
 }
 window.updateHomePrivacySetting=async function(key,checked){
   try{await saveHomeAccountSettings({privacy:{[key]:checked}});showToast('展示偏好已保存');}catch(error){showToast(error.message||'保存失败');}
 };
+window.openHomePrivacyChoice=function(key){
+  loadHomeAccountSettings().then(settings=>{
+    const value=settings.privacy?.[key]||'default';
+    const options=key==='online_status'?{all:'全部',mutual:'互相关注的人',private:'不公开'}:key==='follow_list'?{public:'全部公开',mutual:'互相关注可见',private:'不公开'}:key==='favorites'?{public:'公开',private:'不公开'}:{default:'默认',all:'全部',mutual:'互相关注',followers:'我关注的人',private:'不公开'};
+    homeSettingSelect('选择隐私范围',key,value,options,'saveHomePrivacyChoice');
+  }).catch(()=>showToast('设置暂时无法读取'));
+};
+window.saveHomePrivacyChoice=async function(key,value){try{await saveHomeAccountSettings({privacy:{[key]:value}});showToast('隐私设置已保存');openHomePrivacySettings();}catch(error){showToast('保存失败，请稍后重试');}};
+window.openHomePrivacyPlaceholder=function(){showToast('屏蔽名单将在有被屏蔽用户时显示在这里');};
+async function openHomeGeneralSettings(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('通用设置','<div class="home-feature-empty">正在读取通用设置...</div>');
+  try{
+    const settings=await loadHomeAccountSettings(); const g=settings.general||{};
+    openHomeFeature('通用设置',`<div class="home-setting-section-title">显示</div><section class="home-feature-card home-setting-card">${homeSettingChoice('字体大小','调整应用中支持缩放的文字',g.font_size,{small:'小',medium:'标准',large:'大'},'openHomeGeneralChoice','font_size')}${homeSettingChoice('显示模式','选择白色、暗色或跟随系统',g.theme,{light:'白色',dark:'暗色',system:'随系统'},'openHomeGeneralChoice','theme')}</section><div class="home-setting-section-title">功能</div><section class="home-feature-card home-setting-card">${homeSettingToggle('自动刷新','打开后，首页、本周、省钱和消息会按页面规则刷新',g.auto_refresh!==false,'updateHomeGeneralSetting','auto_refresh')}${homeSettingToggle('浏览记录','打开后，将在本机和账户浏览记录中保存你打开的笔记',g.browsing_history!==false,'updateHomeGeneralSetting','browsing_history')}</section><p class="home-feature-note">关闭自动刷新后，仍可通过页面下拉手动刷新。</p>`);
+  }catch(error){openHomeFeature('通用设置','<div class="home-feature-empty">暂时无法读取通用设置，请稍后重试。</div>');}
+}
+window.openHomeGeneralChoice=function(key){
+  loadHomeAccountSettings().then(settings=>{
+    const value=settings.general?.[key]||'medium';
+    const options=key==='theme'?{light:'白色',dark:'暗色',system:'随系统'}:{small:'小',medium:'标准',large:'大'};
+    homeSettingSelect(key==='theme'?'显示模式':'字体大小',key,value,options,'saveHomeGeneralChoice');
+  }).catch(()=>showToast('设置暂时无法读取'));
+};
+window.saveHomeGeneralChoice=async function(key,value){try{await saveHomeAccountSettings({general:{[key]:value}});showToast('通用设置已保存');openHomeGeneralSettings();}catch(error){showToast('保存失败，请稍后重试');}};
+window.updateHomeGeneralSetting=async function(key,checked){try{await saveHomeAccountSettings({general:{[key]:checked}});showToast('通用设置已保存');}catch(error){showToast('保存失败，请稍后重试');}};
+async function openHomeSecuritySettings(){
+  if(!homeFeatureRequireAuth()) return;
+  openHomeFeature('账号与安全','<div class="home-feature-empty">正在读取账号信息...</div>');
+  try{
+    const settings=await loadHomeAccountSettings(); const s=settings.security||{};
+    const providers=Array.isArray(session?.user?.app_metadata?.providers)?session.user.app_metadata.providers:[];
+    const providerState=name=>providers.includes(name)?'已连接':'未连接';
+    openHomeFeature('账号与安全',`<section class="home-feature-card home-security-account"><h3>${escHtml(session?.user?.email||'当前账户')}</h3><p>邮箱为当前登录账号。账户资料与订单不会因切换设备而丢失。</p></section><div class="home-setting-section-title">登录与验证</div><section class="home-feature-card home-setting-card">${homeSettingChoice('手机号',s.phone||'未绑定',s.phone?'已保存为账户联系号码':'用于订单联系与后续账号验证','openHomePhoneForm','phone')}${homeSettingChoice('登录密码','设置或修改登录密码','建议至少 10 位并包含字母和数字','openHomePasswordChange','password')}</section><div class="home-setting-section-title">第三方账号</div><section class="home-feature-card home-setting-card">${homeSettingChoice('Apple 账号',providerState('apple'),'第三方登录连接状态','openHomeProviderInfo','apple')}${homeSettingChoice('Google 账号',providerState('google'),'第三方登录连接状态','openHomeProviderInfo','google')}</section><div class="home-setting-section-title">身份与找回</div><section class="home-feature-card home-setting-card">${homeSettingChoice('身份认证',s.identity_status==='submitted'?'审核申请已提交':'未认证','钟点工、专业服务等功能可能需要身份审核','openHomeIdentityVerification','identity')}${homeSettingChoice('账号找回','通过邮箱重设登录信息','未记住密码时可发送重置邮件','openHomeAccountRecovery','recovery')}</section><div class="home-setting-section-title">账户</div><section class="home-feature-card home-setting-card">${homeSettingChoice('注销账号',s.deletion_requested_at?'已提交注销申请':'申请注销','注销前会保留订单与付款的法定记录','openHomeDeletionRequest','delete')}</section>`);
+  }catch(error){openHomeFeature('账号与安全','<div class="home-feature-empty">暂时无法读取账号与安全信息，请稍后重试。</div>');}
+}
+window.openHomePhoneForm=function(){
+  loadHomeAccountSettings().then(settings=>openHomeFeature('绑定手机号',`<section class="home-feature-card"><h3>绑定手机号</h3><p>手机号会保存为账户联系号码，用于订单联系与后续验证。短信验证码服务尚未接入时，不会将它标记为已验证。</p><form onsubmit="saveHomePhone(event)"><label class="home-form-label">手机号码<input name="phone" inputmode="tel" maxlength="32" required placeholder="例如 +1 626 000 0000" value="${escAttr(settings.security?.phone||'')}"></label><button class="home-feature-primary" type="submit">保存手机号</button></form></section>`)).catch(()=>showToast('设置暂时无法读取'));
+};
+window.saveHomePhone=async function(event){event.preventDefault();const phone=String(new FormData(event.currentTarget).get('phone')||'').trim();if(phone.length<7){showToast('请输入有效的手机号码');return;}try{await saveHomeAccountSettings({security:{phone}});showToast('手机号已保存');openHomeSecuritySettings();}catch(error){showToast('手机号保存失败');}};
+window.openHomePasswordChange=function(){closeHomeFeature();openAuth('reset');showToast('请设置新的登录密码');};
+window.openHomeProviderInfo=function(provider){
+  const label=provider==='apple'?'Apple':'Google';
+  const linked=(session?.user?.app_metadata?.providers||[]).includes(provider);
+  openHomeFeature(`${label} 账号`, `<section class="home-feature-card"><h3>${linked?'已连接':'尚未连接'} ${label}</h3><p>${linked?`当前账户已通过 ${label} 登录连接。`:`${label} 登录将在对应 OAuth 服务完成配置后开放连接。当前仍可用邮箱和密码登录。`}</p></section>`);
+};
+window.openHomeIdentityVerification=function(){
+  openHomeFeature('身份认证', `<section class="home-feature-card"><h3>身份认证</h3><p>用于钟点工、专业服务等需要确认真人身份的功能。证件审核服务尚未开放上传，本次可先提交认证意向；开放后会在消息中心通知你补充资料。</p><button class="home-feature-primary" type="button" onclick="submitHomeIdentityVerification()">提交认证申请</button></section>`);
+};
+window.submitHomeIdentityVerification=async function(){try{await saveHomeAccountSettings({security:{identity_status:'submitted'}});showToast('认证申请已提交');openHomeSecuritySettings();}catch(error){showToast('提交失败，请稍后重试');}};
+window.openHomeAccountRecovery=function(){openHomeFeature('账号找回', `<section class="home-feature-card"><h3>找回登录信息</h3><p>当前账户邮箱：${escHtml(session?.user?.email||'未登录')}</p><button class="home-feature-primary" type="button" onclick="openHomeRecoveryAuth()">发送密码重置邮件</button><p class="home-feature-note">系统会将重置链接发送到当前账户邮箱。</p></section>`);};
+window.openHomeRecoveryAuth=function(){const email=session?.user?.email||'';closeHomeFeature();openAuth();const input=document.getElementById('authEmail');if(input)input.value=email;setTimeout(()=>requestPasswordReset(),80);};
+window.openHomeDeletionRequest=function(){openHomeFeature('注销账号', `<section class="home-feature-card"><h3>申请注销账号</h3><p>账号注销会停止公开展示账户资料。已完成订单、支付、退款与法律要求保留的记录不会立即删除。</p><button class="home-feature-danger" type="button" onclick="submitHomeDeletionRequest()">提交注销申请</button></section>`);};
+window.submitHomeDeletionRequest=async function(){if(!confirm('确认提交注销申请吗？'))return;try{await saveHomeAccountSettings({security:{deletion_requested_at:new Date().toISOString()}});showToast('注销申请已提交');openHomeSecuritySettings();}catch(error){showToast('提交失败，请稍后重试');}};
 async function fetchHomeAddresses(){
   if(!homeFeatureRequireAuth()) return [];
   const url=`${SUPABASE_URL}/rest/v1/user_delivery_addresses?user_id=eq.${encodeURIComponent(session.user.id)}&select=*&order=is_default.desc,updated_at.desc`;
@@ -14556,13 +14667,13 @@ window.handleHomeMenuAction=function(action,event){
   if(action==='drafts'){ closeHomeMenu(); return window.openComposeDrafts?.(); }
   if(action==='creator'){ closeHomeMenu(); return openHomeCreatorCenter(); }
   if(action==='friends'){ closeHomeMenu(); return openHomeFriendSearch(); }
-  if(action==='history'){ closeHomeMenu(); return showProfileBrowsingHistory(); }
+  if(action==='history'){ closeHomeMenu(); return openUnifiedBrowsingHistory(); }
   if(action==='orders'){ closeHomeMenu(); return openMerchantOrderHistory(); }
   if(action==='cart'){ closeHomeMenu(); return openHomeCart(); }
   if(action==='wallet'){ closeHomeMenu(); return openHomeWallet(); }
   if(action==='community'){ closeHomeMenu(); return openHomeCommunity(); }
-  if(action==='security'){ closeHomeMenu(); return openHomeFeature('账号与安全',`<section class="home-feature-card"><h3>账号与安全</h3><p>${escHtml(session?.user?.email||'当前账户')}</p><button class="home-feature-primary" type="button" onclick="closeHomeFeature();openAuth('reset')">重置密码</button><p class="home-feature-note">密码重置会发送至当前账号邮箱。</p></section>`); }
-  if(action==='general'){ closeHomeMenu(); return openHomeFeature('通用设置','<section class="home-feature-card"><h3>通用设置</h3><p>显示模式、字体大小和自动播放等选项会逐步开放。当前会优先跟随设备的语言与系统外观设置。</p></section>'); }
+  if(action==='security'){ closeHomeMenu(); return openHomeSecuritySettings(); }
+  if(action==='general'){ closeHomeMenu(); return openHomeGeneralSettings(); }
   if(action==='notifications'){ closeHomeMenu(); return openHomeNotificationSettings(); }
   if(action==='privacy'){ closeHomeMenu(); return openHomePrivacySettings(); }
   if(action==='address'){ closeHomeMenu(); return openHomeAddresses(); }
@@ -15328,9 +15439,10 @@ async function launchMerchantAdminAction(){
 }
 
 // 定时刷新仅在首页可见时执行，减少后台页面的无效网络请求。
+function homeAutoRefreshEnabled(){ return homeAccountSettingsCache?.general?.auto_refresh !== false; }
 setInterval(() => {
   const activeTab = document.querySelector('.nav-btn.active');
-  if(document.visibilityState === 'visible' && navigator.onLine && activeTab && activeTab.dataset.tab === 'home'){
+  if(homeAutoRefreshEnabled() && document.visibilityState === 'visible' && navigator.onLine && activeTab && activeTab.dataset.tab === 'home'){
     console.log('⏰ 自动刷新主页数据...');
     loadPostsFromSupabase();
   }
@@ -15340,10 +15452,10 @@ window.addEventListener('online', () => {
   updateNetworkOfflineOverlay();
   window._postsNextRetryAt = 0;
   clearPostsRetry();
-  if(currentTab === 'home') loadPostsFromSupabase({force:true});
+  if(homeAutoRefreshEnabled() && currentTab === 'home') loadPostsFromSupabase({force:true});
 });
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible' && navigator.onLine && currentTab === 'home' && (!window._postsLastFetchedAt || Date.now() - window._postsLastFetchedAt > 180000)){
+  if(homeAutoRefreshEnabled() && document.visibilityState === 'visible' && navigator.onLine && currentTab === 'home' && (!window._postsLastFetchedAt || Date.now() - window._postsLastFetchedAt > 180000)){
     loadPostsFromSupabase();
   }
 });
@@ -15351,4 +15463,4 @@ document.addEventListener('visibilitychange', () => {
 // The home tab is already active in the static markup. Boot owns the first data load so
 // authenticated requests wait for session refresh instead of producing an initial 401 burst.
 bindAppEdgeGestures();
-console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Merchant Booking Module】`);
+console.log(`✓ 页面初始化完成 【版本 ${APP_VERSION} - Account Center Settings】`);
