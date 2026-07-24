@@ -310,7 +310,7 @@ function authorNameHtml(name, userId){
 }
 
 // ====== 用户信息管理 ======
-const APP_VERSION = '5.608';
+const APP_VERSION = '5.609';
 const APP_CACHE_VERSION_KEY = 'leshenghuo_app_cache_version';
 const APP_RELOAD_VERSION_KEY = 'leshenghuo_reload_version_key';
 const APP_VERSION_MANIFEST = 'version.json';
@@ -3858,9 +3858,9 @@ function openShareSheet(context){
   if(!sheet || !shareContext) return;
   const people = shareFollowingPeople();
   const recent = people.length ? people.map(person => `<button class="share-recent-person" onclick="shareToFriend('${String(person.id).replace(/'/g,'')}','${String(person.name).replace(/'/g,'')}')"><span class="share-recent-avatar">${avatarCircleSizedHtml(person.name, person.id, 48)}</span>${escHtml(person.name)}</button>`).join('') : `<span style="font-size:12px;color:var(--ink-faint);padding:11px 4px;">关注好友后，可在这里快速私信分享。</span>`;
-  const reportAction = shareContext.type === 'post' ? `<button class="share-report-inline" onclick="openContentReport()">举报笔记</button>` : '';
+  const reportTarget = shareContext.type === 'post' ? `<button class="share-target" onclick="openContentReport()"><span class="share-target-icon report">${uiIcon('alert',22)}</span>举报笔记</button>` : '';
   const reduceTool = shareContext.type === 'post' && shareContext.category ? `<button class="share-tool" onclick="reduceFeedCategory('${String(shareContext.category).replace(/'/g,'')}')"><span>${uiIcon('eye',21)}</span>减少此类内容</button>` : '';
-  sheet.innerHTML = `<div class="share-sheet-head">${reportAction}分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button></div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reduceTool}</div>`;
+  sheet.innerHTML = `<div class="share-sheet-head">分享至<button onclick="closeShareSheet()" aria-label="关闭">×</button></div><div class="share-recent">${recent}</div><div class="share-target-grid"><button class="share-target" onclick="openShareFriendPicker()"><span class="share-target-icon dm">${uiIcon('message',22)}</span>私信好友</button><button class="share-target" onclick="shareNative('微信好友')"><span class="share-target-icon wechat">微</span>微信好友</button><button class="share-target" onclick="shareFacebook()"><span class="share-target-icon" style="background:#1877f2;color:#fff;">f</span>Facebook</button><button class="share-target" onclick="shareSms()"><span class="share-target-icon sms">${uiIcon('message',22)}</span>信息</button><button class="share-target" onclick="shareNative('更多应用')"><span class="share-target-icon">•••</span>更多应用</button><button class="share-target" onclick="generateShareImage()"><span class="share-target-icon image">${uiIcon('image',22)}</span>生成分享图</button>${reportTarget}</div><div class="share-tools"><button class="share-tool" onclick="copyCurrentShareLink()"><span>${uiIcon('share',21)}</span>复制链接</button><button class="share-tool" onclick="generateShareImage()"><span>${uiIcon('image',21)}</span>分享图片</button><button class="share-tool" onclick="shareNative('系统分享')"><span>${uiIcon('upload',21)}</span>系统分享</button>${reduceTool}</div>`;
   const overlay = document.getElementById('shareOverlay');
   if(overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
   if(!overlay) return;
@@ -3877,6 +3877,13 @@ function openShareFriendPicker(){
 }
 function sharedCardMessage(context){
   const title = String(context?.title || '乐生活内容').replace(/\s+/g,' ').slice(0,80);
+  if(context?.type === 'post' && context?.postId != null){
+    return `[[LSH_POST_CARD]]${JSON.stringify({
+      postId:String(context.postId),
+      title,
+      image:String(context.image || '').trim()
+    })}`;
+  }
   const text = String(context?.text || '').replace(/\s+/g,' ').slice(0,120);
   const image = String(context?.image || '').trim();
   return `【乐生活分享】\n${title}${text ? `\n${text}` : ''}${image ? `\n【封面】${encodeURIComponent(image)}` : ''}\n${context?.url || ''}`;
@@ -3885,13 +3892,19 @@ async function shareToFriend(id, name){
   if(!(session && session.user)){ showToast('请先登录'); openAuth('login'); return; }
   if(!shareContext) return;
   const text = sharedCardMessage(shareContext);
-  closeShareSheet();
+  const sheet = document.getElementById('shareSheet');
+  if(sheet) sheet.innerHTML = `<div class="share-send-status"><span class="share-send-spinner"></span><b>正在发送给 ${escHtml(name)}…</b></div>`;
   try {
     if(!messageApi) throw new Error('私信接口未初始化');
     const saved = await messageApi.send({ fromId:session.user.id, fromName:myNick(), toId:id, text });
     if(saved) dmRows.push(saved);
+    if(sheet) sheet.innerHTML = `<div class="share-send-status success"><span>${uiIcon('check',30)}</span><b>已发送给 ${escHtml(name)}</b><small>可在“消息”中查看</small></div>`;
     showToast(`已发送给 ${name}`);
-  } catch(e){ showToast('发送失败：' + e.message); }
+    setTimeout(closeShareSheet, 950);
+  } catch(e){
+    showToast('发送失败：' + e.message);
+    openShareSheet(shareContext);
+  }
 }
 async function copyCurrentShareLink(){ if(!shareContext) return; try { await navigator.clipboard.writeText(shareContext.url); showToast('链接已复制'); } catch(e){ showToast(shareContext.url); } }
 const nativeActionRequests = new Map();
@@ -10613,6 +10626,8 @@ function openCommentComposer(parentId=null){
   const overlay = document.getElementById('commentComposerOverlay');
   const sheet = document.getElementById('commentComposerSheet');
   if(!overlay || !sheet) return;
+  const postOverlay = document.getElementById('postOverlay');
+  if(postOverlay && activePostId != null) postOverlay.classList.add('open');
   if(overlay.parentElement !== document.body) document.body.appendChild(overlay);
   const targetName = parent ? String(parent.name || '乐生活用户') : '';
   sheet.innerHTML = `<div class="comment-composer-head"><span></span><b>${parent ? `回复 ${escHtml(targetName)}` : '写评论'}</b><button class="comment-composer-close" onclick="closeCommentComposer()" aria-label="关闭">×</button></div><textarea id="commentComposerText" class="comment-composer-text" maxlength="500" placeholder="${parent ? `回复 ${escHtml(targetName)}…` : '说点什么…'}"></textarea><button class="comment-composer-submit" onclick="submitCommentComposer()">发送</button>`;
@@ -10622,6 +10637,7 @@ function openCommentComposer(parentId=null){
   window.setTimeout(() => document.getElementById('commentComposerText')?.focus(), 90);
 }
 function closeCommentComposer(){
+  document.getElementById('commentComposerText')?.blur();
   document.getElementById('commentComposerOverlay')?.classList.remove('open');
   document.body.classList.remove('reply-composer-open');
   commentComposerParentId = null;
@@ -12595,7 +12611,7 @@ function renderDmList(){
       ${avatarHomeLinkHtml(c.id, c.name, 44)}
       <div style="flex:1;min-width:0;">
         <div style="font-size:14px;font-weight:600;">${c.name||'用户'}</div>
-        <div style="font-size:12px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${last.from_id===me?'我: ':''}${last.text}</div>
+        <div style="font-size:12px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${last.from_id===me?'我: ':''}${escHtml(dmMessagePreview(last.text))}</div>
       </div>
       <span style="font-size:11px;color:var(--ink-faint);flex-shrink:0;">${fmtTime(last.created_at)}</span>
     </div>`;
@@ -12712,14 +12728,34 @@ function openMsgCat(cat, keep){
 }
 /* ---- 私信聊天流 ---- */
 function sharedMessageParts(text){
-  const lines = String(text || '').split('\n');
+  const raw = String(text || '');
+  if(raw.startsWith('[[LSH_POST_CARD]]')){
+    try {
+      const card = JSON.parse(raw.slice('[[LSH_POST_CARD]]'.length));
+      if(!card || card.postId == null) return null;
+      return {
+        postId:String(card.postId),
+        title:String(card.title || '乐生活笔记'),
+        image:String(card.image || ''),
+        url:`${window.location.origin}/?post=${encodeURIComponent(card.postId)}`,
+        text:''
+      };
+    } catch(e){ return null; }
+  }
+  const lines = raw.split('\n');
   if(lines[0] !== '【乐生活分享】' || lines.length < 3) return null;
   const url = lines[lines.length - 1] || '';
   const body = lines.slice(2, -1);
   const coverLineIndex = body.findIndex(line => line.startsWith('【封面】'));
   const image = coverLineIndex >= 0 ? decodeURIComponent(body[coverLineIndex].slice(4)) : '';
   if(coverLineIndex >= 0) body.splice(coverLineIndex, 1);
-  return { title:lines[1] || '乐生活内容', text:body.join(' ') || '', url, image };
+  let postId = '';
+  try { postId = new URL(url, window.location.origin).searchParams.get('post') || ''; } catch(e){}
+  return { postId, title:lines[1] || '乐生活内容', text:body.join(' ') || '', url, image };
+}
+function dmMessagePreview(text){
+  const shared = sharedMessageParts(text);
+  return shared ? `分享了一篇笔记：${shared.title}` : String(text || '');
 }
 function openSharedMessage(url){
   try {
@@ -12732,7 +12768,7 @@ function openSharedMessage(url){
 function renderDmMessage(m){
   const shared = sharedMessageParts(m.text);
   if(!shared) return escHtml(m.text || '');
-  return `<button onclick="openSharedMessage(decodeURIComponent('${encodeURIComponent(shared.url)}'))" style="display:block;width:100%;border:0;background:#fff;padding:9px;border-radius:10px;text-align:left;cursor:pointer;color:var(--ink);">${shared.image ? `<img src="${escAttr(shared.image)}" alt="" style="width:100%;height:92px;object-fit:cover;border-radius:7px;margin-bottom:8px;display:block;">` : ''}<div style="font-size:10px;color:var(--berry-dark);font-weight:900;margin-bottom:4px;">乐生活笔记</div><div style="font-size:13px;font-weight:900;line-height:1.4;">${escHtml(shared.title)}</div>${shared.text ? `<div style="font-size:11px;color:var(--ink-soft);line-height:1.45;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escHtml(shared.text)}</div>` : ''}<div style="font-size:10px;color:var(--sage-dark);font-weight:800;margin-top:6px;">点击查看笔记</div></button>`;
+  return `<button onclick="openSharedMessage(decodeURIComponent('${encodeURIComponent(shared.url)}'))" class="dm-shared-post-card">${shared.image ? `<img src="${escAttr(shared.image)}" alt="">` : `<span class="dm-shared-post-placeholder">${uiIcon('image',24)}</span>`}<span><small>乐生活笔记</small><b>${escHtml(shared.title)}</b></span></button>`;
 }
 function openThread(otherId, otherName){
   setReadTs('dm');
@@ -12742,7 +12778,10 @@ function openThread(otherId, otherName){
   detail.style.display = 'block';
   detail.classList.add('dm-thread-detail');
   const me = session.user.id;
-  const msgs = dmRows.filter(m => m.from_id === otherId || m.to_id === otherId);
+  const msgs = dmRows.filter(m =>
+    (String(m.from_id) === String(me) && String(m.to_id) === String(otherId)) ||
+    (String(m.from_id) === String(otherId) && String(m.to_id) === String(me))
+  );
   detail.innerHTML = `
     <div class="dm-thread-shell">
     <div class="dm-thread-head" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);">
@@ -14799,12 +14838,23 @@ window.closeInternalModule = closeInternalModule;
 
 let bottomNavActivatedAt=0;
 let bottomNavActivatedTab='';
+function clearTransientLayersForBottomNavigation(){
+  closeShareSheet();
+  closeCommentComposer();
+  closeContentReport();
+  closeOwnerSheet();
+  closeHomeMenu();
+  document.body.classList.remove('reply-composer-open','home-menu-open');
+  if(document.getElementById('postOverlay')?.classList.contains('open')) closePost();
+}
 window.activateBottomTab=function(tab,event){
   event?.preventDefault?.();
+  event?.stopPropagation?.();
   const now=Date.now();
-  if(tab===bottomNavActivatedTab && now-bottomNavActivatedAt<420) return;
+  if(tab===bottomNavActivatedTab && now-bottomNavActivatedAt<120) return;
   bottomNavActivatedAt=now;
   bottomNavActivatedTab=tab;
+  clearTransientLayersForBottomNavigation();
   window.switchTab(tab);
 };
 
@@ -14912,7 +14962,7 @@ window.switchTab = function(tab){
 // 对底部主导航使用 touchend 兜底，确保每个入口都可稳定响应。
 document.addEventListener('touchend', event => {
   const button = event.target && event.target.closest ? event.target.closest('.bottom-nav .nav-btn[data-tab]') : null;
-  if(!button || event.defaultPrevented) return;
+  if(!button) return;
   const tab = button.dataset.tab;
   if(!tab) return;
   event.preventDefault();

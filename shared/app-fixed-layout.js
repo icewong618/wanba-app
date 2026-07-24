@@ -10,10 +10,10 @@
         // One source of truth for the distance below the fixed home header.
         // The header is fixed, so the feed needs exactly its visible bottom edge
         // plus a small breathing gap. Never measure the already shifted feed.
-      const fixedGap = 0;
+        const fixedGap = 0;
         const topHeader = document.querySelector('header.top:not(.is-hidden)');
-        const headerBottom = topHeader ? Math.ceil(topHeader.getBoundingClientRect().bottom) : 134;
-        root.style.setProperty('--home-fixed-top', `${Math.max(fixedGap, headerBottom + fixedGap)}px`);
+        const headerHeight = topHeader ? Math.ceil(topHeader.getBoundingClientRect().height) : 134;
+        root.style.setProperty('--home-fixed-top', `${Math.max(fixedGap, headerHeight + fixedGap)}px`);
         // A prior release wrote an inline margin here. Remove it so all entries
         // use the CSS variable above and resume/orientation cannot leave a gap.
         document.querySelector('#page-home .feed')?.style.removeProperty('margin-top');
