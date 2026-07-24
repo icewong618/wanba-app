@@ -1398,8 +1398,12 @@
     #postModal.image-detail-layout .xhs-detail-grid{display:grid;grid-template-columns:minmax(0,1.14fr) minmax(360px,.86fr);height:100%;min-height:0;overflow:hidden;}
     #postModal.image-detail-layout .xhs-media-column{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#111;}
     #postModal.image-detail-layout .xhs-media-column .modal-media{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#111;}
-    #postModal.image-detail-layout .xhs-media-column .image-carousel{width:100%;height:100%;aspect-ratio:auto;background:#111;}
-    #postModal.image-detail-layout .xhs-media-column .carousel-slide img{object-fit:contain;}
+    /* 桌面双栏中的轮播必须由左栏明确约束高度；否则轨道会沿用移动端的自然高度，
+       让图片被挤到媒体区域下方并留下大块黑边。 */
+    #postModal.image-detail-layout .xhs-media-column .image-carousel{position:relative;width:100%;height:100%;min-height:0;flex:1 1 auto;aspect-ratio:auto;background:#111;}
+    #postModal.image-detail-layout .xhs-media-column .carousel-track{position:absolute;inset:0;width:100%;height:auto;min-height:0;}
+    #postModal.image-detail-layout .xhs-media-column .carousel-slide{height:100%;min-height:0;overflow:hidden;}
+    #postModal.image-detail-layout .xhs-media-column .carousel-slide img{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;object-position:center;}
     #postModal.image-detail-layout .xhs-media-column .carousel-dots{flex:0 0 auto;background:#111;padding:12px 0;}
     #postModal.image-detail-layout .xhs-content-column{min-width:0;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:#fff;}
     #postModal.image-detail-layout .modal-body{padding:28px 30px 42px;}
